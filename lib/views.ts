@@ -1,4 +1,3 @@
-import "server-only";
 import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent } from "./db";
 import { readHeartbeat } from "./heartbeat";
 import type { Agent, AgentView, HeartbeatInfo, Run } from "./types";

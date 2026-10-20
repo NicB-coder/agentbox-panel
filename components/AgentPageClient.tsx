@@ -321,7 +321,7 @@ function History({ runs }: { runs: Run[] }) {
                     {r.endedAt ? ` · took ${duration(r.endedAt - r.startedAt)}` : ""}
                     {r.status === "stopped" && r.stopReason ? ` · ${r.stopReason}` : ""}
                   </p>
-                  {r.result && r.status !== "stopped" && <p className="mt-1 text-[14px] leading-snug text-muted clamp-3">{r.result}</p>}
+                  {r.result && r.status !== "stopped" && <Report text={r.result} />}
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusPill status={res.status} label={res.label} />
@@ -337,6 +337,24 @@ function History({ runs }: { runs: Run[] }) {
         </ul>
       )}
     </section>
+  );
+}
+
+function Report({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const [first, ...rest] = text.split(/\n\s*\n/);
+  return (
+    <div className="mt-1 text-[14px] leading-snug text-muted">
+      <p className="whitespace-pre-wrap">{first}</p>
+      {rest.length > 0 && (
+        <>
+          {open && <div className="mt-2 whitespace-pre-wrap rounded-[14px] bg-soft p-4 text-ink">{rest.join("\n\n")}</div>}
+          <button className="min-h-11 text-[14px] font-semibold text-ink underline" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? "Hide the report" : "Read the full report"}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 

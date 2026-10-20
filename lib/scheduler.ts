@@ -1,0 +1,49 @@
+import { activeRun, listAgents, setNextRunAt } from "./db";
+import { checkPullRequests, recoverOnBoot, startRun } from "./runner";
+import { nextRunAfter } from "./words";
+
+// A small scheduler inside the server process. Every 30 seconds it starts any scheduled agent
+// whose time has come, and once a minute it checks open pull requests for merges.
+
+type G = typeof globalThis & { __agentboxBackground?: boolean };
+
+export function tickSchedules(now = Date.now()) {
+  for (const a of listAgents()) {
+    if (a.kind !== "claude") continue;
+    if (!a.enabled || a.paused || a.scheduleKind === "manual") {
+      if (a.nextRunAt !== null) setNextRunAt(a.id, null);
+      continue;
+    }
+    // First time we see this schedule (or it was just edited/resumed): plan the next run from now.
+    // Missed runs (e.g. the Mac was asleep or the panel was down) are skipped, not replayed.
+    if (a.nextRunAt === null || a.nextRunAt < now - 10 * 60_000) {
+      setNextRunAt(a.id, nextRunAfter(a.scheduleKind, a.scheduleDays, a.scheduleTime, now));
+      continue;
+    }
+    if (a.nextRunAt > now) continue;
+    setNextRunAt(a.id, nextRunAfter(a.scheduleKind, a.scheduleDays, a.scheduleTime, now));
+    if (activeRun(a.id)) {
+      console.log(`[scheduler] ${a.name} is still busy, skipping this run`);
+      continue;
+    }
+    console.log(`[scheduler] starting ${a.name}`);
+    startRun(a.id, { trigger: "schedule" }).catch((e) => console.warn(`[scheduler] ${a.name}: ${(e as Error).message}`));
+  }
+}
+
+export function startBackground() {
+  const g = globalThis as G;
+  if (g.__agentboxBackground) return;
+  g.__agentboxBackground = true;
+  recoverOnBoot();
+  tickSchedules();
+  setInterval(() => {
+    try {
+      tickSchedules();
+    } catch (e) {
+      console.warn("[scheduler]", e);
+    }
+  }, 30_000);
+  setInterval(() => checkPullRequests().catch((e) => console.warn("[pr-check]", e)), 60_000);
+  console.log("[agentbox] scheduler running");
+}
