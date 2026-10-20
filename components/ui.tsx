@@ -1,5 +1,6 @@
 import type { PillStatus } from "@/lib/types";
 import type { ReactNode } from "react";
+import { COLOR_CHOICES, ICON_CHOICES } from "@/lib/choices";
 
 // The 8 icon choices. Simple 24px line icons drawn in the agent's color.
 const ICON_PATHS: Record<string, ReactNode> = {
@@ -94,7 +95,7 @@ const EXTRA_PATHS: Record<string, ReactNode> = {
   ),
 };
 
-export const ICON_CHOICES = Object.keys(ICON_PATHS);
+export { COLOR_CHOICES, ICON_CHOICES };
 export const ICON_NAMES: Record<string, string> = {
   hammer: "Hammer",
   eye: "Eye",
@@ -105,14 +106,6 @@ export const ICON_NAMES: Record<string, string> = {
   book: "Book",
   sparkle: "Sparkle",
 };
-export const COLOR_CHOICES: { hex: string; name: string }[] = [
-  { hex: "#2F4FD8", name: "Blue" },
-  { hex: "#0F7B6C", name: "Teal" },
-  { hex: "#C2410C", name: "Orange" },
-  { hex: "#7048C8", name: "Purple" },
-  { hex: "#2B8A3E", name: "Green" },
-  { hex: "#BE185D", name: "Pink" },
-];
 
 export function Icon({ name, color, size = 22 }: { name: string; color: string; size?: number }) {
   return (

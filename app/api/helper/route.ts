@@ -27,17 +27,16 @@ export function GET(req: Request) {
   } catch {
     /* defaults */
   }
-  return Response.json({ ...state(Number.isInteger(id) && id > 0 ? id : null), suggestions: suggestions(ctx) });
+  const picked = Number.isInteger(id) && id > 0 ? id : null;
+  if (picked && !getChat(picked)) return Response.json({ error: "That conversation isn't here any more." }, { status: 404 });
+  return Response.json({ ...state(picked), suggestions: suggestions(ctx) });
 }
 
-// New chat: starts fresh (the old ones are kept, up to 20).
+// New chat: starts fresh (the old ones are kept, up to 20; a chat that's still answering is never removed).
 export function POST() {
   const cur = latestChat();
   // Don't pile up empty chats.
   if (cur && listMessages(cur.id, 1).length === 0) return Response.json(state(cur.id));
-  if (cur && busyChat(cur.id)) {
-    /* the old reply keeps going and is saved */
-  }
-  const chat = createChat();
+  const chat = createChat((id) => !!busyChat(id));
   return Response.json(state(chat.id), { status: 201 });
 }

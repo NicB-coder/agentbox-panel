@@ -29,17 +29,20 @@ export function latestChat(): HelperChat | null {
   return r ? toChat(r) : null;
 }
 
-export function createChat(): HelperChat {
+export function createChat(busy?: (chatId: number) => boolean): HelperChat {
   const now = Date.now();
   const id = db().prepare("INSERT INTO helper_chats (title, created_at, updated_at) VALUES ('', ?, ?)").run(now, now).lastInsertRowid as number;
-  prune();
+  prune(busy);
   return getChat(id)!;
 }
 
-// Keep the last 20 conversations.
-function prune() {
+// Keep the last 20 conversations. A chat that's still answering is never removed, however old it is:
+// its reply keeps going and is saved, and it's cleaned up on a later pass once it's idle.
+export function prune(busy: (chatId: number) => boolean = () => false) {
   const old = db().prepare("SELECT id FROM helper_chats ORDER BY updated_at DESC, id DESC LIMIT -1 OFFSET ?").all(KEEP) as { id: number }[];
+  const streaming = db().prepare("SELECT 1 FROM helper_messages WHERE chat_id = ? AND status = 'streaming' LIMIT 1");
   for (const { id } of old) {
+    if (busy(id) || streaming.get(id)) continue;
     db().prepare("DELETE FROM helper_messages WHERE chat_id = ?").run(id);
     db().prepare("DELETE FROM helper_chats WHERE id = ?").run(id);
   }

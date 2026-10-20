@@ -4,13 +4,15 @@
 import readline from "node:readline";
 
 const PANEL = process.env.AGENTBOX_PANEL_URL || "http://127.0.0.1:3000";
+// Proves to the panel that this is the Helper's own tool server. Comes from the panel by environment variable.
+const SECRET = process.env.AGENTBOX_HELPER_SECRET || "";
 
 function send(msg) {
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
 }
 
 async function panel(body) {
-  const r = await fetch(`${PANEL}/api/helper/tools`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const r = await fetch(`${PANEL}/api/helper/tools`, { method: "POST", headers: { "content-type": "application/json", "x-agentbox-helper-secret": SECRET }, body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`The panel answered ${r.status}`);
   return r.json();
 }

@@ -1,8 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getAgent, getApproval, getRun, getSetting, getWfRun, getWorkflow, listAgents } from "./db";
+import { createAgent, createWorkflow, db, getAgent, getApproval, getRun, getSetting, getWfRun, getWorkflow, listAgents, listWorkflows, runsWithStatus, wfRunsWithStatus } from "./db";
 import { addHelperUsage } from "./draftUsage";
 import { helperSystemPrompt } from "./helperGuide";
 import { addMessage, getChat, getMessage, listMessages, streamingMessages, touchChat, updateMessage } from "./helperDb";
@@ -16,7 +17,7 @@ import { parseAgentInput } from "./validate";
 import { STEP_INFO, cleanLimits, cleanSteps, flowSentence, stepTitle, workflowProblems } from "./wf";
 import { agentRefs } from "./workflowViews";
 import { agentSentence, clockOf } from "./words";
-import { COLOR_CHOICES } from "@/components/ui";
+import { COLOR_CHOICES } from "./choices";
 
 // The Helper chat: Claude Code headless with Sonnet, no built-in tools at all (no files, no shell),
 // only the panel's read-only lookups through a tiny local MCP server. It runs in an empty folder
@@ -26,7 +27,28 @@ const PATH = [path.join(os.homedir(), ".local", "bin"), "/opt/homebrew/bin", "/u
 const ROOM = path.join(os.homedir(), "agents", "helper-room"); // empty on purpose
 const MCP = path.join(process.cwd(), "scripts", "helper-mcp.mjs");
 const PANEL_URL = `http://127.0.0.1:${process.env.PORT || 3000}`;
-const TIME_LIMIT = 150_000;
+// How the Helper is started. Tests swap in a fake program and a short time limit.
+export const helperRun = { bin: "claude", timeLimitMs: 150_000 };
+
+type G0 = typeof globalThis & { __agentboxHelperSecret?: string };
+// The shared secret that lets only the Helper's own tool server call /api/helper/tools.
+// Made fresh each time the panel starts and handed over by environment variable; never saved or committed.
+export function toolsSecret(): string {
+  const g0 = globalThis as G0;
+  return (g0.__agentboxHelperSecret ??= process.env.AGENTBOX_HELPER_SECRET || crypto.randomBytes(32).toString("hex"));
+}
+
+export function toolsSecretOk(given: string | null): boolean {
+  const want = Buffer.from(toolsSecret());
+  const got = Buffer.from(given ?? "");
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+
+// Text from logs, pull requests, the snapshot and so on goes to the Helper as data. Make sure it can't
+// close its own tag and pretend to be something else.
+export function dataBlock(tag: string, text: string) {
+  return `<${tag}>\n${text.replace(new RegExp(`</?${tag}\\b`, "gi"), "(tag)")}\n</${tag}>`;
+}
 
 type Gen = { chatId: number; msgId: number; text: string; status: string | null; listeners: Set<(e: HelperStreamEvent) => void>; child: ChildProcess | null };
 type G = typeof globalThis & { __agentboxHelper?: Map<number, Gen> };
@@ -193,13 +215,13 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
   fs.mkdirSync(ROOM, { recursive: true });
   const history = historyText(gen.chatId, userMsgId);
   const prompt = [
-    history ? `<conversation_so_far>\n${history}\n</conversation_so_far>` : "",
-    `<where_nic_is>\n${describeContext(ctx)}\n</where_nic_is>`,
-    `<snapshot>\n${buildSnapshot()}\n</snapshot>`,
+    history ? dataBlock("conversation_so_far", history) : "",
+    dataBlock("where_nic_is", describeContext(ctx)),
+    dataBlock("snapshot", buildSnapshot()),
     `Nic's new message:\n${text}`,
   ].filter(Boolean).join("\n\n");
 
-  const mcp = { mcpServers: { panel: { command: process.execPath, args: [MCP], env: { AGENTBOX_PANEL_URL: PANEL_URL } } } };
+  const mcp = { mcpServers: { panel: { command: process.execPath, args: [MCP], env: { AGENTBOX_PANEL_URL: PANEL_URL, AGENTBOX_HELPER_SECRET: toolsSecret() } } } };
   const args = [
     "-p",
     "--output-format", "stream-json", "--verbose", "--include-partial-messages",
@@ -213,7 +235,7 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
     "--no-session-persistence",
     "--system-prompt", helperSystemPrompt(),
   ];
-  const child = spawn("claude", args, { cwd: ROOM, env: cleanEnv(), stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn(helperRun.bin, args, { cwd: ROOM, env: cleanEnv(), stdio: ["pipe", "pipe", "pipe"] });
   gen.child = child;
   child.stdin.end(prompt);
 
@@ -226,7 +248,8 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
   const timer = setTimeout(() => {
     failed = "That took too long, so I stopped. Try asking in a simpler way, or again in a moment.";
     child.kill("SIGTERM");
-  }, TIME_LIMIT);
+    setTimeout(() => child.exitCode === null && child.signalCode === null && child.kill("SIGKILL"), 5000).unref();
+  }, helperRun.timeLimitMs);
 
   const onEvent = (ev: Record<string, unknown>) => {
     if (ev.type === "stream_event") {
@@ -288,7 +311,7 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
     err = (err + c.toString("utf8")).slice(-4000);
   });
   child.on("error", () => {
-    failed = "I couldn't start Claude on this Mac. Ask Claude to fix this from any error box, or check that Claude Code is installed.";
+    failed = "I couldn't start Claude on this Mac. Check that Claude Code is installed on this Mac.";
   });
   child.on("close", () => {
     clearTimeout(timer);
@@ -337,7 +360,7 @@ export function pageOk(p: string): boolean {
   return true;
 }
 
-function chipFor(kind: string, ref: string, label: string): { href: string; label: string; external?: boolean } | null {
+export function chipFor(kind: string, ref: string, label: string): { href: string; label: string; external?: boolean } | null {
   const n = Number(ref);
   switch (kind) {
     case "agent": {
@@ -369,56 +392,90 @@ function chipFor(kind: string, ref: string, label: string): { href: string; labe
   return null;
 }
 
-const CONFIRM = {
-  merge_pr: "This merges the pull request into main on GitHub, so its changes become part of your real project.",
-  ship_wfrun: "This ships the workflow's work: it merges its pull request into main on GitHub.",
-  pause_all:
-    "This stops every agent and workflow that's running right now, and holds all schedules until you press Resume everything. Work in progress is kept but not finished.",
-};
+const prNumber = (url: string) => url.match(/\/pull\/(\d+)/)?.[1] ?? "";
+const repoOf = (url: string) => url.match(/github\.com\/[\w.-]+\/([\w.-]+)\/pull/)?.[1] ?? "the project";
 
-function actionFor(kind: string, ref: string, label: string): HelperAction | null {
+const PAGE_NAMES: Record<string, string> = { "/": "Agents", "/workflows": "Workflows", "/workflows/new": "New workflow", "/inbox": "the Inbox", "/projects": "Projects", "/settings": "Settings", "/help": "Help", "/agents/new": "the agent editor" };
+
+function pageName(p: string): string {
+  if (PAGE_NAMES[p]) return PAGE_NAMES[p];
+  const a = p.match(/^\/agents\/(\d+)(\/edit)?$/);
+  if (a) return `${getAgent(Number(a[1]))?.name ?? "the agent"}${a[2] ? "'s settings" : ""}`;
+  const w = p.match(/^\/workflows\/(\d+)$/);
+  if (w) return getWorkflow(Number(w[1]))?.name ?? "the workflow";
+  return "it";
+}
+
+// A button the Helper suggested. The model only picks which action and for what; the label and the
+// "Are you sure?" text are always written here, from the real thing it acts on. So a log or a pull
+// request comment that talks the model into "[[button:merge_pr:5|Open the log]]" still shows
+// "Merge pull request #12", and it still asks first.
+export function actionFor(kind: string, ref: string): HelperAction | null {
   const n = Number(ref);
-  const a = (risky?: keyof typeof CONFIRM): HelperAction => ({ kind: kind as HelperAction["kind"], ref, label: label.trim().slice(0, 40), ...(risky ? { risky: true, confirm: CONFIRM[risky] } : {}) });
+  const id = /^\d+$/.test(ref) && n > 0;
+  const a = (label: string, confirm?: string): HelperAction => ({ kind: kind as HelperAction["kind"], ref, label, ...(confirm ? { risky: true, confirm } : {}) });
   switch (kind) {
     case "retry_run": {
-      const r = getRun(n);
+      const r = id ? getRun(n) : null;
       const ag = r && getAgent(r.agentId);
-      return r && r.status === "stopped" && !r.workflowRunId && ag?.kind === "claude" && ag.enabled ? a() : null;
+      return r && r.status === "stopped" && !r.workflowRunId && ag?.kind === "claude" && ag.enabled ? a("Try again") : null;
     }
     case "approve_plan": {
-      const r = getRun(n);
-      return r && r.status === "waiting" && r.plan ? a() : null;
+      const r = id ? getRun(n) : null;
+      return r && r.status === "waiting" && r.plan ? a("Approve plan") : null;
     }
     case "allow":
-    case "deny":
-      return getApproval(n)?.status === "pending" ? a() : null;
+    case "deny": {
+      const ap = id ? getApproval(n) : null;
+      return ap?.status === "pending" ? a(kind === "allow" ? "Allow" : "Deny") : null;
+    }
     case "run_agent": {
-      const ag = getAgent(n);
-      return ag && ag.kind === "claude" && ag.enabled ? a() : null;
+      const ag = id ? getAgent(n) : null;
+      return ag && ag.kind === "claude" && ag.enabled ? a(`Run ${ag.name} now`) : null;
     }
     case "test_run":
-      return getWorkflow(n) ? a() : null;
+      return id && getWorkflow(n) ? a("Start a test run") : null;
     case "resume_wfrun":
-      return getWfRun(n)?.status === "stopped" ? a() : null;
+      return id && getWfRun(n)?.status === "stopped" ? a("Pick up where it stopped") : null;
     case "approve_wfrun": {
-      const wr = getWfRun(n);
-      return wr?.status === "needs" && wr.waiting?.kind === "ask" ? a() : null;
+      const wr = id ? getWfRun(n) : null;
+      return wr?.status === "needs" && wr.waiting?.kind === "ask" ? a("Approve") : null;
     }
     case "ship_wfrun": {
-      const wr = getWfRun(n);
-      return wr?.status === "needs" && wr.waiting?.kind === "ship" ? a("ship_wfrun") : null;
+      const wr = id ? getWfRun(n) : null;
+      if (!(wr?.status === "needs" && wr.waiting?.kind === "ship")) return null;
+      const wf = getWorkflow(wr.workflowId);
+      const pr = wr.prUrl ? prNumber(wr.prUrl) : "";
+      return a(
+        pr ? `Ship it: merge pull request #${pr}` : "Ship it",
+        `This ships "${wf?.name ?? "the workflow"}": it merges ${pr ? `pull request #${pr}` : "its pull request"} into main of ${wf?.project ?? "the project"} on GitHub, so its changes become part of your real project. agentbox can't undo a merge.`,
+      );
     }
     case "merge_pr": {
-      const r = getRun(n);
-      return r?.status === "review" && r.prUrl ? a("merge_pr") : null;
+      const r = id ? getRun(n) : null;
+      if (!(r?.status === "review" && r.prUrl)) return null;
+      const pr = prNumber(r.prUrl);
+      return a(
+        `Merge pull request #${pr}`,
+        `This merges pull request #${pr} ("${r.task.slice(0, 80)}") into main of ${repoOf(r.prUrl)} on GitHub, so its changes become part of your real project. agentbox can't undo a merge.`,
+      );
     }
-    case "pause_all":
-      return getSetting<boolean>("pausedAll", false) ? null : a("pause_all");
+    case "pause_all": {
+      if (getSetting<boolean>("pausedAll", false)) return null;
+      const runs = runsWithStatus("working", "waiting").filter((r) => !r.workflowRunId).length;
+      const flows = wfRunsWithStatus("running", "needs").length;
+      const count = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
+      return a(
+        "Pause everything",
+        `This stops what's going right now (${count(runs, "agent run", "agent runs")} and ${count(flows, "workflow run", "workflow runs")}) and holds every schedule until you press Resume everything. Work so far is kept but not finished.`,
+      );
+    }
     case "resume_all":
-      return getSetting<boolean>("pausedAll", false) ? a() : null;
+      return getSetting<boolean>("pausedAll", false) ? a("Resume everything") : null;
     case "open":
-      return pageOk(ref) ? a() : null;
+      return pageOk(ref) ? a(`Open ${pageName(ref)}`) : null;
   }
+  // Anything else (delete, merge by another name…) isn't a button the Helper can offer.
   return null;
 }
 
@@ -486,7 +543,7 @@ export function finalize(raw: string, meta: HelperMeta): { text: string; meta: H
     const rest = colon >= 0 ? head.slice(colon + 1).trim() : "";
     if (kind === "button") {
       const c = rest.indexOf(":");
-      const act = actionFor(c >= 0 ? rest.slice(0, c) : rest, c >= 0 ? rest.slice(c + 1) : "", label || "Do it");
+      const act = actionFor(c >= 0 ? rest.slice(0, c).trim() : rest, c >= 0 ? rest.slice(c + 1).trim() : "");
       if (act && !actions.some((x) => x.kind === act.kind && x.ref === act.ref)) actions.push(act);
       return "";
     }
@@ -512,9 +569,33 @@ export function cardOf(msgId: number, index: number): HelperCard | null {
   return m?.meta.cards?.[index] ?? null;
 }
 
-export function markCreated(msgId: number, c: { index: number; kind: "agent" | "workflow"; id: number; href: string }) {
-  const m = getMessage(msgId);
-  if (!m) return;
-  updateMessage(msgId, { meta: { ...m.meta, created: [...(m.meta.created ?? []), c] } });
-}
+type CreateResult = { ok: true; href: string; existing: boolean } | { ok: false; status: number; error: string };
 
+// "Create it" on a preview card: saves it switched Off. Pressed twice (a double click, two tabs, the
+// laptop and the phone), it makes it once and hands back the same link the second time.
+export function createFromCard(msgId: number, index: number): CreateResult {
+  return db().transaction((): CreateResult => {
+    const m = getMessage(msgId);
+    const card = m?.role === "helper" ? m.meta.cards?.[index] : undefined;
+    if (!m || !card) return { ok: false, status: 404, error: "That preview isn't here any more. Ask the Helper again." };
+    const done = m.meta.created?.find((c) => c.index === index);
+    if (done && (done.kind === "agent" ? getAgent(done.id) : getWorkflow(done.id))) return { ok: true, href: done.href, existing: true };
+    if (card.problem) return { ok: false, status: 400, error: card.problem };
+    let made: { kind: "agent" | "workflow"; id: number; href: string };
+    if (card.type === "agent") {
+      const parsed = parseAgentInput({ ...card.draft, enabled: false }, listProjects());
+      if (!parsed.ok) return { ok: false, status: 400, error: parsed.error };
+      const ag = createAgent({ ...parsed.agent, enabled: false });
+      made = { kind: "agent", id: ag.id, href: `/agents/${ag.id}/edit` };
+    } else {
+      const taken = new Set(listWorkflows().map((x) => x.name));
+      let name = card.draft.name;
+      for (let i = 2; taken.has(name); i++) name = `${card.draft.name} ${i}`;
+      const w = createWorkflow({ ...card.draft, name }, "Made by the Helper");
+      made = { kind: "workflow", id: w.id, href: `/workflows/${w.id}` };
+    }
+    const created = [...(m.meta.created ?? []).filter((c) => c.index !== index), { index, ...made }];
+    updateMessage(msgId, { meta: { ...m.meta, created } });
+    return { ok: true, href: made.href, existing: false };
+  })();
+}
