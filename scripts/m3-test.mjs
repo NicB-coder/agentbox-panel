@@ -1,0 +1,20 @@
+// Milestone 3: "Describe it" makes steps with Claude and opens them in the editor (uses a little usage).
+import { chromium } from "playwright";
+const base = process.env.BASE_URL || "http://127.0.0.1:3000";
+const out = process.argv[2] || "/tmp/shots";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
+const errors = [];
+page.on("pageerror", (e) => errors.push(String(e)));
+await page.goto(base + "/workflows/new", { waitUntil: "networkidle" });
+await page.getByLabel("What should happen?").fill("Every night at 2 AM, have Site Checker look at my site. If it finds problems, message me and open an issue.");
+await page.getByRole("button", { name: "Make the steps" }).click();
+await page.getByText("Claude is reading it").waitFor();
+await page.screenshot({ path: `${out}/laptop-describe-busy.png` });
+await page.waitForURL(/drafted=1/, { timeout: 200_000 });
+await page.getByText("Claude drafted these steps").waitFor();
+await page.screenshot({ path: `${out}/laptop-describe-result.png`, fullPage: true });
+const steps = await page.getByRole("button", { name: /^Step \d+:/ }).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+console.log(steps.join("\n"));
+console.log(errors.length ? "errors: " + errors.join(" | ") : "no console errors");
+await browser.close();

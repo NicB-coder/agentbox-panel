@@ -1,5 +1,7 @@
 import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent } from "./db";
 import { readHeartbeat } from "./heartbeat";
+import { inboxCount } from "./inbox";
+import { usageState } from "./usage";
 import type { Agent, AgentView, HeartbeatInfo, Run } from "./types";
 import { ago, clock, clockOf, inWords, nextRunAfter, scheduleWords } from "./words";
 
@@ -51,6 +53,15 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
 
   const base = { agent: a, activeRun: run, pendingApproval: pending, waitingForOk: false };
 
+  if (run && run.status === "queued") {
+    return {
+      ...base,
+      status: "queued",
+      task: run.task,
+      summary: run.activity ?? "Waiting for usage to reset",
+      timeLabel: `asked ${ago(run.startedAt, now)}`,
+    };
+  }
   if (run && (pending || run.status === "waiting")) {
     return {
       ...base,
@@ -138,6 +149,8 @@ function dayWord(ms: number) {
 export type HomeState = {
   greeting: string;
   summary: string;
+  needs: number;
+  usageNote: string | null;
   views: AgentView[];
 };
 
@@ -145,14 +158,21 @@ export function homeState(): HomeState {
   const hb = readHeartbeat();
   const views = listAgents().map((a) => agentView(a, hb));
   const working = views.filter((v) => v.status === "working").length;
-  const needs = views.filter((v) => v.status === "needs").length;
+  const needs = inboxCount();
   const h = new Date().getHours();
   const greeting = `Good ${h < 5 ? "evening" : h < 12 ? "morning" : h < 18 ? "afternoon" : "evening"}, Nic`;
   const parts = [
     `${working} agent${working === 1 ? "" : "s"} working`,
     needs ? `${needs} thing${needs === 1 ? "" : "s"} need${needs === 1 ? "s" : ""} you` : "nothing needs you",
   ];
-  return { greeting, summary: parts.join(" · "), views };
+  const u = usageState();
+  const queued = views.filter((v) => v.status === "queued").length;
+  const usageNote = u.limited
+    ? `You're out of Claude usage${u.limitedUntil ? ` until ${clockOf(u.limitedUntil)}` : " for now"}. New runs wait and start by themselves after that.`
+    : queued
+      ? `${queued} ${queued === 1 ? "run is" : "runs are"} waiting for usage to reset.`
+      : null;
+  return { greeting, summary: parts.join(" · "), needs, usageNote, views };
 }
 
 export type AgentPageState = {

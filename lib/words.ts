@@ -74,9 +74,15 @@ export function inWords(ms: number, now = Date.now()): string {
   else if (mins < 60 * 36) {
     const h = Math.round(mins / 60);
     s = `${h} hour${h === 1 ? "" : "s"}`;
-  } else {
+  } else if (mins < 60 * 24 * 60) {
     const d = Math.round(mins / 60 / 24);
     s = `${d} day${d === 1 ? "" : "s"}`;
+  } else if (mins < 60 * 24 * 365) {
+    const m = Math.round(mins / 60 / 24 / 30);
+    s = `${m} month${m === 1 ? "" : "s"}`;
+  } else {
+    const y = Math.round(mins / 60 / 24 / 365);
+    s = `${y} year${y === 1 ? "" : "s"}`;
   }
   return diff >= 0 ? `in ${s}` : `${s} ago`;
 }
@@ -156,4 +162,18 @@ export function agentSentence(a: Pick<AgentInput, "name" | "project" | "schedule
 export function agentAsInput(a: Agent): AgentInput {
   const { id: _i, slug: _s, kind: _k, nextRunAt: _n, createdAt: _c, paused: _p, ...rest } = a;
   return rest;
+}
+
+// Agents write a little markdown. In the main UI we show plain words.
+export function plainText(s: string): string {
+  return s
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/(^|\s)\*([^*\n]+)\*/g, "$1$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, "$1 ($2)");
+}
+
+export function times(n: number): string {
+  return n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
 }

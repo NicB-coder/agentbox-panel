@@ -84,3 +84,27 @@ button.tile:hover {
     animation: none;
   }
 }
+
+@keyframes glow-ring {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    filter: drop-shadow(0 0 10px var(--glow));
+  }
+}
+.glow {
+  animation: glow-ring 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .glow {
+    animation: none;
+  }
+}
+
+/* Placeholder text dark enough to read (4.5:1 on white). */
+::placeholder {
+  color: #6b7079;
+  opacity: 1;
+}

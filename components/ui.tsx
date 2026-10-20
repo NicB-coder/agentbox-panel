@@ -37,6 +37,63 @@ const ICON_PATHS: Record<string, ReactNode> = {
   ),
 };
 
+// Icons for workflow steps and the app itself (not offered as agent icons).
+const EXTRA_PATHS: Record<string, ReactNode> = {
+  play: <path d="M7 4.5v15l12-7.5-12-7.5Z" />,
+  check: (
+    <>
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="m8 12.5 2.6 2.6L16.5 9" />
+    </>
+  ),
+  hand: (
+    <>
+      <path d="M18 11V6.5a1.5 1.5 0 0 0-3 0V11M15 10.5V4.5a1.5 1.5 0 0 0-3 0v6M12 10V5.5a1.5 1.5 0 0 0-3 0V14" />
+      <path d="M18 8.5a1.5 1.5 0 0 1 3 0V14a8 8 0 0 1-8 8h-1a7 7 0 0 1-5.6-2.8L3.2 15a1.6 1.6 0 0 1 2.5-2L9 16" />
+    </>
+  ),
+  rocket: (
+    <>
+      <path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1Z" />
+      <path d="m12 15-3-3a22 22 0 0 1 2-3.9A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22.4 22.4 0 0 1-4 2Z" />
+      <path d="M9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0M12 15v5s3-.6 4-2c1.1-1.6 0-5 0-5" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
+    </>
+  ),
+  flow: (
+    <>
+      <rect x="2.5" y="3" width="7" height="7" rx="2" />
+      <rect x="14.5" y="14" width="7" height="7" rx="2" />
+      <path d="M6 10v3a3 3 0 0 0 3 3h5.5" />
+      <path d="m12 13.5 2.5 2.5-2.5 2.5" />
+    </>
+  ),
+  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />,
+  bulb: (
+    <>
+      <path d="M9 18h6M10 21.5h4" />
+      <path d="M12 2.5a6.5 6.5 0 0 0-3.8 11.8c.5.4.8 1 .8 1.7v.5h6V16c0-.7.3-1.3.8-1.7A6.5 6.5 0 0 0 12 2.5Z" />
+    </>
+  ),
+  inbox: (
+    <>
+      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+      <path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1Z" />
+    </>
+  ),
+  pause: (
+    <>
+      <rect x="6" y="4.5" width="4" height="15" rx="1" />
+      <rect x="14" y="4.5" width="4" height="15" rx="1" />
+    </>
+  ),
+};
+
 export const ICON_CHOICES = Object.keys(ICON_PATHS);
 export const ICON_NAMES: Record<string, string> = {
   hammer: "Hammer",
@@ -60,7 +117,7 @@ export const COLOR_CHOICES: { hex: string; name: string }[] = [
 export function Icon({ name, color, size = 22 }: { name: string; color: string; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {ICON_PATHS[name] ?? ICON_PATHS.sparkle}
+      {ICON_PATHS[name] ?? EXTRA_PATHS[name] ?? ICON_PATHS.sparkle}
     </svg>
   );
 }
@@ -76,7 +133,7 @@ export function AgentIcon({ name, color, size = 40 }: { name: string; color: str
   );
 }
 
-const PILL: Record<PillStatus, { label: string; bg: string; fg: string }> = {
+const PILL: Record<PillStatus, { label: string; bg: string; fg: string; dot?: string }> = {
   working: { label: "Working", bg: "#EEF1FD", fg: "#2A3F9E" },
   needs: { label: "Needs you", bg: "#FDF0DC", fg: "#8A4600" },
   done: { label: "Done", bg: "#E6F4EA", fg: "#1E6B34" },
@@ -85,13 +142,18 @@ const PILL: Record<PillStatus, { label: string; bg: string; fg: string }> = {
   paused: { label: "Paused", bg: "#EEF0F3", fg: "#4A4F57" },
   off: { label: "Off", bg: "#EEF0F3", fg: "#4A4F57" },
   ready: { label: "Ready", bg: "#EEF0F3", fg: "#4A4F57" },
+  queued: { label: "Waiting", bg: "#EEF0F3", fg: "#4A4F57" },
+  running: { label: "Running", bg: "#EEF1FD", fg: "#2A3F9E" },
+  on: { label: "On", bg: "#EEF0F3", fg: "#4A4F57", dot: "#1F9D55" },
 };
+
+export const PILL_LABEL = Object.fromEntries(Object.entries(PILL).map(([k, v]) => [k, v.label])) as Record<PillStatus, string>;
 
 export function StatusPill({ status, label }: { status: PillStatus; label?: string }) {
   const p = PILL[status];
   return (
     <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-semibold leading-none whitespace-nowrap" style={{ background: p.bg, color: p.fg }}>
-      <span className={`h-2 w-2 rounded-full ${status === "working" ? "pulse" : ""}`} style={{ background: p.fg }} aria-hidden="true" />
+      <span className={`h-2 w-2 rounded-full ${status === "working" || status === "running" ? "pulse" : ""}`} style={{ background: p.dot ?? p.fg }} aria-hidden="true" />
       {label ?? p.label}
     </span>
   );
@@ -105,4 +167,7 @@ export const btn = {
   danger:
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-[14px] border border-[#F2C4BF] bg-[#FDE8E6] px-5 text-[15px] font-semibold text-[#A11B12] hover:bg-[#FBD9D5] disabled:opacity-50",
   pill: "inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-[15px] font-semibold text-white hover:bg-black",
+  link: "inline-flex min-h-11 items-center px-1 text-[15px] font-semibold text-ink underline underline-offset-2 hover:text-black",
 };
+
+export const field = "rounded-[14px] border border-[#C9CDD4] bg-white px-3 text-[15px]";

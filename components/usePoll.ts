@@ -17,6 +17,12 @@ export function usePoll<T>(url: string, initial: T, everyMs = 3000) {
       busy.current = false;
     }
   }, [url]);
+  const first = useRef(true);
+  useEffect(() => {
+    // The address changed (e.g. a different run picked): fetch straight away.
+    if (first.current) first.current = false;
+    else refresh();
+  }, [refresh]);
   useEffect(() => {
     const t = setInterval(() => {
       if (document.visibilityState === "visible") refresh();

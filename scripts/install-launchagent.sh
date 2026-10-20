@@ -20,6 +20,14 @@ plutil -lint "$PLIST" >/dev/null
 
 UID_NUM=$(id -u)
 launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$UID_NUM" "$PLIST"
+# launchd can take a moment to let go of the old job; wait for it, then load the new one.
+for i in {1..20}; do
+  launchctl print "gui/$UID_NUM/$LABEL" >/dev/null 2>&1 || break
+  sleep 0.5
+done
+for i in {1..5}; do
+  launchctl bootstrap "gui/$UID_NUM" "$PLIST" 2>/dev/null && break
+  sleep 1
+done
 launchctl kickstart -k "gui/$UID_NUM/$LABEL"
 echo "agentbox panel is starting at http://127.0.0.1:3000 (logs in $LOG_DIR)"

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { AgentView } from "@/lib/types";
-import { AgentIcon, StatusPill } from "./ui";
+import { AgentIcon, PILL_LABEL, StatusPill } from "./ui";
 
 export function AgentTile({ v }: { v: AgentView }) {
   const a = v.agent;
@@ -31,7 +31,7 @@ export function AgentTile({ v }: { v: AgentView }) {
 }
 
 function statusWord(v: AgentView) {
-  return { working: "Working", needs: "Needs you", done: "Done", stopped: "Stopped", scheduled: "Scheduled", paused: "Paused", off: "Off", ready: "Ready" }[v.status];
+  return PILL_LABEL[v.status];
 }
 
 export function AddAgentTile() {

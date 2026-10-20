@@ -2,11 +2,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { AgentPageState } from "@/lib/views";
-import type { Approval, Run, WorkMode } from "@/lib/types";
-import { ago, clockOf, duration, MODE_WORDS, agentSentence } from "@/lib/words";
+import type { Approval, PillStatus, Run, WorkMode } from "@/lib/types";
+import { ago, clockOf, duration, MODE_WORDS, agentSentence, plainText } from "@/lib/words";
 import { AgentIcon, StatusPill, btn } from "./ui";
 import { usePoll } from "./usePoll";
 import ModePicker from "./ModePicker";
+import { ErrorBox } from "./bits";
 
 async function post(url: string, body: unknown = {}) {
   const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -75,9 +76,9 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
         )}
       </div>
       {error && (
-        <p role="alert" className="mt-4 rounded-[14px] bg-[#FDE8E6] px-4 py-3 text-[15px] font-medium text-[#A11B12]">
-          {error}
-        </p>
+        <div className="mt-4">
+          <ErrorBox message={error} onRetry={() => setError("")} where={`${a.name}'s page`} />
+        </div>
       )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -164,7 +165,17 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: (l: string, 
       ) : (
         <>
           <p className="mt-3 text-[20px] font-semibold leading-snug">{view.task}</p>
-          <p className="mt-1 text-[15px] text-muted">{view.summary}</p>
+          {!(view.status === "stopped" && runs[0]?.status === "stopped") && <p className="mt-1 text-[15px] text-muted">{view.summary}</p>}
+          {view.status === "stopped" && runs[0]?.status === "stopped" && (
+            <div className="mt-5">
+              <ErrorBox
+                compact
+                message={runs[0].stopReason ?? "It stopped before finishing."}
+                onRetry={() => act("retry", `/api/runs/${runs[0].id}/retry`)}
+                where={`${view.agent.name}: "${runs[0].task}"`}
+              />
+            </div>
+          )}
         </>
       )}
     </section>
@@ -276,11 +287,7 @@ function GiveTask({ id, defaultMode, disabled, onStarted }: { id: number; defaul
           />
         </label>
         <ModePicker value={mode} onChange={setMode} legend="How should it work with you this time?" />
-        {error && (
-          <p role="alert" className="text-[14px] font-medium text-[#A11B12]">
-            {error}
-          </p>
-        )}
+        {error && <ErrorBox compact message={error} where="Give it a task" />}
         <div>
           <button type="submit" className={btn.primary} disabled={busy || disabled}>
             {busy ? "Starting…" : "Start"}
@@ -292,7 +299,8 @@ function GiveTask({ id, defaultMode, disabled, onStarted }: { id: number; defaul
   );
 }
 
-const RESULT: Record<Run["status"], { status: "working" | "needs" | "done" | "stopped"; label: string }> = {
+const RESULT: Record<Run["status"], { status: PillStatus; label: string }> = {
+  queued: { status: "queued", label: "Waiting" },
   working: { status: "working", label: "Working" },
   waiting: { status: "needs", label: "Needs you" },
   review: { status: "needs", label: "Needs you" },
@@ -342,7 +350,7 @@ function History({ runs }: { runs: Run[] }) {
 
 function Report({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-  const [first, ...rest] = text.split(/\n\s*\n/);
+  const [first, ...rest] = plainText(text).split(/\n\s*\n/);
   return (
     <div className="mt-1 text-[14px] leading-snug text-muted">
       <p className="whitespace-pre-wrap">{first}</p>
