@@ -71,7 +71,7 @@ export function inWords(ms: number, now = Date.now()): string {
   let s: string;
   if (mins < 1) s = "less than a minute";
   else if (mins < 60) s = `${mins} min`;
-  else if (mins < 60 * 24) {
+  else if (mins < 60 * 36) {
     const h = Math.round(mins / 60);
     s = `${h} hour${h === 1 ? "" : "s"}`;
   } else {
