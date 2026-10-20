@@ -11,7 +11,6 @@ import { activeWfRun } from "./workflowRunner";
 export function suggestions(ctx: HelperContext): string[] {
   const p = ctx.path || "/";
   const out: string[] = [];
-  if (ctx.errors.length) out.push("What does this error mean?");
   if (getSetting<boolean>("pausedAll", false)) out.push("Why is everything paused?");
   const u = usageState();
 
@@ -53,6 +52,8 @@ export function suggestions(ctx: HelperContext): string[] {
   } else if (p.startsWith("/help")) {
     out.push("What should I try first?", "What does the usage meter mean?");
   }
+  // An error on screen comes first, unless "Why did this stop?" already covers it.
+  if (ctx.errors.length && !out.includes("Why did this stop?")) out.unshift("What does this error mean?");
   if (u.session && u.session.pct >= 75 && out.length < 3) out.push("Will I run out of usage?");
   if (out.length < 2) out.push("What can you help me with?");
   return [...new Set(out)].slice(0, 3);
