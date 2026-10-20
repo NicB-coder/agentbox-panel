@@ -13,7 +13,7 @@ import { PAUSED_ALL, USAGE_STOP, pausedAll, startRun, stopRun } from "./runner";
 import type { Model, Run, RunExtra, WfStep, WfStepRun, Workflow, WorkflowRun, WorkMode } from "./types";
 import { usageBlocked, usageState } from "./usage";
 import { flowSentence, stepTitle, type AgentRef } from "./wf";
-import { clockOf, nextRunAfter } from "./words";
+import { clockOf, nextRunAfter, plainText } from "./words";
 
 // Runs a workflow: one shared git worktree and branch, one pull request, steps one after another.
 // Agent-like steps reuse the v1 task runner (same hooks, approvals and the main/force-push block).
@@ -23,9 +23,10 @@ const PATH = [path.join(os.homedir(), ".local", "bin"), "/opt/homebrew/bin", "/u
 const RESTARTED = "The panel restarted while it was working.";
 const PROTECTED_REPOS = ["agentbox-panel"]; // never ship automatically
 
-type G = typeof globalThis & { __wfBusy?: Set<number>; __wfChecks?: Set<number>; __wfLastPoll?: number; __wfRepo?: Map<string, string> };
+type G = typeof globalThis & { __wfHandled?: Set<number>; __wfBusy?: Set<number>; __wfChecks?: Set<number>; __wfLastPoll?: number; __wfRepo?: Map<string, string> };
 const g = globalThis as G;
 const busy = (g.__wfBusy ??= new Set());
+const handled = (g.__wfHandled ??= new Set()); // step runs whose end we've already dealt with
 const checking = (g.__wfChecks ??= new Set());
 const repoCache = (g.__wfRepo ??= new Map());
 
@@ -340,6 +341,9 @@ async function startStep(wr: WorkflowRun, step: WfStep) {
 export async function onStepRunEnded(runId: number) {
   const run = getRun(runId);
   if (!run?.workflowRunId || !run.stepId) return;
+  if (run.status !== "done" && run.status !== "stopped") return;
+  if (handled.has(runId)) return;
+  handled.add(runId);
   const wr = getWfRun(run.workflowRunId);
   if (!wr || wr.status !== "running") return;
   const idx = wr.steps.findIndex((s) => s.id === run.stepId);
@@ -361,7 +365,7 @@ export async function onStepRunEnded(runId: number) {
   if (run.status !== "done") return;
 
   const text = run.result ?? "";
-  const summary = text.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 280) ?? "Finished.";
+  const summary = plainText(text.split("\n").map((l) => l.trim()).find(Boolean) ?? "Finished.").slice(0, 280);
   await syncBranch(wr.id);
   const fresh = getWfRun(wr.id)!;
   const agents = agentRefs();

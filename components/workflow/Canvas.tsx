@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { WfStep, WfStepRun, WfStepState } from "@/lib/types";
 import { STEP_INFO, hasFailPath, stepSubtitle, stepTitle, type AgentRef } from "@/lib/wf";
 import { Icon } from "../ui";
+import { plainText } from "@/lib/words";
 
 // The step row. Tiles snap into a left-to-right row (top-to-bottom on a phone); the app draws the lines.
 
@@ -180,7 +181,7 @@ export default function Canvas({ steps, agents, selected, onSelect, onInsert, on
             const title = stepTitle(s, agents);
             const isNow = state === "now" || state === "waiting";
             const faded = live && (state === "todo" || state === "skipped");
-            const subtitle = live && isNow ? live.nowText[s.id] ?? sr?.note ?? "" : live && sr?.note && state !== "todo" ? sr.note : stepSubtitle(s, order, agents);
+            const subtitle = live && isNow ? plainText(live.nowText[s.id] ?? sr?.note ?? "") : live && sr?.note && state !== "todo" ? plainText(sr.note) : stepSubtitle(s, order, agents);
             return (
               <li key={s.id} className={vertical ? "flex flex-col items-start" : "flex items-center"}>
                 {i > 0 && <Connector vertical={vertical} label={hasFailPath(order[i - 1]) ? "passed" : null} onAdd={live ? null : () => onInsert(i)} />}

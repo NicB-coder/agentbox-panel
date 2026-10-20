@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { AgentPageState } from "@/lib/views";
 import type { Approval, PillStatus, Run, WorkMode } from "@/lib/types";
-import { ago, clockOf, duration, MODE_WORDS, agentSentence } from "@/lib/words";
+import { ago, clockOf, duration, MODE_WORDS, agentSentence, plainText } from "@/lib/words";
 import { AgentIcon, StatusPill, btn } from "./ui";
 import { usePoll } from "./usePoll";
 import ModePicker from "./ModePicker";
@@ -343,7 +343,7 @@ function History({ runs }: { runs: Run[] }) {
 
 function Report({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-  const [first, ...rest] = text.split(/\n\s*\n/);
+  const [first, ...rest] = plainText(text).split(/\n\s*\n/);
   return (
     <div className="mt-1 text-[14px] leading-snug text-muted">
       <p className="whitespace-pre-wrap">{first}</p>

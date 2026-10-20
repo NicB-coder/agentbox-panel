@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { WfStep, WorkflowRun } from "@/lib/types";
 import { stepTitle, type AgentRef } from "@/lib/wf";
 import type { StepRunInfo } from "@/lib/workflowViews";
-import { clockOf, duration } from "@/lib/words";
+import { clockOf, duration, plainText } from "@/lib/words";
 import { btn } from "../ui";
 import { Sheet } from "./StepPanel";
 import { stepColor, stepIcon } from "./Canvas";
@@ -19,7 +19,7 @@ export default function RunStepPanel({ step, run, info, agents, onClose }: { ste
     <Sheet title={stepTitle(step, agents)} icon={stepIcon(step, agents)} color={stepColor(step, agents)} onClose={onClose}>
       <div>
         <p className="text-[14px] font-semibold text-muted">{WORD[sr?.state ?? "todo"]}</p>
-        {sr?.note && <p className="mt-1 text-[16px] font-semibold leading-snug">{sr.note}</p>}
+        {sr?.note && <p className="mt-1 text-[16px] font-semibold leading-snug">{plainText(sr.note)}</p>}
         {sr?.startedAt && (
           <p className="mt-1 text-[14px] text-muted">
             Started {clockOf(sr.startedAt)}
@@ -55,7 +55,8 @@ export default function RunStepPanel({ step, run, info, agents, onClose }: { ste
 function StepRun({ r, label }: { r: StepRunInfo; label: string | null }) {
   const [open, setOpen] = useState(false);
   const [log, setLog] = useState("");
-  const text = r.status === "stopped" ? r.stopReason : r.result ?? r.activity;
+  const raw = r.status === "stopped" ? r.stopReason : r.result ?? r.activity;
+  const text = raw ? plainText(raw) : raw;
   return (
     <div className="rounded-[18px] border border-line p-4">
       {label && <p className="text-[13px] font-semibold text-muted">{label}</p>}

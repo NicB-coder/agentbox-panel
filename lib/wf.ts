@@ -1,7 +1,7 @@
 // Workflow building blocks shared by the browser and the server: step types, templates,
 // the plain-English sentence for a whole flow, and turning anything into a clean workflow.
 import type { CheckKind, Model, StartTrigger, StepType, WfLimits, WfStep, WorkflowInput, WorkMode } from "./types";
-import { clock, scheduleWords } from "./words";
+import { clock, scheduleWords, times } from "./words";
 
 export type AgentRef = { id: number; name: string; color: string; icon: string; slug?: string; allowed?: string };
 
@@ -134,7 +134,7 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
         break;
       case "review": {
         const t = s.onFail && s.onFail !== "stop" ? steps.find((x) => x.id === s.onFail) : null;
-        parts.push(t ? `a reviewer checks it (back to ${stepTitle(t, agents)} if it needs work, up to ${w.limits.maxLoops} times)` : "a reviewer checks it (stops if it needs work)");
+        parts.push(t ? `a reviewer checks it (back to ${stepTitle(t, agents)} if it needs work, up to ${times(w.limits.maxLoops)})` : "a reviewer checks it (stops if it needs work)");
         break;
       }
       case "check": {
