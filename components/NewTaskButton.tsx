@@ -9,7 +9,7 @@ import { ErrorBox } from "./bits";
 type Pick = { id: number; name: string; mode: WorkMode };
 
 // Opens the New task window from anywhere (the phone menu, an idea in the Inbox…).
-export function openNewTask(detail: { task?: string; ideaId?: number } = {}) {
+export function openNewTask(detail: { task?: string; ideaId?: number; agentId?: number } = {}) {
   window.dispatchEvent(new CustomEvent("agentbox:new-task", { detail }));
 }
 
@@ -31,15 +31,16 @@ export default function NewTaskButton({ agents, buttonClassName = "inline-flex" 
 
   useEffect(() => {
     const open = (e: Event) => {
-      const d = (e as CustomEvent<{ task?: string; ideaId?: number }>).detail ?? {};
+      const d = (e as CustomEvent<{ task?: string; ideaId?: number; agentId?: number }>).detail ?? {};
       if (d.task !== undefined) setTask(d.task);
+      if (d.agentId && agents.some((a) => a.id === d.agentId)) setAgentId(d.agentId);
       setIdeaId(d.ideaId ?? null);
       setError("");
       ref.current?.showModal();
     };
     window.addEventListener("agentbox:new-task", open);
     return () => window.removeEventListener("agentbox:new-task", open);
-  }, []);
+  }, [agents]);
 
   async function start(e?: React.FormEvent) {
     e?.preventDefault();

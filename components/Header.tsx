@@ -392,7 +392,7 @@ function Breakdown({ title, items, empty }: { title: string; items: UsageView["b
               <span className="flex justify-between gap-2">
                 <span className="truncate">{i.name}</span>
                 <span className="shrink-0 text-muted">
-                  {i.share}% · {i.runs} {i.runs === 1 ? "run" : "runs"}
+                  {i.share}% · {i.runs} {i.runs === 1 ? i.unit?.[0] ?? "run" : i.unit?.[1] ?? "runs"}
                 </span>
               </span>
               <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-[#E6E8EC]" aria-hidden="true">

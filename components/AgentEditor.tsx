@@ -9,6 +9,7 @@ import Segmented from "./Segmented";
 import ModePicker from "./ModePicker";
 import ProjectSelect from "./ProjectSelect";
 import { ErrorBox, InfoTip, Label, Switch } from "./bits";
+import { useHelperContext } from "./helper/helperStore";
 
 const PLACEHOLDER = `For example: Every night, open my portfolio site in a real browser at laptop and phone width. Click every link and check every page loads, images show up and nothing overlaps. A good result is a short list of real problems with which page they're on, or "all good". Never change any code, never fill in forms.`;
 
@@ -20,6 +21,11 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof AgentInput>(k: K, v: AgentInput[K]) => setA((x) => ({ ...x, [k]: v }));
+  // The Helper can see what's typed so far (e.g. "Help me write what it should do").
+  useHelperContext({
+    agentId: id ?? undefined,
+    editing: `${id ? "this agent's settings" : "a new agent"}, not saved yet. Name: "${a.name}". What it should do so far: "${a.prompt.slice(0, 1200)}". ${agentSentence(a)}`,
+  });
 
   const never = a.notify.length === 0;
   function toggleNotify(n: NotifyOn | "never") {

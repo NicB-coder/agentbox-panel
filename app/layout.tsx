@@ -5,6 +5,7 @@ import "./globals.css";
 import { listAgents } from "@/lib/db";
 import { headerState } from "@/lib/control";
 import Header from "@/components/Header";
+import HelperBubble from "@/components/helper/HelperBubble";
 
 const instrument = Instrument_Sans({
   subsets: ["latin"],
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
           </nav>
         </footer>
+        <HelperBubble />
       </body>
     </html>
   );

@@ -151,6 +151,22 @@ function migrate(d: Database.Database) {
       key TEXT NOT NULL,
       PRIMARY KEY (workflow_id, key)
     );
+    CREATE TABLE IF NOT EXISTS helper_chats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS helper_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      text TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'done',
+      meta TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS helper_msgs_chat ON helper_messages(chat_id, id);
   `);
 }
 
@@ -568,4 +584,17 @@ export function updateWfRun(id: number, patch: Partial<WorkflowRun>) {
   }
   if (!sets.length) return;
   db().prepare(`UPDATE workflow_runs SET ${sets.join(", ")} WHERE id = ?`).run(...vals, id);
+}
+
+// For the Helper: everything active, then the newest of the rest.
+export function readRecentRuns(n: number): Run[] {
+  const active = (db().prepare("SELECT * FROM runs WHERE status IN ('queued','working','waiting','review') ORDER BY id DESC").all() as RunRow[]).map(toRun);
+  const rest = (db().prepare("SELECT * FROM runs WHERE status NOT IN ('queued','working','waiting','review') ORDER BY id DESC LIMIT ?").all(n) as RunRow[]).map(toRun);
+  return [...active, ...rest].slice(0, Math.max(n, active.length));
+}
+
+export function recentWfRuns(n: number): WorkflowRun[] {
+  const active = (db().prepare("SELECT * FROM workflow_runs WHERE status IN ('queued','running','needs') ORDER BY id DESC").all() as WfRunRow[]).map(toWfRun);
+  const rest = (db().prepare("SELECT * FROM workflow_runs WHERE status NOT IN ('queued','running','needs') ORDER BY id DESC LIMIT ?").all(n) as WfRunRow[]).map(toWfRun);
+  return [...active, ...rest].slice(0, Math.max(n, active.length));
 }

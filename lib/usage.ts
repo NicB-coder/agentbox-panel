@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { getAgent, getSetting, getWorkflow, getWfRun, runsSince, runsWithStatus, setSetting } from "./db";
-import { draftUsageToday } from "./draftUsage";
+import { draftUsageToday, helperUsageToday } from "./draftUsage";
 import type { UsageBreakdown, UsageState, UsageView, UsageWindow } from "./types";
 
 // Where the numbers come from (checked against Claude Code 2.1.304):
@@ -177,8 +177,9 @@ function startOfToday() {
 export function usageView(): UsageView {
   const runs = runsSince(startOfToday());
   const drafts = draftUsageToday();
-  const total = runs.reduce((n, r) => n + r.costUsd, 0) + drafts.cost;
-  const byAgent = new Map<string, { name: string; color: string; cost: number; runs: number }>();
+  const helper = helperUsageToday();
+  const total = runs.reduce((n, r) => n + r.costUsd, 0) + drafts.cost + helper.cost;
+  const byAgent = new Map<string, { name: string; color: string; cost: number; runs: number; unit?: [string, string] }>();
   const byWorkflow = new Map<string, { name: string; color: string; cost: number; runs: number }>();
   for (const r of runs) {
     if (r.workflowRunId) {
@@ -198,11 +199,13 @@ export function usageView(): UsageView {
     e.runs++;
     byAgent.set(key, e);
   }
+  // The Helper chat isn't an agent run, but it shows in the agent split so Nic sees what it costs.
+  if (helper.count) byAgent.set("helper", { name: "Helper", color: "#15171B", cost: helper.cost, runs: helper.count, unit: ["chat reply", "chat replies"] });
   if (drafts.count) byWorkflow.set("drafts", { name: "Drafting workflows", color: "#2F4FD8", cost: drafts.cost, runs: drafts.count });
   const list = (m: typeof byAgent): UsageBreakdown =>
     [...m.values()]
       .sort((a, b) => b.cost - a.cost)
-      .map((e) => ({ name: e.name, color: e.color, runs: e.runs, share: total > 0 ? Math.round((e.cost / total) * 100) : 0 }));
+      .map((e) => ({ name: e.name, color: e.color, runs: e.runs, unit: "unit" in e ? e.unit : undefined, share: total > 0 ? Math.round((e.cost / total) * 100) : 0 }));
   const b = usageBlocked();
   return {
     state: usageState(),
