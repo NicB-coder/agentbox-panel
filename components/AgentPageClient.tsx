@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { AgentPageState } from "@/lib/views";
-import type { Approval, Run, WorkMode } from "@/lib/types";
+import type { Approval, PillStatus, Run, WorkMode } from "@/lib/types";
 import { ago, clockOf, duration, MODE_WORDS, agentSentence } from "@/lib/words";
 import { AgentIcon, StatusPill, btn } from "./ui";
 import { usePoll } from "./usePoll";
@@ -292,7 +292,8 @@ function GiveTask({ id, defaultMode, disabled, onStarted }: { id: number; defaul
   );
 }
 
-const RESULT: Record<Run["status"], { status: "working" | "needs" | "done" | "stopped"; label: string }> = {
+const RESULT: Record<Run["status"], { status: PillStatus; label: string }> = {
+  queued: { status: "queued", label: "Waiting" },
   working: { status: "working", label: "Working" },
   waiting: { status: "needs", label: "Needs you" },
   review: { status: "needs", label: "Needs you" },

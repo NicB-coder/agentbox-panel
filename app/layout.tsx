@@ -3,8 +3,8 @@ import { Instrument_Sans } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { listAgents } from "@/lib/db";
-import OnlineDot from "@/components/OnlineDot";
-import NewTaskButton from "@/components/NewTaskButton";
+import { headerState } from "@/lib/control";
+import Header from "@/components/Header";
 
 const instrument = Instrument_Sans({
   subsets: ["latin"],
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   description: "Control the AI agents running on agentbox.",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#ffffff" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#ffffff", viewportFit: "cover" };
 
 export const dynamic = "force-dynamic";
 
@@ -31,20 +31,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:p-3">
           Skip to content
         </a>
-        <header className="h-16 border-b border-line">
-          <div className="mx-auto flex h-full max-w-[1112px] items-center justify-between px-4">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="flex min-h-11 items-center text-[20px] font-bold tracking-tight">
-                agentbox
-              </Link>
-              <OnlineDot />
-            </div>
-            <NewTaskButton agents={agents} />
-          </div>
-        </header>
-        <main id="main" className="mx-auto max-w-[1112px] px-4 pb-24">
+        <Header initial={headerState()} agents={agents} />
+        <main id="main" className="mx-auto max-w-[1112px] px-4 pb-16">
           {children}
         </main>
+        <footer className="mx-auto max-w-[1112px] px-4 pb-28 lg:pb-10">
+          <nav aria-label="More" className="flex flex-wrap gap-x-2 border-t border-line pt-4 text-[14px] text-muted">
+            <Link href="/projects" className="inline-flex min-h-11 items-center px-2 font-medium hover:text-ink">
+              Projects
+            </Link>
+            <Link href="/settings" className="inline-flex min-h-11 items-center px-2 font-medium hover:text-ink">
+              Settings
+            </Link>
+            <Link href="/help" className="inline-flex min-h-11 items-center px-2 font-medium hover:text-ink">
+              Help
+            </Link>
+          </nav>
+        </footer>
       </body>
     </html>
   );

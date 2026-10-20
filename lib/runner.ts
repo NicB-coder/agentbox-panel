@@ -3,11 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  LOG_DIR, activeRun, createRun, denyPendingForRun, getAgent, getRun, pendingApprovalForRun, runsWithStatus, updateRun,
+  LOG_DIR, activeRun, addRunUsage, createRun, denyPendingForRun, getAgent, getRun, getSetting, pendingApprovalForRun, runsWithStatus, updateRun,
 } from "./db";
 import { notify } from "./notify";
 import { projectPath } from "./projects";
-import type { Agent, Allowed, Run, Step, WorkMode } from "./types";
+import type { Agent, Allowed, Model, Run, RunExtra, Step, WorkMode } from "./types";
+import { ingestRateLimitEvent, markLimited, usageBlocked } from "./usage";
+import { clockOf } from "./words";
 
 // One run = a git worktree on its own branch + a headless Claude Code session in it.
 // Working → (Needs you while waiting for an OK) → Needs you (pull request open) → Done when merged.
@@ -70,6 +72,26 @@ function slug(s: string, n: number) {
 
 const lookOnly = (allowed: Allowed, mode: WorkMode) => allowed === "look" || mode === "look";
 
+// What this run actually uses: the agent's settings, unless a workflow step overrides them.
+function eff(agent: Agent, run: Run): { allowed: Allowed; model: Model; maxMinutes: number; prompt: string; name: string } {
+  const x = run.extra ?? {};
+  return {
+    allowed: x.allowed ?? agent.allowed,
+    model: x.model ?? agent.model,
+    maxMinutes: x.maxMinutes ?? agent.maxMinutes,
+    prompt: x.prompt ?? agent.prompt,
+    name: agent.kind === "helper" ? x.label ?? "Workflow step" : agent.name,
+  };
+}
+
+export function pausedAll(): boolean {
+  return getSetting<boolean>("pausedAll", false);
+}
+
+function afterEnd(run: Run) {
+  if (run.workflowRunId) import("./workflowRunner").then((m) => m.onStepRunEnded(run.id)).catch((e) => console.warn("[workflow]", e));
+}
+
 function defaultSteps(look: boolean): Step[] {
   const labels = look ? ["Look around", "Check the details", "Write up what it found"] : ["Understand the problem", "Make the changes", "Check that it works", "Send a pull request"];
   return labels.map((label, i) => ({ label, state: i === 0 ? "now" : "todo" }));
@@ -77,22 +99,68 @@ function defaultSteps(look: boolean): Step[] {
 
 // ---------- starting a run ----------
 
-export async function startRun(agentId: number, opts: { task?: string; mode?: WorkMode; trigger: Run["trigger"] }): Promise<Run> {
+export type StartOpts = {
+  task?: string;
+  mode?: WorkMode;
+  trigger: Run["trigger"];
+  project?: string; // workflow steps run in the workflow's project
+  workflowRunId?: number;
+  stepId?: string;
+  extra?: RunExtra;
+};
+
+export const WAITING_FOR_USAGE = "Waiting for usage to reset";
+
+export async function startRun(agentId: number, opts: StartOpts): Promise<Run> {
   const agent = getAgent(agentId);
-  if (!agent || agent.kind !== "claude") throw new Error("This agent can't run tasks.");
+  if (!agent || (agent.kind !== "claude" && agent.kind !== "helper")) throw new Error("This agent can't run tasks.");
   if (!agent.enabled) throw new Error("This agent is switched off. Turn it on in Edit first.");
-  if (activeRun(agentId)) throw new Error("It's already working on something.");
-  const repo = projectPath(agent.project);
-  if (!repo) throw new Error(`Can't find the project "${agent.project}" on this Mac.`);
+  if (pausedAll()) throw new Error("Everything is paused. Press Resume everything at the top first.");
+  if (agent.kind === "claude" && activeRun(agentId)) throw new Error("It's already working on something.");
+  const project = opts.project ?? agent.project;
+  const repo = projectPath(project);
+  if (!repo) throw new Error(`Can't find the project "${project}" on this Mac.`);
 
   const mode = opts.mode ?? agent.mode;
+  const extra = opts.extra ?? {};
+  const allowed = extra.allowed ?? agent.allowed;
   const task = opts.task?.trim() || (opts.trigger === "schedule" ? "Scheduled run" : "Its usual job");
-  const run = createRun({ agentId, task, mode, trigger: opts.trigger, steps: defaultSteps(lookOnly(agent.allowed, mode)) });
-  log(run.id, `Run started by ${opts.trigger === "schedule" ? "the schedule" : "Nic"} · task: ${task} · mode: ${mode} · allowed: ${agent.allowed} · model: ${agent.model}`);
+  const blocked = usageBlocked();
+  const run = createRun({
+    agentId, task, mode, trigger: opts.trigger, steps: defaultSteps(lookOnly(allowed, mode)),
+    status: blocked.blocked ? "queued" : "working",
+    activity: blocked.blocked ? `${WAITING_FOR_USAGE}${blocked.until ? ` at ${clockOf(blocked.until)}` : ""}` : undefined,
+    workflowRunId: opts.workflowRunId, stepId: opts.stepId, extra: { ...extra, project },
+  });
+  const by = opts.trigger === "schedule" ? "the schedule" : opts.trigger === "workflow" ? "a workflow" : "Nic";
+  log(run.id, `Run started by ${by} · task: ${task} · mode: ${mode} · allowed: ${allowed} · model: ${extra.model ?? agent.model}`);
+  if (blocked.blocked) {
+    log(run.id, blocked.reason === "guard" ? "Usage is past your limit in Settings, so it waits for the reset." : "Out of Claude usage, so it waits for the reset.");
+    return getRun(run.id)!;
+  }
 
   // Prepare the worktree, then start Claude. Runs in the background; the page polls for progress.
   prepareAndSpawn(agent, run, repo).catch((e) => finishStopped(run.id, "It couldn't get started.", String(e)));
   return getRun(run.id)!;
+}
+
+// Starts runs that were waiting for usage to come back. Called by the scheduler.
+export function startQueued() {
+  if (pausedAll() || usageBlocked().blocked) return;
+  for (const run of runsWithStatus("queued")) {
+    const agent = getAgent(run.agentId);
+    if (!agent) continue;
+    if (agent.kind === "claude" && runsWithStatus("working", "waiting").some((r) => r.agentId === agent.id)) continue;
+    const project = run.extra.project ?? agent.project;
+    const repo = projectPath(project);
+    if (!repo) {
+      finishStopped(run.id, `Can't find the project "${project}" on this Mac.`);
+      continue;
+    }
+    log(run.id, "Usage is back. Starting now.");
+    updateRun(run.id, { status: "working", activity: "Getting ready…", startedAt: Date.now() });
+    prepareAndSpawn(agent, getRun(run.id)!, repo).catch((e) => finishStopped(run.id, "It couldn't get started.", String(e)));
+  }
 }
 
 async function baseRef(repo: string): Promise<string> {
@@ -104,9 +172,17 @@ async function baseRef(repo: string): Promise<string> {
 }
 
 async function prepareAndSpawn(agent: Agent, run: Run, repo: string) {
+  if (run.extra.worktree) {
+    // A workflow step: everyone works in the workflow's shared folder and branch.
+    updateRun(run.id, { branch: run.extra.branch ?? null, worktree: run.extra.worktree, activity: "Reading the task…" });
+    log(run.id, `Working in the workflow's shared copy on branch ${run.extra.branch}`);
+    const fresh = getRun(run.id)!;
+    spawnClaude(agent, fresh, run.mode === "plan" ? "plan" : "work", buildPrompt(agent, fresh));
+    return;
+  }
   const base = await baseRef(repo);
   const branch = `agent/${agent.slug}-${slug(run.task, 4) || "run"}-${run.id}`;
-  const dir = path.join(WORKTREES, agent.project, branch.replace(/\//g, "-"));
+  const dir = path.join(WORKTREES, run.extra.project ?? agent.project, branch.replace(/\//g, "-"));
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   const wt = await sh("git", ["worktree", "add", "-b", branch, dir, base], repo);
   if (!wt.ok) throw new Error(`git worktree add failed: ${wt.err}`);
@@ -118,9 +194,10 @@ async function prepareAndSpawn(agent: Agent, run: Run, repo: string) {
 }
 
 function rules(agent: Agent, run: Run): string {
-  const look = lookOnly(agent.allowed, run.mode);
+  const e = eff(agent, run);
+  const look = lookOnly(e.allowed, run.mode);
   const lines = [
-    `You are "${agent.name}", an AI agent started from Nic's agentbox panel. Nic is a high-school developer who reads your progress in the panel, so write for him in plain, friendly English without jargon.`,
+    `You are "${e.name}", an AI agent started from Nic's agentbox panel. Nic is a high-school developer who reads your progress in the panel, so write for him in plain, friendly English without jargon.`,
     "",
     "Progress lines (the panel reads these, put each on its own line):",
     `- Before you start, write: PLAN: first step | second step | third step   (3 to 5 short plain-English steps such as "Understand the problem", "Make the changes", "Test it in a browser"${look ? "" : ". Don't include sending a pull request, the panel does that"}).`,
@@ -130,12 +207,13 @@ function rules(agent: Agent, run: Run): string {
     `You are working in your own copy of the project${run.branch ? ` on the branch ${run.branch}` : ""}. Never push to main or master, never force push, and never touch secrets, tokens or passwords.`,
   ];
   if (look) lines.push("You may only LOOK: read, run read-only checks and report. Don't change, create or delete any files in the project, and don't commit or push. Your final message is the report Nic reads.");
-  else if (agent.allowed === "suggest") lines.push("Make your changes in this copy and commit them with a clear message. Don't push and don't open a pull request; the panel pushes your branch and opens the pull request for Nic.");
+  else if (e.allowed === "suggest") lines.push("Make your changes in this copy and commit them with a clear message. Don't push and don't open a pull request; the panel pushes your branch and opens the pull request for Nic.");
   else lines.push(`You may commit and push to your own branch (git push origin ${run.branch}). Never push anywhere else. The panel opens the pull request for Nic.`);
   return lines.join("\n");
 }
 
 function buildPrompt(agent: Agent, run: Run): string {
+  if (run.workflowRunId) return `${eff(agent, run).prompt}`;
   const job = `Your job, in Nic's words:\n${agent.prompt}`;
   if (run.task === "Its usual job" || run.task === "Scheduled run") return `${job}\n\nDo your job now.`;
   return `${job}\n\nThis time, Nic asked you to:\n${run.task}`;
@@ -148,7 +226,8 @@ function permissionMode(mode: WorkMode, phase: "plan" | "work"): string {
 }
 
 function spawnClaude(agent: Agent, run: Run, phase: "plan" | "work", prompt: string, resume?: string) {
-  const look = lookOnly(agent.allowed, run.mode);
+  const e = eff(agent, run);
+  const look = lookOnly(e.allowed, run.mode);
   const settings = {
     hooks: {
       PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: `node "${HOOK}"`, timeout: 30 }] }],
@@ -159,21 +238,22 @@ function spawnClaude(agent: Agent, run: Run, phase: "plan" | "work", prompt: str
     "-p", prompt,
     "--output-format", "stream-json",
     "--verbose",
-    "--model", agent.model,
+    "--model", e.model,
     "--permission-mode", permissionMode(run.mode, phase),
     "--settings", JSON.stringify(settings),
     "--append-system-prompt", rules(agent, run),
   ];
   const deny = ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git push * main*)", "Bash(git push * master*)"];
   if (look) deny.push("Edit", "Write", "NotebookEdit", "Bash(git commit *)", "Bash(git push *)");
-  else if (agent.allowed === "suggest") deny.push("Bash(git push *)", "Bash(gh pr create *)");
+  else if (e.allowed === "suggest") deny.push("Bash(git push *)", "Bash(gh pr create *)");
+  if (run.workflowRunId) deny.push("Bash(gh pr merge *)");
   args.push("--disallowedTools", ...deny);
   if (resume) args.push("--resume", resume);
 
   log(run.id, `Starting Claude Code (${phase === "plan" ? "planning" : "working"}, permission mode ${permissionMode(run.mode, phase)}${resume ? ", continuing the same session" : ""})`);
   const child = spawn("claude", args, {
     cwd: run.worktree!,
-    env: { ...cleanEnv(), AGENTBOX_URL: PANEL_URL, AGENTBOX_RUN_ID: String(run.id), AGENTBOX_ALLOWED: look ? "look" : agent.allowed },
+    env: { ...cleanEnv(), AGENTBOX_URL: PANEL_URL, AGENTBOX_RUN_ID: String(run.id), AGENTBOX_ALLOWED: look ? "look" : e.allowed },
     stdio: ["ignore", "pipe", "pipe"],
     detached: true, // own process group, so Stop takes down Claude and anything it started
   });
@@ -181,7 +261,7 @@ function spawnClaude(agent: Agent, run: Run, phase: "plan" | "work", prompt: str
   live.set(run.id, entry);
   updateRun(run.id, { pid: child.pid ?? null, status: "working" });
 
-  armTimer(run.id, agent.maxMinutes, run.startedAt);
+  armTimer(run.id, e.maxMinutes, run.startedAt);
 
   const state = { result: null as null | { text: string; isError: boolean; subtype: string }, sawStepMarker: false, edited: false, stderr: "" };
   let buf = "";
@@ -297,10 +377,18 @@ function onEvent(runId: number, line: string, state: StreamState) {
   if (ev.type === "result") {
     state.result = { text: String(ev.result ?? ""), isError: !!ev.is_error, subtype: String(ev.subtype ?? "") };
     if (ev.session_id) updateRun(runId, { sessionId: String(ev.session_id) });
-    log(runId, `Finished: ${ev.subtype}${ev.is_error ? " (error)" : ""} · ${Math.round(Number(ev.duration_ms ?? 0) / 1000)}s · $${Number(ev.total_cost_usd ?? 0).toFixed(2)}`);
+    const u = (ev.usage ?? {}) as Record<string, number>;
+    const tokens = (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+    addRunUsage(runId, Number(ev.total_cost_usd ?? 0), tokens);
+    log(runId, `Finished: ${ev.subtype}${ev.is_error ? " (error)" : ""} · ${Math.round(Number(ev.duration_ms ?? 0) / 1000)}s · ${tokens} tokens`);
     return;
   }
-  if (ev.type === "rate_limit_event") return;
+  if (ev.type === "rate_limit_event") {
+    const info = (ev.rate_limit_info ?? {}) as Record<string, unknown>;
+    ingestRateLimitEvent(info);
+    if (info.status === "rejected") log(runId, "Claude says the usage limit is reached.");
+    return;
+  }
   log(runId, `${ev.type}${ev.subtype ? `/${ev.subtype}` : ""}`);
 }
 
@@ -349,9 +437,12 @@ function stripMarkers(text: string) {
 
 // ---------- finishing ----------
 
+export const USAGE_STOP = "It ran out of Claude usage.";
+const isUsageLimit = (s: string) => /usage limit|limit reached|hit your limit|rate limit|quota|out of (extra )?usage/i.test(s);
+
 function plainError(text: string, stderr: string, subtype: string): string {
   const all = `${text}\n${stderr}`.toLowerCase();
-  if (/usage limit|limit reached|rate limit|quota|out of (extra )?usage/.test(all)) return "It hit the Claude usage limit. Try again later.";
+  if (isUsageLimit(all)) return USAGE_STOP;
   if (/not logged in|authenticat|invalid api key|please run \/login/.test(all)) return "Claude Code isn't logged in on this Mac.";
   if (subtype === "error_max_turns") return "It took too many steps and gave up.";
   if (/overloaded|529|internal server error/.test(all)) return "Claude was too busy. Try again in a bit.";
@@ -366,7 +457,9 @@ async function onExit(runId: number, phase: "plan" | "work", code: number | null
 
   if (stopReason) return finishStopped(runId, stopReason);
   if (!st.result || st.result.isError || (code !== 0 && code !== null)) {
-    return finishStopped(runId, plainError(st.result?.text ?? "", st.stderr, st.result?.subtype ?? ""));
+    const reason = plainError(st.result?.text ?? "", st.stderr, st.result?.subtype ?? "");
+    if (reason === USAGE_STOP) markLimited(`${st.result?.text ?? ""}\n${st.stderr}`);
+    return finishStopped(runId, reason);
   }
 
   if (phase === "plan") {
@@ -379,6 +472,7 @@ async function onExit(runId: number, phase: "plan" | "work", code: number | null
 
   const fresh = getRun(runId)!;
   const summary = fresh.result || firstLine(stripMarkers(st.result.text)) || "Finished.";
+  if (fresh.workflowRunId) return finishStep(agent, fresh, summary, stripMarkers(st.result.text));
   if (lookOnly(agent.allowed, run.mode)) {
     allStepsDone(runId);
     const report = stripMarkers(st.result.text);
@@ -389,6 +483,22 @@ async function onExit(runId: number, phase: "plan" | "work", code: number | null
     return;
   }
   await shipIt(agent, fresh, summary);
+}
+
+// A workflow step is done: keep the shared folder, commit what it changed, and hand back to the workflow.
+async function finishStep(agent: Agent, run: Run, summary: string, report: string) {
+  const e = eff(agent, run);
+  if (!lookOnly(e.allowed, run.mode) && run.worktree) {
+    const status = await sh("git", ["status", "--porcelain"], run.worktree);
+    if (status.out) {
+      await sh("git", ["add", "-A"], run.worktree);
+      await sh("git", ["commit", "-m", `${(run.extra.label ?? e.name).slice(0, 60)}: ${summary.slice(0, 200)}\n\nMade by a workflow step from agentbox.`], run.worktree);
+    }
+  }
+  allStepsDone(run.id);
+  updateRun(run.id, { status: "done", result: report && report !== summary ? `${summary}\n\n${report}` : summary, endedAt: Date.now(), activity: null, pid: null });
+  log(run.id, "Step finished, handing back to the workflow.");
+  afterEnd(getRun(run.id)!);
 }
 
 function firstLine(s: string) {
@@ -447,7 +557,7 @@ async function shipIt(agent: Agent, run: Run, summary: string) {
 async function removeWorktree(run: Run) {
   if (!run.worktree || !fs.existsSync(run.worktree)) return;
   const agent = getAgent(run.agentId);
-  const repo = agent && projectPath(agent.project);
+  const repo = agent && projectPath(run.extra.project ?? agent.project);
   if (repo) await sh("git", ["worktree", "remove", "--force", run.worktree], repo);
 }
 
@@ -459,14 +569,18 @@ function finishStopped(runId: number, reason: string, detail?: string) {
   denyPendingForRun(runId, "The run was stopped.");
   updateRun(runId, { status: "stopped", stopReason: reason, endedAt: Date.now(), activity: null, pid: null });
   const agent = getAgent(run.agentId);
-  if (agent && reason !== "You stopped it.") notify(agent, "problems", `stopped while doing “${run.task}”: ${reason}`);
+  if (agent && !run.workflowRunId && reason !== "You stopped it." && reason !== PAUSED_ALL) notify(agent, "problems", `stopped while doing “${run.task}”: ${reason}`);
+  afterEnd(getRun(runId)!);
 }
+
+export const PAUSED_ALL = "You paused everything.";
 
 // ---------- controls ----------
 
 export function stopRun(runId: number, reason = "You stopped it.") {
   const run = getRun(runId);
-  if (!run || (run.status !== "working" && run.status !== "waiting")) return;
+  if (!run || (run.status !== "working" && run.status !== "waiting" && run.status !== "queued")) return;
+  if (run.status === "queued") return finishStopped(runId, reason);
   const entry = live.get(runId);
   denyPendingForRun(runId, "The run was stopped.");
   if (entry?.child.pid) {
@@ -495,6 +609,11 @@ function killGroup(pid: number) {
       /* gone */
     }
   }, 8000).unref();
+}
+
+// "Pause everything": stop whatever is running. Schedules and workflows check pausedAll() themselves.
+export function stopAllRuns(reason = PAUSED_ALL) {
+  for (const run of runsWithStatus("queued", "working", "waiting")) stopRun(run.id, reason);
 }
 
 export function approvePlan(runId: number) {

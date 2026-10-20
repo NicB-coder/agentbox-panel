@@ -1,5 +1,6 @@
 "use client";
 import { useId } from "react";
+import { InfoTip } from "./bits";
 
 // A segmented choice built on real radio buttons, so it works with a keyboard and screen readers.
 export default function Segmented<T extends string>({
@@ -8,17 +9,22 @@ export default function Segmented<T extends string>({
   onChange,
   options,
   hint,
+  tip,
 }: {
   legend: string;
   value: T;
   onChange: (v: T) => void;
   options: { value: T; label: string }[];
   hint?: string;
+  tip?: string;
 }) {
   const name = useId();
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-[15px] font-semibold">{legend}</legend>
+      <legend className="mb-2 flex items-center text-[15px] font-semibold">
+        {legend}
+        {tip && <InfoTip text={tip} label={legend} />}
+      </legend>
       <div className="flex flex-wrap gap-1 rounded-[16px] bg-soft p-1">
         {options.map((o) => (
           <label

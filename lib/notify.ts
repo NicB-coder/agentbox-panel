@@ -14,18 +14,24 @@ function webhook(): Promise<string | null> {
 
 export async function notify(agent: Agent, kind: NotifyOn, text: string) {
   if (!agent.notify.includes(kind)) return;
+  await sendDiscord(`agentbox · ${agent.name}: ${text}`);
+}
+
+export async function sendDiscord(content: string): Promise<boolean> {
   const url = await webhook();
   if (!url) {
     console.warn("[notify] no Discord webhook in the Keychain");
-    return;
+    return false;
   }
   try {
-    await fetch(url, {
+    const r = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ content: `agentbox · ${agent.name}: ${text}`.slice(0, 1900), allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({ content: content.slice(0, 1900), allowed_mentions: { parse: [] } }),
     });
+    return r.ok;
   } catch (e) {
     console.warn("[notify] Discord ping failed:", (e as Error).message);
+    return false;
   }
 }

@@ -51,6 +51,15 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
 
   const base = { agent: a, activeRun: run, pendingApproval: pending, waitingForOk: false };
 
+  if (run && run.status === "queued") {
+    return {
+      ...base,
+      status: "queued",
+      task: run.task,
+      summary: run.activity ?? "Waiting for usage to reset",
+      timeLabel: `asked ${ago(run.startedAt, now)}`,
+    };
+  }
   if (run && (pending || run.status === "waiting")) {
     return {
       ...base,

@@ -1,5 +1,7 @@
 import { activeRun, listAgents, setNextRunAt } from "./db";
-import { checkPullRequests, recoverOnBoot, startRun } from "./runner";
+import { checkPullRequests, pausedAll, recoverOnBoot, startQueued, startRun } from "./runner";
+import { refreshUsage } from "./usage";
+import { tickWorkflows } from "./workflowRunner";
 import { nextRunAfter } from "./words";
 
 // A small scheduler inside the server process. Every 30 seconds it starts any scheduled agent
@@ -8,6 +10,8 @@ import { nextRunAfter } from "./words";
 type G = typeof globalThis & { __agentboxBackground?: boolean };
 
 export function tickSchedules(now = Date.now()) {
+  // Pause everything holds schedules; dev copies (AGENTBOX_NO_SCHEDULE=1) never start scheduled runs.
+  if (pausedAll() || process.env.AGENTBOX_NO_SCHEDULE === "1") return;
   for (const a of listAgents()) {
     if (a.kind !== "claude") continue;
     if (!a.enabled || a.paused || a.scheduleKind === "manual") {
@@ -37,13 +41,19 @@ export function startBackground() {
   g.__agentboxBackground = true;
   recoverOnBoot();
   tickSchedules();
-  setInterval(() => {
+  refreshUsage(true);
+  const tick = () => {
     try {
       tickSchedules();
+      startQueued();
     } catch (e) {
       console.warn("[scheduler]", e);
     }
-  }, 30_000);
+    tickWorkflows().catch((e) => console.warn("[workflows]", e));
+  };
+  setTimeout(tick, 5_000);
+  setInterval(tick, 30_000);
+  setInterval(() => refreshUsage(), 5 * 60_000);
   setInterval(() => checkPullRequests().catch((e) => console.warn("[pr-check]", e)), 60_000);
   console.log("[agentbox] scheduler running");
 }
