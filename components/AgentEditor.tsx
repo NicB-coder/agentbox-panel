@@ -7,6 +7,7 @@ import { ALLOWED_WORDS, DAY_NAMES, DAY_SHORT, NOTIFY_WORDS, SCHEDULE_WORDS, agen
 import { AgentIcon, COLOR_CHOICES, ICON_CHOICES, ICON_NAMES, Icon, btn } from "./ui";
 import Segmented from "./Segmented";
 import ModePicker from "./ModePicker";
+import ProjectSelect from "./ProjectSelect";
 
 const PLACEHOLDER = `For example: Every night, open my portfolio site in a real browser at laptop and phone width. Click every link and check every page loads, images show up and nothing overlaps. A good result is a short list of real problems with which page they're on, or "all good". Never change any code, never fill in forms.`;
 
@@ -117,17 +118,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
 
         {/* Settings */}
         <section className="panel flex flex-col gap-8 p-6 sm:p-8">
-          <label className="flex flex-col gap-2">
-            <span className="text-[15px] font-semibold">Project</span>
-            <select value={a.project} onChange={(e) => set("project", e.target.value)} className={`${field} min-h-11`}>
-              {!projects.includes(a.project) && <option value="">Pick a project…</option>}
-              {projects.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ProjectSelect value={a.project} onChange={(p) => set("project", p)} projects={projects} tip="The code this agent works on. It always works in its own copy, never straight in main." />
 
           <div className="flex flex-col gap-4">
             <Segmented<ScheduleKind>

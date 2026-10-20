@@ -74,9 +74,15 @@ export function inWords(ms: number, now = Date.now()): string {
   else if (mins < 60 * 36) {
     const h = Math.round(mins / 60);
     s = `${h} hour${h === 1 ? "" : "s"}`;
-  } else {
+  } else if (mins < 60 * 24 * 60) {
     const d = Math.round(mins / 60 / 24);
     s = `${d} day${d === 1 ? "" : "s"}`;
+  } else if (mins < 60 * 24 * 365) {
+    const m = Math.round(mins / 60 / 24 / 30);
+    s = `${m} month${m === 1 ? "" : "s"}`;
+  } else {
+    const y = Math.round(mins / 60 / 24 / 365);
+    s = `${y} year${y === 1 ? "" : "s"}`;
   }
   return diff >= 0 ? `in ${s}` : `${s} ago`;
 }
