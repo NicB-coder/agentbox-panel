@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { getAgent, getSetting, getWorkflow, getWfRun, runsSince, runsWithStatus, setSetting } from "./db";
+import { draftUsageToday } from "./draftUsage";
 import type { UsageBreakdown, UsageState, UsageView, UsageWindow } from "./types";
 
 // Where the numbers come from (checked against Claude Code 2.1.304):
@@ -173,7 +174,8 @@ function startOfToday() {
 
 export function usageView(): UsageView {
   const runs = runsSince(startOfToday());
-  const total = runs.reduce((n, r) => n + r.costUsd, 0);
+  const drafts = draftUsageToday();
+  const total = runs.reduce((n, r) => n + r.costUsd, 0) + drafts.cost;
   const byAgent = new Map<string, { name: string; color: string; cost: number; runs: number }>();
   const byWorkflow = new Map<string, { name: string; color: string; cost: number; runs: number }>();
   for (const r of runs) {
@@ -194,6 +196,7 @@ export function usageView(): UsageView {
     e.runs++;
     byAgent.set(key, e);
   }
+  if (drafts.count) byWorkflow.set("drafts", { name: "Drafting workflows", color: "#2F4FD8", cost: drafts.cost, runs: drafts.count });
   const list = (m: typeof byAgent): UsageBreakdown =>
     [...m.values()]
       .sort((a, b) => b.cost - a.cost)

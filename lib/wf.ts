@@ -123,7 +123,11 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
   for (const s of steps.slice(1)) {
     switch (s.type) {
       case "agent":
-        parts.push(s.agentId == null ? `a quick step ${short(s.prompt) ? `does “${short(s.prompt)}”` : "does its part"}` : `${stepTitle(s, agents)} works on it`);
+        {
+          const a = agents.find((x) => x.id === s.agentId);
+          const look = s.mode === "look" || a?.allowed === "look";
+          parts.push(s.agentId == null ? `a quick step ${short(s.prompt) ? `does “${short(s.prompt)}”` : "does its part"}` : look ? `${stepTitle(s, agents)} takes a look` : `${stepTitle(s, agents)} works on it`);
+        }
         break;
       case "research":
         parts.push("it researches the task");
