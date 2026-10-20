@@ -1,0 +1,29 @@
+{
+  "name": "agentbox-panel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "build": "next build",
+    "start": "next start -H 127.0.0.1 -p 3000",
+    "typecheck": "tsc --noEmit",
+    "test:ui": "node scripts/ui-check.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "next": "^16.4.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "playwright": "^1.64.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3"
+  }
+}
