@@ -22,7 +22,7 @@ const STEPS = [
   {
     icon: "inbox",
     title: "The Inbox and the usage meter",
-    text: "Anything that needs you (an OK, a pull request to look at, something that went wrong) shows up in the Inbox. The meter at the top shows how much of your Claude usage is left and when it resets.",
+    text: "Anything that needs you (an OK, a pull request to look at, something that went wrong) shows up in the Inbox. The meter at the top shows how much of your Claude usage is left and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
   },
 ];
 

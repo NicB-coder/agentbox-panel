@@ -25,6 +25,12 @@ export const HELP_PARTS = [
     text: "Your Claude plan lets you use a certain amount every few hours (a session) and every week. The meter at the top shows how much of this session is used and when it resets. If you run out, new runs wait and start by themselves after the reset.",
     link: { href: "/settings", label: "Usage settings" },
   },
+  {
+    icon: "bulb",
+    title: "The Helper",
+    text: "The round chat bubble in the bottom-right corner of every page. Ask it what anything means, what your agents are doing, or why something stopped (it reads the real log). It can also draft a new agent or workflow for you to check. It only looks and suggests: nothing happens until you click.",
+    link: null,
+  },
 ];
 
 export const HELP_WORDS: [string, string][] = [

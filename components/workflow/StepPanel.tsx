@@ -9,10 +9,11 @@ import Segmented from "../Segmented";
 import { btn, field } from "../ui";
 import { stepColor, stepIcon } from "./Canvas";
 import { Icon } from "../ui";
+import { askHelper } from "../helper/helperStore";
 
 // The side panel (a bottom sheet on a phone) for one step. Same controls as the agent editor.
 
-export function Sheet({ title, icon, color, onClose, children }: { title: string; icon: string; color: string; onClose: () => void; children: React.ReactNode }) {
+export function Sheet({ title, icon, color, onClose, children, ask }: { title: string; icon: string; color: string; onClose: () => void; children: React.ReactNode; ask?: string }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -35,6 +36,20 @@ export function Sheet({ title, icon, color, onClose, children }: { title: string
           </span>
         </span>
         <h2 className="min-w-0 flex-1 truncate text-[18px] font-semibold">{title}</h2>
+        {ask && (
+          // The Helper bubble steps aside while this panel is open, so it gets its own way in.
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[#C9CDD4] px-3 text-[14px] font-semibold hover:bg-soft"
+            onClick={() => askHelper(ask)}
+            aria-label={`Ask the Helper: ${ask}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 8.9 8.9 0 0 1-3.9-.9L3 20.5l1.6-4.6a8 8 0 0 1-1.1-4.4A8.4 8.4 0 0 1 12 3.2a8.4 8.4 0 0 1 9 8.3Z" />
+            </svg>
+            Ask
+          </button>
+        )}
         <button type="button" className="min-h-11 rounded-[14px] px-3 text-[15px] font-semibold underline" onClick={onClose}>
           Done
         </button>
@@ -95,7 +110,7 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
   );
 
   return (
-    <Sheet title={s.type === "agent" ? stepTitle(s, agents) : info.title} icon={stepIcon(s, agents)} color={stepColor(s, agents)} onClose={onClose}>
+    <Sheet title={s.type === "agent" ? stepTitle(s, agents) : info.title} icon={stepIcon(s, agents)} color={stepColor(s, agents)} onClose={onClose} ask="What does this step do?">
       <p className="text-[15px] leading-relaxed text-muted">{info.help}</p>
 
       {s.type === "start" && (

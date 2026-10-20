@@ -53,6 +53,17 @@ Data lives in `data/agentbox.db` (SQLite) and run logs in `data/logs/`. Both are
 - **Describe it** (`lib/draft.ts`) runs Claude Code headless with `--tools ""` (no tools at all) and `--json-schema`, then opens the draft switched off.
 - **Projects** clones with `gh repo clone` or makes a public repo with `gh repo create --public --add-readme --clone` into `~/projects`.
 
+## v2.1: the Helper chat bubble
+
+![The Helper drafting a workflow](docs/screenshots/v2.1-helper-workflow-card.png)
+
+- **A round chat bubble** in the bottom-right corner of every page (above the tabs on a phone) opens the Helper: a 380px panel on a laptop, a full-height sheet on a phone. It explains the site and what's on screen, says what's running and why something stopped, and drafts agents and workflows.
+- **What it's sent with every message:** where Nic is (page, the open agent or workflow, the selected step, the run on the canvas, what's typed in the agent editor, any error box on screen), a fresh plain-text snapshot of the panel (`lib/helperSnapshot.ts`: agents, recent runs with their steps and log tails, workflows and live runs, Inbox, ideas, usage, projects, heartbeat), the last 14 messages, and a built-in guide to every page and control plus the Help page text (`lib/helperGuide.ts`, `lib/helpText.ts`).
+- **How it runs** (`lib/helper.ts`): `claude -p` with Sonnet, `--tools ""` (no files, no shell), `--strict-mcp-config` with one tiny local MCP server (`scripts/helper-mcp.mjs`) whose 8 tools only *read* through `/api/helper/tools` (a run's full log, a run's details, an agent's settings, a workflow, a workflow run, a pull request's live state via `gh`, projects, heartbeat). `--permission-mode dontAsk` with only those tools allowed, `--setting-sources ""`, `--no-session-persistence`, and an empty working folder (`~/agents/helper-room`), never inside a project. Replies stream (`--include-partial-messages`) to the browser as JSON lines from `/api/helper/stream`, and a reply keeps going (and is saved) if the page changes or reloads.
+- **Chips, buttons and cards:** the Helper writes small markers (`[[agent:3|Builder]]`, `[[button:retry_run:12|Try again]]`, a fenced `agent-preview` / `workflow-preview` block). When the reply ends, the server checks every one: chips to things that don't exist become plain text, buttons only survive if they still make sense (e.g. *Try again* only on a stopped run), and cards are cleaned with the same validation as the editors. Buttons call the same endpoints as the rest of the site; *Merge*, *Ship* and *Pause everything* show the same "Are you sure?". **Create it** saves the agent or workflow switched **Off** and opens it in the normal editor.
+- **Saved chats:** `helper_chats` and `helper_messages` in SQLite, the last 20 kept. **New chat** starts fresh; **Earlier chats** shows the old ones. Works across laptop and phone.
+- **Usage:** each reply's cost is added to a daily total shown as **Helper** in the usage meter's "Today, by agent". When usage is out, the panel says so with the reset time instead of calling Claude.
+
 ## Tests
 
 With the panel running:
@@ -65,6 +76,9 @@ node scripts/m1-test.mjs out/               # header, usage panel, Pause everyth
 node scripts/m2-test.mjs out/               # workflow templates, editor, undo, drag, versions
 node scripts/m3-test.mjs out/               # Describe it (uses a little Claude usage)
 node scripts/walkthrough.mjs out/           # screenshots of every page at both widths
+node scripts/helper-test.mjs out/           # Helper: bubble, streamed reply, saved across reload (a little usage)
+node scripts/helper-test2.mjs out/          # Helper: suggestions, buttons, Are you sure?, Create it cards (some usage)
+node scripts/helper-walkthrough.mjs out/ 1366  # Helper: a beginner question on every page, answers saved to a file
 ```
 
 To try changes without touching the always-on service, run a second copy with its own data and build folder:

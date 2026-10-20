@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HelpTourButton from "@/components/HelpTourButton";
+import AskHelperButton from "@/components/helper/AskHelperButton";
 import { Icon, btn } from "@/components/ui";
 import { listAgents } from "@/lib/db";
 import { HELP_PARTS as PARTS, HELP_WORDS as WORDS } from "@/lib/helpText";
@@ -45,9 +46,13 @@ export default function Help() {
             </span>
             <h2 className="text-[19px] font-semibold">{p.title}</h2>
             <p className="text-[15px] leading-relaxed text-muted">{p.text}</p>
-            <Link href={p.link.href} className={btn.link + " mt-auto self-start"}>
-              {p.link.label}
-            </Link>
+            {p.link ? (
+              <Link href={p.link.href} className={btn.link + " mt-auto self-start"}>
+                {p.link.label}
+              </Link>
+            ) : (
+              <AskHelperButton />
+            )}
           </li>
         ))}
       </ul>
