@@ -1,0 +1,10 @@
+node_modules/
+.next/
+data/
+*.db
+*.db-*
+.env*
+screenshots/tmp/
+test-results/
+next-env.d.ts
+*.tsbuildinfo
