@@ -21,8 +21,10 @@ export function usageState(): UsageState {
   const s = getSetting<UsageState>("usage", EMPTY);
   const now = Date.now();
   // A window that has reset since we last looked starts again from zero.
-  const fresh = (w: UsageWindow | null): UsageWindow | null => (w && w.resetsAt && w.resetsAt <= now ? { pct: 0, resetsAt: null } : w);
+  const fresh = (w: UsageWindow | null): UsageWindow | null =>
+    w && w.resetsAt && w.resetsAt <= now ? { pct: 0, resetsAt: null } : w && w.resetsAt ? { ...w, resetsAt: Math.round(w.resetsAt / 60_000) * 60_000 } : w;
   const out: UsageState = { ...s, session: fresh(s.session), week: fresh(s.week) };
+  if (out.limitedUntil) out.limitedUntil = Math.round(out.limitedUntil / 60_000) * 60_000;
   if (out.limited && out.limitedUntil && out.limitedUntil <= now) {
     out.limited = false;
     out.limitedUntil = null;
@@ -40,11 +42,11 @@ function save(patch: Partial<UsageState>) {
 export function ingestRateLimitEvent(info: Record<string, unknown>) {
   const windows = (info.unifiedWindows ?? {}) as Record<string, { utilization?: number; resetsAt?: number }>;
   const win = (w?: { utilization?: number; resetsAt?: number }): UsageWindow | null =>
-    w && typeof w.utilization === "number" ? { pct: Math.round(w.utilization * 100), resetsAt: w.resetsAt ? w.resetsAt * 1000 : null } : null;
+    w && typeof w.utilization === "number" ? { pct: Math.round(w.utilization * 100), resetsAt: w.resetsAt ? Math.round(w.resetsAt / 60) * 60_000 : null } : null;
   const session = win(windows.five_hour);
   const week = win(windows.seven_day);
   const rejected = info.status === "rejected";
-  const resetsAt = typeof info.resetsAt === "number" ? info.resetsAt * 1000 : null;
+  const resetsAt = typeof info.resetsAt === "number" ? Math.round(info.resetsAt / 60) * 60_000 : null;
   const patch: Partial<UsageState> = { exact: true, source: "run" };
   if (session) patch.session = session;
   if (week) patch.week = week;

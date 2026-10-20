@@ -1,4 +1,4 @@
-import { createWorkflow, listAgents } from "@/lib/db";
+import { createWorkflow, listAgents, listWorkflows } from "@/lib/db";
 import { listProjects } from "@/lib/projects";
 import { cleanLimits, cleanSteps, templateWorkflow, TEMPLATES, type TemplateKey } from "@/lib/wf";
 import { agentRefs } from "@/lib/workflowViews";
@@ -12,7 +12,11 @@ export async function POST(req: Request) {
   const project = b.project && projects.includes(b.project) ? b.project : projects[0] ?? "";
   if (b.template) {
     if (!TEMPLATES.some((t) => t.key === b.template)) return Response.json({ error: "That template isn't here." }, { status: 400 });
-    const w = createWorkflow(templateWorkflow(b.template, agentRefs(), project), "Made from a template");
+    const t = templateWorkflow(b.template, agentRefs(), project);
+    const taken = new Set(listWorkflows().map((x) => x.name));
+    let name = t.name;
+    for (let i = 2; taken.has(name); i++) name = `${t.name} ${i}`;
+    const w = createWorkflow({ ...t, name }, "Made from a template");
     return Response.json(w, { status: 201 });
   }
   const ids = listAgents().map((a) => a.id);

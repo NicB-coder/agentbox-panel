@@ -99,14 +99,18 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
                   <span className="text-[18px] font-semibold">{t.name}</span>
                   <span className="text-[15px] leading-relaxed text-muted">{t.blurb}</span>
                   <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-2" aria-hidden="true">
-                    {steps.map((s, i) => (
-                      <span key={s.id} className="flex items-center gap-1.5">
-                        {i > 0 && <span className="text-[#9AA0A8]">→</span>}
-                        <span className="flex h-8 w-8 items-center justify-center rounded-[10px]" style={{ background: `${STEP_INFO[s.type].color}1A` }}>
-                          <Icon name={STEP_INFO[s.type].icon} color={STEP_INFO[s.type].color} size={16} />
+                    {steps.map((s, i) => {
+                      const a = s.type === "agent" && s.agentId != null ? agents.find((x) => x.id === s.agentId) : null;
+                      const color = a?.color ?? STEP_INFO[s.type].color;
+                      return (
+                        <span key={s.id} className="flex items-center gap-1.5">
+                          {i > 0 && <span className="text-[#9AA0A8]">→</span>}
+                          <span className="flex h-8 w-8 items-center justify-center rounded-[10px]" style={{ background: `${color}1A` }}>
+                            <Icon name={a?.icon ?? STEP_INFO[s.type].icon} color={color} size={16} />
+                          </span>
                         </span>
-                      </span>
-                    ))}
+                      );
+                    })}
                   </span>
                   <span className="text-[15px] font-semibold underline">{busy === t.key ? "Setting it up…" : "Use this template"}</span>
                 </button>

@@ -1,7 +1,7 @@
 import { getRun, getWfRun, getWorkflow, listAgents, listVersions, listWfRuns, listWorkflows, pendingApprovalForRun } from "./db";
 import { listProjects } from "./projects";
 import type { PillStatus, Run, Workflow, WorkflowRun, WorkflowVersion } from "./types";
-import { flowSentence, type AgentRef } from "./wf";
+import { STEP_INFO, flowSentence, type AgentRef } from "./wf";
 import { ago } from "./words";
 import { activeWfRun } from "./workflowRunner";
 
@@ -10,7 +10,7 @@ export const agentRefs = (): AgentRef[] =>
     .filter((a) => a.kind === "claude")
     .map((a) => ({ id: a.id, name: a.name, color: a.color, icon: a.icon, slug: a.slug, allowed: a.allowed }));
 
-export type WorkflowTile = { id: number; name: string; sentence: string; status: PillStatus; timeLabel: string; note: string | null };
+export type WorkflowTile = { id: number; name: string; sentence: string; status: PillStatus; timeLabel: string; note: string | null; chips: { icon: string; color: string }[] };
 
 export function workflowTile(w: Workflow, agents = agentRefs()): WorkflowTile {
   const runs = listWfRuns(w.id, 1);
@@ -28,6 +28,10 @@ export function workflowTile(w: Workflow, agents = agentRefs()): WorkflowTile {
   }
   return {
     id: w.id, name: w.name, sentence: flowSentence(w, agents), status, note,
+    chips: w.steps.map((s) => {
+      const a = s.type === "agent" && s.agentId != null ? agents.find((x) => x.id === s.agentId) : null;
+      return { icon: a?.icon ?? STEP_INFO[s.type].icon, color: a?.color ?? STEP_INFO[s.type].color };
+    }),
     timeLabel: active ? `started ${ago(active.startedAt)}` : last ? `last run ${ago(last.endedAt ?? last.startedAt)}` : "never run",
   };
 }

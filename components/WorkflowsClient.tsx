@@ -55,8 +55,18 @@ function Tile({ t }: { t: WorkflowTile }) {
         </span>
         <div className="min-w-0 truncate text-[17px] font-semibold leading-tight">{t.name}</div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col justify-center gap-1.5 py-4">
-        <p className="clamp-3 text-[16px] font-semibold leading-snug">{t.sentence}</p>
+      <div className="flex min-h-0 flex-1 flex-col justify-center gap-2 py-4">
+        <span className="flex flex-wrap items-center gap-1" aria-hidden="true">
+          {t.chips.map((c, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <span className="text-[11px] text-[#9AA0A8]">→</span>}
+              <span className="flex h-7 w-7 items-center justify-center rounded-[9px]" style={{ background: `${c.color}1A` }}>
+                <Icon name={c.icon} color={c.color} size={14} />
+              </span>
+            </span>
+          ))}
+        </span>
+        <p className="clamp-3 text-[15px] font-semibold leading-snug">{t.sentence}</p>
         {t.note && <p className={`clamp-2 text-[14px] leading-snug ${t.status === "needs" ? "font-semibold text-[#8A4600]" : "text-muted"}`}>{t.note}</p>}
       </div>
       <div className="flex items-center justify-between gap-3">

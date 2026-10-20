@@ -617,6 +617,24 @@ export async function answer(wrId: number, action: "approve" | "send_back" | "st
   return advance(wrId);
 }
 
+// "Pick up where it stopped": continue a stopped run in the same copy and pull request.
+export async function resumeWorkflow(wrId: number) {
+  const wr = getWfRun(wrId);
+  if (!wr || wr.status !== "stopped") throw new Error("Only a stopped run can be picked up again.");
+  if (pausedAll()) throw new Error("Everything is paused. Press Resume everything at the top first.");
+  if (!wr.worktree || !fs.existsSync(wr.worktree)) throw new Error("Its copy of the project is gone, so it can't pick up. Start it over instead.");
+  if (activeWfRun(wr.workflowId)) throw new Error("This workflow is already running. Wait for it to finish first.");
+  const step = wr.steps[wr.current];
+  updateWfRun(wrId, {
+    status: "running", stopReason: null, endedAt: null, loops: 0, waiting: null, summary: null,
+    waitedMs: wr.waitedMs + Math.max(0, Date.now() - (wr.endedAt ?? Date.now())), usageStart: usageState().session,
+  });
+  const target = step && (step.type === "review" || step.type === "check") && wr.stepRuns[step.id]?.state === "needs_work" && step.onFail && step.onFail !== "stop" ? wr.steps.findIndex((x) => x.id === step.onFail) : -1;
+  if (target >= 1 && target < wr.current && wr.feedback) goBackTo(wrId, target, wr.feedback, false);
+  else if (step) setStep(wrId, step.id, { state: "todo", note: "Picking up where it stopped" });
+  await advance(wrId);
+}
+
 export function stopAllWorkflowRuns(reason = PAUSED_ALL) {
   for (const wr of wfRunsWithStatus("queued", "running", "needs")) stopWorkflow(wr.id, reason, { byUser: true });
 }

@@ -247,8 +247,11 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               )}
               {it.kind === "wf_failed" && (
                 <>
-                  <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/retry`)}>
-                    Try again
+                  <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/resume`)}>
+                    Pick up where it stopped
+                  </button>
+                  <button className={btn.secondary} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/retry`)}>
+                    Start over
                   </button>
                   <FixButton error={`The workflow "${it.who}" stopped: ${it.text}`} />
                   <button className={btn.link} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/dismiss`)}>

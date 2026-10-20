@@ -102,3 +102,9 @@ button.tile:hover {
     animation: none;
   }
 }
+
+/* Placeholder text dark enough to read (4.5:1 on white). */
+::placeholder {
+  color: #6b7079;
+  opacity: 1;
+}

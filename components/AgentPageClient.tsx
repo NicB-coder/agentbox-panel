@@ -165,7 +165,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: (l: string, 
       ) : (
         <>
           <p className="mt-3 text-[20px] font-semibold leading-snug">{view.task}</p>
-          <p className="mt-1 text-[15px] text-muted">{view.summary}</p>
+          {!(view.status === "stopped" && runs[0]?.status === "stopped") && <p className="mt-1 text-[15px] text-muted">{view.summary}</p>}
           {view.status === "stopped" && runs[0]?.status === "stopped" && (
             <div className="mt-5">
               <ErrorBox

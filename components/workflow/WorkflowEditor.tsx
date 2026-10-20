@@ -214,6 +214,28 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
     await refresh();
     refreshHeader();
   }
+  async function resume() {
+    if (!viewing) return;
+    setBusy("resume");
+    setError(null);
+    try {
+      await post(`/api/workflow-runs/${viewing.id}/resume`);
+      await refresh();
+      refreshHeader();
+    } catch (e) {
+      setError({ msg: (e as Error).message, retry: resume });
+    } finally {
+      setBusy("");
+    }
+  }
+  async function duplicate() {
+    try {
+      const w = await post<{ id: number }>(`/api/workflows/${id}/duplicate`);
+      router.push(`/workflows/${w.id}`);
+    } catch (e) {
+      setError({ msg: (e as Error).message, retry: duplicate });
+    }
+  }
   async function del() {
     setConfirmDelete(false);
     try {
@@ -301,6 +323,11 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
                   Stop
                 </button>
               )}
+              {viewing!.status === "stopped" && viewing!.worktree && !data.active && (
+                <button type="button" className={btn.primary} onClick={resume} disabled={!!busy}>
+                  Pick up where it stopped
+                </button>
+              )}
               {viewing!.prUrl && (
                 <a href={viewing!.prUrl} target="_blank" rel="noreferrer" className={btn.secondary}>
                   Pull request
@@ -351,7 +378,10 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       <History runs={data.runs} viewingId={viewing?.id ?? null} onView={viewRun} />
 
       {!live && (
-        <div className="mt-10 border-t border-line pt-6">
+        <div className="mt-10 flex flex-wrap gap-4 border-t border-line pt-6">
+          <button type="button" className={btn.link} onClick={duplicate}>
+            Make a copy
+          </button>
           <button type="button" className={btn.link + " !text-[#A11B12]"} onClick={() => setConfirmDelete(true)}>
             Delete this workflow
           </button>
