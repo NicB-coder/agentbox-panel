@@ -8,6 +8,7 @@ import { AgentIcon, COLOR_CHOICES, ICON_CHOICES, ICON_NAMES, Icon, btn } from ".
 import Segmented from "./Segmented";
 import ModePicker from "./ModePicker";
 import ProjectSelect from "./ProjectSelect";
+import { ErrorBox, InfoTip, Label, Switch } from "./bits";
 
 const PLACEHOLDER = `For example: Every night, open my portfolio site in a real browser at laptop and phone width. Click every link and check every page loads, images show up and nothing overlaps. A good result is a short list of real problems with which page they're on, or "all good". Never change any code, never fill in forms.`;
 
@@ -30,11 +31,17 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
     e.preventDefault();
     setBusy(true);
     setError("");
-    const r = await fetch(id ? `/api/agents/${id}` : "/api/agents", {
-      method: id ? "PUT" : "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(a),
-    });
+    let r: Response;
+    try {
+      r = await fetch(id ? `/api/agents/${id}` : "/api/agents", {
+        method: id ? "PUT" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(a),
+      });
+    } catch {
+      setBusy(false);
+      return setError("Couldn't reach agentbox. Check that you're online and try again.");
+    }
     const j = await r.json().catch(() => ({}));
     setBusy(false);
     if (!r.ok) return setError(j.error ?? "Couldn't save it.");
@@ -65,11 +72,11 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
         {/* Name, color, icon */}
         <section className="panel flex flex-col gap-6 p-6 sm:p-8">
           <label className="flex flex-col gap-2">
-            <span className="text-[15px] font-semibold">Name</span>
+            <Label tip="What you'll call it, like Site Checker. Shown on its tile.">Name</Label>
             <input value={a.name} onChange={(e) => set("name", e.target.value)} maxLength={40} placeholder="Site Checker" className={`${field} min-h-11`} />
           </label>
           <fieldset>
-            <legend className="mb-3 text-[15px] font-semibold">Color</legend>
+            <Label as="legend" tip="Its color on the tile, so you can spot it quickly.">Color</Label>
             <div className="flex flex-wrap gap-2">
               {COLOR_CHOICES.map((c) => (
                 <label key={c.hex} className="relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-full has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-[#2f4fd8]">
@@ -80,7 +87,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
             </div>
           </fieldset>
           <fieldset>
-            <legend className="mb-3 text-[15px] font-semibold">Icon</legend>
+            <Label as="legend" tip="A little picture for its tile.">Icon</Label>
             <div className="flex flex-wrap gap-2">
               {ICON_CHOICES.map((i) => (
                 <label
@@ -99,9 +106,10 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
 
         {/* Prompt */}
         <section className="panel flex flex-col gap-2 p-6 sm:p-8">
-          <label htmlFor="prompt" className="text-[18px] font-semibold">
-            What should this agent do?
-          </label>
+          <span className="flex items-center text-[18px] font-semibold">
+            <label htmlFor="prompt">What should this agent do?</label>
+            <InfoTip text="Its job description, in your own words. It reads this every time it runs." label="What should this agent do?" />
+          </span>
           <textarea
             id="prompt"
             value={a.prompt}
@@ -123,6 +131,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
           <div className="flex flex-col gap-4">
             <Segmented<ScheduleKind>
               legend="When does it run?"
+              tip="Only when I ask means it waits for you. The others start it by themselves on a timetable."
               value={a.scheduleKind}
               onChange={(v) => set("scheduleKind", v)}
               options={(["manual", "hourly", "daily", "days"] as ScheduleKind[]).map((k) => ({ value: k, label: SCHEDULE_WORDS[k] }))}
@@ -163,7 +172,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
           </div>
 
           <fieldset>
-            <legend className="mb-3 text-[15px] font-semibold">What is it allowed to do?</legend>
+            <Label as="legend" tip="How far it may go. Even Make changes never touches main: you always decide what goes in.">What is it allowed to do?</Label>
             <div className="grid gap-2 sm:grid-cols-3">
               {(["look", "suggest", "make"] as Allowed[]).map((k, i) => (
                 <label
@@ -186,7 +195,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
           <div className="flex flex-col gap-6">
             <label className="flex flex-col gap-3">
               <span className="flex items-baseline justify-between text-[15px] font-semibold">
-                Longest it can run
+                <Label tip="If a run takes longer than this, it stops so it can't run forever. Waiting for your OK doesn't count.">Longest it can run</Label>
                 <span className="text-[15px] font-semibold">{a.maxMinutes} minutes</span>
               </span>
               <input
@@ -201,6 +210,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
             </label>
             <Segmented<Model>
               legend="Which model?"
+              tip="Fast is good for most jobs. Smartest thinks harder but takes longer and uses more of your Claude usage."
               value={a.model}
               onChange={(v) => set("model", v)}
               options={[
@@ -211,7 +221,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
           </div>
 
           <fieldset>
-            <legend className="mb-3 text-[15px] font-semibold">Tell me when</legend>
+            <Label as="legend" tip="When it should send you a Discord message. Pick as many as you like.">Tell me when</Label>
             <div className="flex flex-wrap gap-2">
               {(["finished", "needs_ok", "problems", "never"] as const).map((n) => {
                 const on = n === "never" ? never : a.notify.includes(n);
@@ -232,29 +242,17 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
             <p className="mt-2 text-[14px] text-muted">Messages go to your Discord.</p>
           </fieldset>
 
-          <label className="flex min-h-11 cursor-pointer items-center justify-between gap-4">
-            <span>
-              <span className="block text-[15px] font-semibold">On</span>
-              <span className="block text-[14px] text-muted">When it's off, it never runs, even on schedule.</span>
-            </span>
-            <input type="checkbox" role="switch" className="peer sr-only" checked={a.enabled} onChange={(e) => set("enabled", e.target.checked)} />
-            <span
-              aria-hidden="true"
-              className={`relative h-8 w-14 shrink-0 rounded-full transition-colors peer-focus-visible:outline peer-focus-visible:outline-3 peer-focus-visible:outline-[#2f4fd8] ${a.enabled ? "bg-[#1E6B34]" : "bg-[#9AA0A8]"}`}
-            >
-              <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${a.enabled ? "left-7" : "left-1"}`} />
-            </span>
-          </label>
+          <Switch label="On" hint="When it's off, it never runs, even on schedule." tip="Turn it off to keep it but stop it from running." checked={a.enabled} onChange={(v) => set("enabled", v)} />
         </section>
 
-        <div className="sticky bottom-0 -mx-4 border-t border-line bg-white/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+        <div className="sticky bottom-[calc(56px+env(safe-area-inset-bottom))] -mx-4 border-t border-line bg-white/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
           <p className="mb-4 text-[16px] font-medium leading-relaxed" aria-live="polite">
             {agentSentence(a)}
           </p>
           {error && (
-            <p role="alert" className="mb-4 text-[15px] font-medium text-[#A11B12]">
-              {error}
-            </p>
+            <div className="mb-4">
+              <ErrorBox compact message={error} where={id ? "the agent editor" : "Add an agent"} />
+            </div>
           )}
           <div className="flex flex-wrap items-center gap-3">
             <button type="submit" className={btn.primary} disabled={busy}>
