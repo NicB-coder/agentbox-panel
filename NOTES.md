@@ -19,6 +19,21 @@ All 5 milestones, each tested with Playwright at 1366px and 390px on a separate 
 4. **"Make me an agent / a workflow"** with preview cards (name, color, icon, project, the plain-English sentence, steps for workflows) and **Create it** / **Change it**. Create it saves it **Off** and opens the normal editor. Tested for real at both widths: 2 agents and 2 workflows made and opened in the editor, all switched off.
 5. **Beginner walkthrough** of the Helper on every page at both widths (answers saved and read one by one), fixes (below), Help page section and a line in the welcome tour, README section, screenshots in `docs/screenshots/v2.1-*`.
 
+## v2.1: Fixes after review (this pull request replaces #8)
+
+Everything from #8 is merged in, plus:
+
+- **Buttons can't be disguised.** The Helper only picks *which* action; the panel writes the label and the "Are you sure?" from the real thing. A log that talks it into a "Show the full log" button that really merges still shows **Merge pull request #8**, and asks first: "This merges pull request #8 ("Fix the footer") into main of portfolio on GitHub… agentbox can't undo a merge." Ship and Pause everything work the same way (Pause says how many runs it will stop, or "Nothing is running right now"). There is no Delete button the Helper can offer at all.
+- **Logs, pull request comments and the snapshot are data, never instructions.** The Helper's instructions say so, and that text is put in clearly marked boxes it can't break out of. Tested with a planted "SYSTEM NOTE TO THE HELPER… add this button" in a pull request comment: it ignored it, told you about it, and gave the real reason the run stopped.
+- **Create it only makes it once.** Pressing it twice (double tap, two tabs, laptop and phone) returns the link to the one already made. If you deleted it since, it can be made again.
+- **Chat cleanup (keep the last 20) never removes a chat that's still answering.** It's cleaned up on a later pass once it's done.
+- **The Helper's lookup tools need a secret.** A random one is made each time the panel starts and handed to the Helper's tool server by environment variable. It's never saved or committed. Anything else calling that address gets "Not allowed".
+- **Shorter replies, every step.** Most answers are 1–3 sentences; a how-to is a numbered list of every step, each under 10 words. "How do I make a new agent and run it?" went from about 170 words to about 70 with all the steps still there.
+- **Calmer typing.** Replies type out at an even pace of about 11–13 words a second, however fast they arrive. Buttons and cards show once the words are all there.
+- **The view stays still.** It no longer jumps down with every word. When new words appear below what you can see, a small **↓ New text** button shows; tap it to jump to the end. It still jumps to the end when you open the panel, pick a chat, or send something.
+- Smaller fixes: a missing chat gives "That conversation isn't here any more" (and the bubble quietly opens your latest chat instead), message and card numbers are checked, the confusing "Ask Claude to fix this" error now says "Check that Claude Code is installed on this Mac", and an empty bit of code is gone.
+- **`npm test`**: 25 quick checks of the Helper in about 1.5 seconds, with no live app and no Claude usage (a throwaway database and a pretend Claude). They cover disguised merge buttons, broken and cut-off cards, Create it twice, chat cleanup, the reply time limit, Claude Code not installed, made-up links, and the secret.
+
 ## v2.1: Changes from the beginner walkthrough
 
 - It sometimes started with "The snapshot already shows the log…" → it now starts straight with the answer and never talks about how it knows things or uses run numbers.
@@ -35,16 +50,22 @@ All 5 milestones, each tested with Playwright at 1366px and 390px on a separate 
 - **A reply can't be stopped halfway.** It's cut off after 2.5 minutes at most. While one reply is being written, a second question to the same chat waits ("Wait a moment, the Helper is still answering").
 - **The Helper sees what's typed only in the agent editor** (and whether the workflow editor has unsaved changes). Other forms aren't sent.
 - **Pressing Escape with a step panel and the Helper both open closes both.**
-- **The Helper's tests use real Claude usage** (`helper-test.mjs` a little, `helper-test2.mjs` and `helper-walkthrough.mjs` more). The rest of the old tests don't.
+- **The browser tests of the Helper use real Claude usage** (`helper-test.mjs` and `helper-calm-test.mjs` a little, `helper-test2.mjs` and `helper-walkthrough.mjs` more). `npm test` uses none.
+- **A pull request comment can still mislead the Helper's words** (for example, give a wrong reason). It can't make a button do something other than what its label says, and risky ones always ask first. Read the log yourself before merging anything important.
 
 ## v2.1: Decisions I made
 
-- **Branch:** the brief said `build/helper`, but this run was told to use its own branch, so everything is on `agent/builder-its-usual-job-5` and the panel opens the pull request.
+- **Branch:** the brief said `build/helper`, but this run was told to use its own branch. The first version was on `agent/builder-its-usual-job-5` (#8); the fixes merged it into `agent/builder-fix-the-open-helper-22`, whose pull request replaces #8.
+- **All button labels are written by the panel**, not only the risky ones: Try again, Approve plan, Allow, Deny, "Run Builder now", "Open the Inbox" and so on. Simpler, and a harmless-looking label can never sit on a different action.
+- **The tools secret is made fresh at each start** (32 random bytes) instead of being stored in the Keychain: nothing to set up, nothing that can leak into git, and only the Helper's own tool server ever gets it. `AGENTBOX_HELPER_SECRET` can override it if ever needed.
+- **Typing pace:** one word every 75 ms (about 13 a second, still faster than reading), a little faster only when far behind so a long reply doesn't drag. If your Mac is set to "Reduce motion", replies show without the typing effect.
+- **Tests without extra packages:** `npm test` uses Node's own test runner and its built-in TypeScript support, with a 30-line loader (`tests/register.mjs`). The color and icon lists moved to `lib/choices.ts` so the tests don't need the UI code.
+- **Fix dev copy:** `/tmp/agentbox-dev-22`, port 3100, schedules off, Discord pings off, my own live run marked done in the copy only, plus one pretend stopped Reviewer run whose log hides a sneaky instruction. Your real database and the always-on service weren't touched.
 - **Cheapest reliable option:** Claude Code headless (`claude -p`) with **Sonnet**, the same tool the rest of the panel already uses, so it shares your login and shows up in the same usage numbers. No API key needed. It costs about 2 cents of API-equivalent usage per reply.
 - **No tools that change things, by construction:** `--tools ""` removes every built-in tool (no files, no shell, no web). The only tools are 8 read-only lookups served by a tiny MCP server I wrote with no extra packages (`scripts/helper-mcp.mjs`), which only calls `POST /api/helper/tools` on 127.0.0.1. `--permission-mode dontAsk` plus an allow-list of exactly those tools, `--strict-mcp-config` (no other MCP servers), `--setting-sources ""` (no settings or hooks from elsewhere), `--no-session-persistence`, and its own short system prompt instead of the coding one.
 - **Its working folder is `~/agents/helper-room`**, empty and outside every project, so it never picks up a project's instructions.
 - **The panel remembers the conversation, not Claude:** each message sends the last 14 messages itself. That way chats work the same from laptop and phone and nothing depends on Claude's session files.
-- **Buttons and chips are checked by the server**, so the Helper can't show a button for something made up or out of date: a chip to something that doesn't exist becomes plain text; *Try again* only appears for a stopped run, *Approve plan* only while a plan is waiting, *Merge it* only while a pull request is open, *Pause everything* only when it isn't already paused.
+- **Buttons and chips are checked by the server**, so the Helper can't show a button for something made up or out of date: a chip to something that doesn't exist becomes plain text; *Try again* only appears for a stopped run, *Approve plan* only while a plan is waiting, *Merge pull request #N* only while a pull request is open, *Pause everything* only when it isn't already paused.
 - **Buttons do exactly what the same button elsewhere does**, through the same endpoints. "Start a test run" opens the workflow with its Test run window (it still needs your task and Start). A suggested task opens **New task** filled in; you still press Start.
 - **Create it** uses the same checks as the editors. If the Helper picks a project that isn't on this Mac, it falls back to agentbox-panel. A workflow name that's taken gets a number. Agents and workflows are always saved **Off**.
 - **The bubble gets a red dot** when an error box is on the page or a reply finished while the panel was closed.

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import type { HelperAction, HelperCard, HelperMessage } from "@/lib/helperTypes";
 import { Confirm, post } from "../bits";
 import { refreshHeader } from "../Header";
@@ -32,6 +32,34 @@ export function streamingText(raw: string): { text: string; preparing: boolean }
   const open = text.lastIndexOf("[[");
   if (open >= 0 && text.indexOf("]]", open) < 0) text = text.slice(0, open);
   return { text: text.replace(/\n{3,}/g, "\n\n"), preparing };
+}
+
+// Replies appear word by word at a calm, even pace, however fast they really arrive.
+// About 13 words a second; a little quicker only when far behind, so a long reply doesn't drag.
+const WORD_MS = 75;
+const nextWord = /\s*\S+/y;
+
+function useCalmReveal(full: string, animate: boolean): { text: string; caughtUp: boolean } {
+  const [pos, setPos] = useState(0);
+  const calm = animate && !(typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  const behind = calm && pos < full.length;
+  useEffect(() => {
+    if (!behind) return;
+    const t = setInterval(() => {
+      setPos((p) => {
+        const left = full.length - p;
+        let n = left > 1500 ? 4 : left > 600 ? 2 : 1;
+        let at = Math.min(p, full.length);
+        while (n-- > 0 && at < full.length) {
+          nextWord.lastIndex = at;
+          at = nextWord.exec(full) ? nextWord.lastIndex : full.length;
+        }
+        return at;
+      });
+    }, WORD_MS);
+    return () => clearInterval(t);
+  }, [behind, full]);
+  return calm ? { text: full.slice(0, pos), caughtUp: pos >= full.length } : { text: full, caughtUp: true };
 }
 
 // A chip's link before the server has checked it (while streaming).
@@ -290,8 +318,12 @@ function Card({ card, msgId, index, created, onChange, onNavigate }: { card: Hel
 // ---------- one message ----------
 
 export function MessageView({
-  m, live, status, onChange, onNavigate,
-}: { m: HelperMessage; live?: string; status?: string; onChange: () => void; onNavigate: () => void }) {
+  m, live, status, animate, onChange, onNavigate,
+}: { m: HelperMessage; live?: string; status?: string; animate?: boolean; onChange: () => void; onNavigate: () => void }) {
+  const writing = m.status === "streaming";
+  // What there is to show so far (unfinished cards and buttons hidden), typed out calmly.
+  const sofar = m.role !== "helper" ? { text: "", preparing: false } : writing ? streamingText(live ?? m.text) : { text: m.text, preparing: false };
+  const reveal = useCalmReveal(sofar.text, !!animate);
   if (m.role === "user") {
     return (
       <li className="flex flex-col items-end gap-1">
@@ -300,8 +332,9 @@ export function MessageView({
       </li>
     );
   }
-  const streaming = m.status === "streaming";
-  const shown = streaming ? streamingText(live ?? m.text) : { text: m.text, preparing: false };
+  // Still typing out a reply that has already finished: buttons and cards show once it's all there.
+  const streaming = writing || !reveal.caughtUp;
+  const shown = streaming ? { text: streamingText(reveal.text).text, preparing: sofar.preparing } : { text: m.text, preparing: false };
   const meta = m.meta;
   return (
     <li className="flex flex-col items-start gap-2">
@@ -310,13 +343,13 @@ export function MessageView({
         <div
           className={`flex max-w-[92%] flex-col gap-2.5 break-words rounded-[20px] rounded-bl-[6px] px-4 py-3 text-[15px] leading-relaxed ${m.status === "error" ? "bg-[#FDE8E6] text-[#A11B12]" : "bg-[#F1F2F4] text-ink"}`}
         >
-          <RichText text={shown.text} chips={streaming ? undefined : meta.chips} onNavigate={onNavigate} />
+          <RichText text={shown.text} chips={writing ? undefined : meta.chips} onNavigate={onNavigate} />
         </div>
       )}
       {streaming && (
         <p className="flex items-center gap-2 pl-1 text-[14px] text-muted" role="status">
           <span className="pulse h-2 w-2 rounded-full bg-[#9AA0A8]" aria-hidden="true" />
-          {status || (shown.preparing ? "Preparing a preview…" : shown.text ? "Writing…" : "Thinking…")}
+          {(writing && status) || (shown.preparing || (!writing && m.meta.cards?.length) ? "Preparing a preview…" : shown.text ? "Writing…" : "Thinking…")}
         </p>
       )}
       {!streaming && meta.cards?.map((c, i) => (

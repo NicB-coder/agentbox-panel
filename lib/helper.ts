@@ -465,9 +465,12 @@ export function actionFor(kind: string, ref: string): HelperAction | null {
       const runs = runsWithStatus("working", "waiting").filter((r) => !r.workflowRunId).length;
       const flows = wfRunsWithStatus("running", "needs").length;
       const count = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
+      const going = [runs && count(runs, "agent run", "agent runs"), flows && count(flows, "workflow run", "workflow runs")].filter(Boolean).join(" and ");
       return a(
         "Pause everything",
-        `This stops what's going right now (${count(runs, "agent run", "agent runs")} and ${count(flows, "workflow run", "workflow runs")}) and holds every schedule until you press Resume everything. Work so far is kept but not finished.`,
+        going
+          ? `This stops what's running right now (${going}) and holds every schedule until you press Resume everything. Work so far is kept but not finished.`
+          : "Nothing is running right now. This holds every schedule until you press Resume everything, so no agent or workflow starts by itself.",
       );
     }
     case "resume_all":

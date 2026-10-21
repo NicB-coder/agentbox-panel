@@ -77,6 +77,8 @@ node scripts/m2-test.mjs out/               # workflow templates, editor, undo, 
 node scripts/m3-test.mjs out/               # Describe it (uses a little Claude usage)
 node scripts/walkthrough.mjs out/           # screenshots of every page at both widths
 node scripts/helper-test.mjs out/           # Helper: bubble, streamed reply, saved across reload (a little usage)
+npm test                                     # Helper: 25 quick checks, no app running and no Claude usage (about 1.5 s)
+BASE_URL=http://127.0.0.1:3100 DB=/tmp/agentbox-dev/agentbox.db node scripts/helper-calm-test.mjs out/  # Helper: calm typing, New text button, sneaky log, Create it twice (a little usage)
 node scripts/helper-test2.mjs out/          # Helper: suggestions, buttons, Are you sure?, Create it cards (some usage)
 node scripts/helper-walkthrough.mjs out/ 1366  # Helper: a beginner question on every page, answers saved to a file
 ```

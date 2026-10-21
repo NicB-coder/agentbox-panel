@@ -47,6 +47,11 @@ export default function HelperBubble() {
   const [unread, setUnread] = useState(false);
   const [showChats, setShowChats] = useState(false);
   const [announce, setAnnounce] = useState("");
+  const [newText, setNewText] = useState(false);
+  // Replies that were written while the panel was open: these type out calmly. Older ones show at once.
+  const [typed, setTyped] = useState<Set<number>>(() => new Set());
+  const shownChat = useRef<number | null>(null);
+  const jumpToEnd = useRef(false);
   const attached = useRef(new Set<number>());
   const box = useRef<HTMLTextAreaElement>(null);
   const bubble = useRef<HTMLButtonElement>(null);
@@ -68,6 +73,7 @@ export default function HelperBubble() {
       if (chat) q.set("chat", String(chat));
       try {
         const r = await fetch(`/api/helper?${q}`, { cache: "no-store" });
+        if (r.status === 404 && chat) return load(null); // that chat was cleaned up: show the latest one
         if (r.ok) setData(await r.json());
       } catch {
         /* offline: keep what we have */
@@ -80,6 +86,7 @@ export default function HelperBubble() {
   const attach = useCallback(async (msgId: number) => {
     if (attached.current.has(msgId)) return;
     attached.current.add(msgId);
+    setTyped((t) => new Set(t).add(msgId));
     try {
       const r = await fetch(`/api/helper/stream?msg=${msgId}`, { cache: "no-store" });
       if (!r.body) throw new Error("no stream");
@@ -126,12 +133,42 @@ export default function HelperBubble() {
     for (const m of data?.messages ?? []) if (m.status === "streaming" && m.id > 0) attach(m.id);
   }, [data, attach]);
 
-  // Scroll to the newest message.
-  const lastLive = Object.values(live).map((l) => l.text.length).join();
+  // The view stays still while a reply is typed. It only jumps to the end when the panel opens,
+  // another chat is shown, or Nic sends something. New words below the fold show "↓ New text".
+  const atEnd = () => {
+    const el = list.current;
+    return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  };
+  const toEnd = (smooth = false) => {
+    const el = list.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    setNewText(false);
+  };
+  useEffect(() => {
+    if (!open) {
+      shownChat.current = null;
+      return;
+    }
+    const id = data?.chat?.id ?? null;
+    if (data && (id !== shownChat.current || jumpToEnd.current)) {
+      shownChat.current = id;
+      jumpToEnd.current = false;
+      requestAnimationFrame(() => toEnd());
+    }
+  }, [open, data, showChats]);
   useEffect(() => {
     const el = list.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [data?.messages.length, lastLive, open]);
+    const inner = el?.firstElementChild;
+    if (!open || !el || !inner) return;
+    let last = inner.getBoundingClientRect().height;
+    const ro = new ResizeObserver(() => {
+      const h = inner.getBoundingClientRect().height;
+      if (h > last + 1 && !atEnd()) setNewText(true);
+      last = h;
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [open, showChats, data?.chat?.id, data?.messages.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -161,6 +198,7 @@ export default function HelperBubble() {
       { id: -1, chatId: chatId ?? 0, role: "user", text: t, status: "done", meta: {}, createdAt: Date.now() },
       { id: -2, chatId: chatId ?? 0, role: "helper", text: "", status: "streaming", meta: {}, createdAt: Date.now() },
     ];
+    jumpToEnd.current = true;
     setData((d) => ({ chat: d?.chat ?? null, chats: d?.chats ?? [], outOfUsage: d?.outOfUsage ?? null, suggestions: d?.suggestions, messages: [...(d?.messages ?? []), ...temp] }));
     setInput("");
     try {
@@ -321,7 +359,7 @@ export default function HelperBubble() {
               </ul>
             </div>
           ) : (
-            <div ref={list} className="flex-1 overflow-y-auto px-4 py-4">
+            <div ref={list} className="relative flex-1 overflow-y-auto px-4 py-4" onScroll={() => newText && atEnd() && setNewText(false)}>
               {messages.length === 0 ? (
                 <div className="flex flex-col gap-3 pt-2 text-[15px] leading-relaxed">
                   <p className="text-[17px] font-semibold">Hi Nic! I'm the Helper.</p>
@@ -340,6 +378,7 @@ export default function HelperBubble() {
                       key={m.id}
                       m={m}
                       live={live[m.id]?.text}
+                      animate={typed.has(m.id)}
                       status={live[m.id]?.status}
                       onNavigate={onNavigate}
                       onChange={() => {
@@ -354,7 +393,16 @@ export default function HelperBubble() {
           )}
 
           {/* Bottom: out of usage, error, input, suggestions */}
-          <div className="border-t border-line px-3 pb-3 pt-2">
+          <div className="relative border-t border-line px-3 pb-3 pt-2">
+            {newText && !showChats && (
+              <button
+                type="button"
+                onClick={() => toEnd(true)}
+                className="absolute -top-14 left-1/2 z-10 inline-flex min-h-11 -translate-x-1/2 items-center gap-1.5 rounded-full bg-ink px-4 text-[14px] font-semibold text-white shadow-[0_6px_18px_rgba(21,23,27,0.25)] hover:bg-black"
+              >
+                <span aria-hidden="true">↓</span> New text
+              </button>
+            )}
             {out && (
               <p className="mb-2 rounded-[14px] bg-[#FDE8E6] px-3 py-2 text-[14px] font-medium text-[#A11B12]">
                 Out of Claude usage{out.until ? ` until ${clockOf(out.until)} (in ${until(out.until)})` : ""}. I'll be back then.
