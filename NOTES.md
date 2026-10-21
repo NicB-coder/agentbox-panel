@@ -34,6 +34,15 @@ Everything from #8 is merged in, plus:
 - Smaller fixes: a missing chat gives "That conversation isn't here any more" (and the bubble quietly opens your latest chat instead), message and card numbers are checked, the confusing "Ask Claude to fix this" error now says "Check that Claude Code is installed on this Mac", and an empty bit of code is gone.
 - **`npm test`**: 25 quick checks of the Helper in about 1.5 seconds, with no live app and no Claude usage (a throwaway database and a pretend Claude). They cover disguised merge buttons, broken and cut-off cards, Create it twice, chat cleanup, the reply time limit, Claude Code not installed, made-up links, and the secret.
 
+## v2.1: How I tested it
+
+- **`npm test`**: 25 of 25 quick checks pass in about 1.5 s (no app running, no Claude usage).
+- **Type check and a full production build** both pass.
+- **Real browser (Playwright) at 1366px and 390px** on a separate dev copy (its own database copy, port 3100, schedules and Discord pings off) with `scripts/helper-calm-test.mjs`: **19 of 19 checks pass.** "Thinking…" shows in under 5 ms; words type at 10–13 a second; the view doesn't move while typing; **↓ New text** jumps to the end; the how-to answer is 66–76 words with numbered steps; a planted instruction in a pull request comment was ignored (no disguised button, no Pause everything) and the real reason (30-minute time limit) was given; two **Create it** presses at the same moment made 1 agent and returned the same link, and the card's own button then opened that same agent.
+- **The "Are you sure?" for Pause everything** checked by eye in the browser (screenshot `docs/screenshots/v2.1-helper-are-you-sure.png`); I pressed Cancel.
+- **API checks by hand:** the tools address answers 403 without the secret, a missing chat gives 404, a card number that isn't a number gives 400.
+- The live panel on port 3000 was left alone and still answers.
+
 ## v2.1: Changes from the beginner walkthrough
 
 - It sometimes started with "The snapshot already shows the log…" → it now starts straight with the answer and never talks about how it knows things or uses run numbers.
