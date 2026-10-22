@@ -2,6 +2,61 @@
 
 # v3: simpler, fully in the panel, deep research
 
+## v3 — What Nic should click first
+
+1. **New task** (top right). Type something small and real, like "make the arcade's home page title friendlier", pick **arcade**, leave **Careful** on, press **Start**. A new agent appears, named after the job. Watch its tile: the step it's on, what it's doing right now, and time so far. A second AI reviews and fixes the work before it reaches your **Inbox**.
+2. In the Inbox, press **Look at it**: what it did in plain words, **before and after pictures**, and the code behind a toggle. Then **Merge it**, or **Send back with a note**. When it's merged you get a **Shipped** item with a **Play** button.
+3. **New task → Research something**, and ask a question you actually care about. You get a report with a short answer first and every source linked, and a PDF if you want one.
+4. Look at **Machine** and **Connectors** (Menu on your phone, or the footer). On Connectors, connect anything you'd like agents to use (Slack, Notion…) through claude.ai.
+
+## v3 — Done
+
+All 7 milestones, each committed and pushed on `build/v3` and tested with Playwright at 1366px and 390px on a separate dev copy (its own database copy, port 3100, schedules and Discord off; from milestone 4 on, a real production build):
+
+1. **Leftovers** were already on main. **One agent per job**: premade agents archived (Heartbeat stays), New task makes a job-named agent, **Add a follow-up** continues the same job (same branch and pull request), **Archive** with an Archived filter. **One Start a task panel** used by New task, follow-ups, Inbox ideas and the Helper, with Freedom, Careful/Quick, When does it run (pickers and "Next run" shown at once) and More options; short labels with ⓘ bubbles.
+2. **Careful mode** (build → review by the other model → fix, up to 2 rounds → polish → final check → Inbox with "Reviewed ✓ · 2 fixes made · optimized"). **Never lose work to usage limits**: runs wait and carry on in the same conversation (this happened for real during testing). **Ran out of time** with **Keep going (+30 min)**. **Big jobs** with milestones, checkpoints, a usage budget, hold-small-runs, brief files. **Runs survive panel restarts** (their own launchd jobs; tested by restarting mid-milestone) and resume after a Mac restart. Old copies tidied after 3 days. Sign-in problems show **Sign in again**.
+3. **Projects** in the header, **See what changed** for any pull request (pictures, code toggle, comment, send back), **Preview / Play**, **Update agentbox** with a side-by-side build and **automatic rollback** (tested with a good update, a broken build and a version that wouldn't start), **Install it** for jobs that change the panel, **Machine** page, **Terminal** page.
+4. **Busy tiles** (tint, pulsing dot, right-now line, step x of y, time so far; running and waiting ones first; workflow tiles show their step). **Shipped** items in the Inbox with Play, louder and logged Discord messages, and the Tell me investigation (below). **Workflows**: the "What should this workflow make?" box, labeled step instructions, Freedom and Careful/Quick in steps.
+5. **Deep research** with the Report page, PDF and Markdown, Reports in the Inbox, save to project, and the same method for workflow Research steps.
+6. **Connectors** page, per-task and per-step choices, and "send, delete or book asks first" (tested with a real Gmail send that I denied).
+7. **Helper** knows v3 and opens Start a task filled in; it answers by itself after a usage reset. **Beginner walkthrough** of every page at both widths (below), README, these notes.
+
+`npm test`: 31 of 31 pass (no app, no Claude usage). Type check and production build pass. Every page passes the browser check at both widths (no console errors, no sideways scrolling, tap targets 44px+).
+
+## v3 — Changes from the beginner walkthrough
+
+- Agent pages and the Inbox showed an agent's raw formatting (backticks around file names) → plain text everywhere.
+- After a follow-up, both the old and the new run said "Needs you" for the same pull request → the follow-up takes over the pull request and the old one says "Continued in a follow-up".
+- Research jobs talked about branches and buttons in their follow-up box → research wording ("Ask more about the same topic. It builds on the earlier report.").
+- A research report that a reviewer flagged and the researcher then corrected still said "a few things still need a look" → "Reviewed and corrected ✓".
+- The Help page, welcome tour and help texts still described Builder and "Add an agent" → rewritten for v3 (Start a task, Careful, Freedom, follow-ups, Shipped, reports); the safety list mentions connectors and automatic rollback.
+- Look steps in workflows showed a hammer → an eye.
+- The phone Projects page scrolled sideways, and two small links were hard to tap → fixed.
+- Typing quickly in the Terminal could arrive out of order → keystrokes now go out in order.
+- The Start a task panel could show "None connected yet" right after a restart → it fetches the current connectors when you open More options.
+- The header was crowded at laptop width → the usage meter shows the short form until very wide screens.
+
+## v3 — Not done / known limits
+
+- **Preview / Play only works for plain HTML/CSS/JS sites and games** (or an already-built folder). Projects that need `npm run dev` (Next.js, Vite) can't be previewed or photographed yet; See what changed just leaves the pictures out for them.
+- **A Mac restart was simulated, not done for real.** I tested a session being cut off (the panel restarting, a session killed) and the "carry on with --resume" path, but didn't restart the Mac while you were away.
+- **Sign in again** opens the Terminal with the right command typed in; I didn't run it for real, so as not to sign the bot or Claude Code out.
+- **Connectors**: Slack, Notion, Linear, Figma and Canva show "Not connected" until you connect them in claude.ai. Connecting other MCP servers by address isn't in the panel.
+- **A job's Settings page doesn't have the Connectors choice** (pick them in Start a task, or per follow-up).
+- **The Helper's auto-answer after a usage reset** shows up in an open chat the next time you open or switch chats, not live.
+- **Big jobs that change the panel itself** were tested on arcade, not on agentbox-panel. The prompt tells such agents to test on their own dev copy (`scripts/dev-copy.sh` with its own port), and **Install it** uses the update flow that was tested with rollback.
+- **Hydration warning**: once during testing the home page reported a one-off mismatch between server and browser text (a time label crossing a minute). I couldn't reproduce it.
+- **Week usage**: building and testing v3 used a fair share of this week's Claude usage (the weekly meter was at 80% when I finished).
+
+## v3 — Needs Nic
+
+Nothing needs an admin password.
+
+- **Switching the always-on panel to v3**: your `build-v3.sh` script merges this pull request and runs `./scripts/install-launchagent.sh` by itself once I create `BUILD_V3_DONE`. If you'd rather do it by hand: `cd ~/projects/agentbox-panel && git checkout main && git pull && ./scripts/install-launchagent.sh`. After that, use **Settings → Update agentbox** for future updates.
+- **On first start, v3 archives Builder, Reviewer, Site Checker and Overnight** (history kept; Unarchive any of them from the Archived filter). Their schedules stop.
+- **Optional: connect more apps** at claude.ai → Settings → Connectors (signed in with the same Claude account), then press Check again on the Connectors page.
+- The v1 items still apply if you haven't done them (`tailscale serve`, protecting `main` on GitHub).
+
 ## v3 — Decisions I made
 
 - **HELPER.md doesn't exist** in the repo (or anywhere I could find). I used the Helper sections of NOTES.md (v2.1) and the code instead.

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DATA_DIR, getAgent, getRun } from "./db";
-import { launch } from "./proc";
+import { cleanupFinished, launch } from "./proc";
 import { cleanEnv, log, sh } from "./runner";
 
 // Update agentbox: runs scripts/update-panel.sh as its own launchd job (it restarts the panel, so it can't be
@@ -52,6 +52,7 @@ export async function startUpdate(opts: { force?: boolean } = {}): Promise<void>
   const cur = updateStatus();
   if (cur?.state === "running") throw new Error("An update is already going.");
   const port = Number(process.env.PORT || 3000);
+  await cleanupFinished("update-").catch(() => {});
   fs.writeFileSync(STATUS_FILE, JSON.stringify({ state: "running", step: 0, steps: [], message: "Starting…", startedAt: Date.now(), endedAt: null, from: "", to: "", pid: process.pid }));
   await launch(`update-${Date.now()}`, "/bin/zsh", [path.join(process.cwd(), "scripts", "update-panel.sh")], process.cwd(), {
     ...cleanEnv(),

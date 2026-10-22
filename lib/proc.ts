@@ -212,3 +212,15 @@ export function sweepProcFiles(maxAgeMs = 3 * 86400_000) {
 }
 
 export const homeDir = os.homedir();
+
+// Finished jobs whose names start with `prefix` (e.g. earlier updates): unregister them from launchd and remove their files.
+export async function cleanupFinished(prefix: string) {
+  const r = await new Promise<string>((resolve) => execFile("/bin/launchctl", ["list"], { timeout: 15_000 }, (_e, o) => resolve(String(o))));
+  for (const line of r.split("\n")) {
+    const [pid, , label] = line.trim().split(/\s+/);
+    if (!label?.startsWith(`com.agentbox.run.${TAG}.${prefix}`) || pid !== "-") continue;
+    await launchctl(["bootout", `gui/${UID}/${label}`]);
+    const key = label.slice(`com.agentbox.run.${TAG}.`.length);
+    for (const ext of [".plist", ".json", ".pid", ".exit", ".runner.log"]) fs.rmSync(path.join(PROC_DIR, key + ext), { force: true });
+  }
+}
