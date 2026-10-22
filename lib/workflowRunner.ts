@@ -305,7 +305,7 @@ function stepRunConfig(wr: WorkflowRun, wf: Workflow, step: WfStep): { agentId: 
     agentId: agent ? agent.id : helperAgentId(),
     mode: step.freedom ? modeFor(freedom, step.mode === "ask").mode : step.mode ?? agent?.mode ?? "auto",
     extra: {
-      ...base, role: agent ? "agent" : "quick", allowed: look ? "look" : "suggest", careful: !!step.careful,
+      ...base, role: agent ? "agent" : "quick", allowed: look ? "look" : "suggest", careful: !!step.careful, connectors: step.connectors ?? [],
       model: (agent ? step.model ?? agent.model : step.model ?? "sonnet") as Model, maxMinutes: step.maxMinutes ?? agent?.maxMinutes ?? 30,
       prompt: `${ctx}\n\n${job}${extraNote}${outcome}${finish}`,
     },

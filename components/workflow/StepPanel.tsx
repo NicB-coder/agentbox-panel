@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CheckKind, StartTrigger, WfStep } from "@/lib/types";
 import { CHECK_WORDS, STEP_INFO, TRIGGER_WORDS, stepTitle, type AgentRef } from "@/lib/wf";
 import { DAY_NAMES, DAY_SHORT } from "@/lib/words";
 import { InfoTip, Label } from "../bits";
-import { CarefulPicker, FreedomPicker } from "../controls";
+import { CarefulPicker, Chip, FreedomPicker } from "../controls";
 import { modeFor } from "@/lib/job";
 import Segmented from "../Segmented";
 import { btn, field } from "../ui";
@@ -211,6 +211,7 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
             />
           </label>
           <FreedomPicker value={s.freedom ?? (s.mode === "look" ? "look" : s.mode === "plan" ? "check" : "auto")} onChange={(f) => onChange({ freedom: f, mode: modeFor(f, false).mode })} />
+          <StepConnectors value={s.connectors ?? []} onChange={(c) => onChange({ connectors: c })} />
           {(s.freedom ?? "auto") !== "look" && <CarefulPicker value={!!s.careful} onChange={(c) => onChange({ careful: c, maxMinutes: Math.max(s.maxMinutes ?? 30, c ? 60 : 30) })} />}
           {timeSlider}
           {s.agentId == null && modelPick("Fast is good for most steps. Smartest takes longer and uses more of your usage.")}
@@ -331,5 +332,29 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
         </div>
       )}
     </Sheet>
+  );
+}
+
+// Which connected apps this step may use (none by default).
+function StepConnectors({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [list, setList] = useState<{ id: string; name: string; state: string }[] | null>(null);
+  useEffect(() => {
+    fetch("/api/connectors").then((r) => r.json()).then(setList).catch(() => setList([]));
+  }, []);
+  const usable = (list ?? []).filter((c) => c.state === "connected" && c.id !== "github");
+  if (!usable.length) return null;
+  return (
+    <fieldset>
+      <Label as="legend" tip="Apps this step may use, like your email or calendar. Anything that sends, deletes or books something still asks you first.">
+        Connectors
+      </Label>
+      <div className="flex flex-wrap gap-2">
+        {usable.map((c) => (
+          <Chip key={c.id} checked={value.includes(c.id)} onChange={(v) => onChange(v ? [...value, c.id] : value.filter((x) => x !== c.id))}>
+            {c.name}
+          </Chip>
+        ))}
+      </div>
+    </fieldset>
   );
 }

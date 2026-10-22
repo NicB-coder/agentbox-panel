@@ -44,6 +44,7 @@ export function startBackground() {
   recoverOnBoot();
   tickSchedules();
   refreshUsage(true);
+  import("./connectorStatus").then((m) => m.connectorStatus()).catch(() => {});
   const tick = () => {
     try {
       tickSchedules();

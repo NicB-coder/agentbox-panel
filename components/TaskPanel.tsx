@@ -48,7 +48,7 @@ async function followUpOf(id: number): Promise<TaskPanelOpen["followUp"] | null>
 }
 
 // Features that switch on as they're finished (never show a half-built one).
-export const TASK_FEATURES = { research: true, big: true, connectors: false };
+export const TASK_FEATURES = { research: true, big: true, connectors: true };
 
 type Brief = { name: string; text: string };
 
@@ -83,6 +83,15 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
   const [briefPick, setBriefPick] = useState<null | { file: string }[]>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [live, setLive] = useState<Connector[] | null>(null);
+  useEffect(() => {
+    // The newest list of connected apps, when More options opens.
+    if (!more || live) return;
+    fetch("/api/connectors")
+      .then((r) => r.json())
+      .then((list: { id: string; name: string; state: string }[]) => setLive(list.map((c) => ({ id: c.id, name: c.name, connected: c.state === "connected", risky: false }))))
+      .catch(() => {});
+  }, [more, live]);
 
   // Sensible time limit for the kind of work, until Nic moves the slider himself.
   useEffect(() => {
@@ -178,7 +187,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
 
   const research = kind === "research";
   const scheduled = when.scheduleKind !== "manual" && !follow;
-  const usable = connectors.filter((c) => c.connected);
+  const usable = (live ?? connectors).filter((c) => c.connected);
 
   return (
     <dialog
@@ -290,7 +299,13 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
 
           {!follow && <WhenPicker value={when} onChange={setWhen} />}
 
-          <FreedomPicker value={freedom} onChange={setFreedom} />
+          {research ? (
+            <p className="flex items-center text-[15px] text-muted">
+              Research only reads and reports. It never changes anything.
+            </p>
+          ) : (
+            <FreedomPicker value={freedom} onChange={setFreedom} />
+          )}
           <CarefulPicker value={careful} onChange={setCareful} />
 
           <div>
@@ -309,16 +324,16 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
                     <Label as="legend" tip="Apps it may use for this task, like your email or calendar. Anything that sends, deletes or books something still asks you first.">
                       Connectors
                     </Label>
-                    {usable.length === 0 ? (
+                    {usable.filter((c) => c.id !== "github").length === 0 ? (
                       <p className="text-[14px] text-muted">
                         None connected yet.{" "}
-                        <a href="/connectors" className="font-semibold underline">
+                        <a href="/connectors" className="inline-flex min-h-11 items-center font-semibold underline">
                           Connect one
                         </a>
                       </p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        {usable.map((c) => (
+                        {usable.filter((c) => c.id !== "github").map((c) => (
                           <Chip key={c.id} checked={picked.includes(c.id)} onChange={(v) => setPicked(v ? [...picked, c.id] : picked.filter((x) => x !== c.id))}>
                             {c.name}
                           </Chip>

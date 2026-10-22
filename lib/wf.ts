@@ -286,6 +286,7 @@ export function cleanSteps(raw: unknown, agentIds: number[]): WfStep[] {
       s.mode = MODES.includes(r.mode as WorkMode) ? (r.mode as WorkMode) : "auto";
       s.freedom = (["look", "check", "auto"] as const).includes(r.freedom as "auto") ? (r.freedom as Freedom) : s.mode === "look" ? "look" : s.mode === "plan" ? "check" : "auto";
       s.careful = r.careful === true;
+      s.connectors = Array.isArray(r.connectors) ? (r.connectors as unknown[]).map(String).filter((c) => /^[a-z0-9_-]{1,40}$/i.test(c)).slice(0, 20) : [];
     }
     if (type === "check") {
       s.checks = Array.isArray(r.checks) ? [...new Set((r.checks as CheckKind[]).filter((c) => CHECKS.includes(c)))] : ["tests"];

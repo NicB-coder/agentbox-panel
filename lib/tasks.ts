@@ -55,7 +55,8 @@ export function parseTaskInput(body: unknown, projects = listProjects()): { ok: 
   if (scheduleKind === "days" && !scheduleDays.length) return { ok: false, error: "Pick at least one day." };
   const scheduleTime = String(b.scheduleTime ?? "18:00");
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime)) return { ok: false, error: "Pick a time." };
-  const freedom = (FREEDOMS.includes(b.freedom as Freedom) ? b.freedom : kind === "research" ? "look" : "auto") as Freedom;
+  // Research only ever writes a report, so it's always Look only (connectors that send or change things still ask).
+  const freedom = (kind === "research" ? "look" : FREEDOMS.includes(b.freedom as Freedom) ? b.freedom : "auto") as Freedom;
   const careful = b.careful !== false;
   const model = (MODELS.includes(b.model as Model) ? b.model : kind === "research" ? "opus" : "sonnet") as Model;
   const big = b.big === true;

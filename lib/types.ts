@@ -137,6 +137,7 @@ export type Flow = {
   polished: boolean;
   workSession: string | null; // the builder's conversation, continued for fixes and polish
   lastFix?: boolean;
+  fixedSinceReview?: boolean; // a fix came after the last review
   workSummary?: string; // what the build itself did (fix and polish write their own summaries)
   subSteps?: Step[]; // the builder's own plan while it builds (Careful mode)
   big?: { milestones: Milestone[]; index: number; handoff: string; weekCarry: number; weekStart: number | null; lastWeek: number | null; budgetPct: number };
@@ -254,6 +255,7 @@ export type WfStep = {
   model?: Model;
   freedom?: Freedom; // agent steps (v3): replaces mode
   careful?: boolean; // agent steps (v3): build → review → fix inside the step
+  connectors?: string[]; // agent steps (v3): apps it may use
   // check
   checks?: CheckKind[];
   pagePath?: string; // "/" or a full https:// address

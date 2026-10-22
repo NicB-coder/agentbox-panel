@@ -90,9 +90,10 @@ const otherModel = (m: Model): Model => (m === "opus" ? "sonnet" : "opus");
 // What this run actually uses: the agent's settings, unless a follow-up or workflow step overrides them.
 export function eff(agent: Agent, run: Run): { allowed: Allowed; model: Model; maxMinutes: number; prompt: string; name: string; careful: boolean; big: boolean } {
   const x = run.extra ?? {};
-  const look = lookOnly(x.allowed ?? agent.allowed, run.mode);
+  const research = agent.kind === "claude" && agent.job.kind === "research" && !run.workflowRunId;
+  const look = research || lookOnly(x.allowed ?? agent.allowed, run.mode);
   return {
-    allowed: x.allowed ?? agent.allowed,
+    allowed: research ? "look" : x.allowed ?? agent.allowed,
     model: x.model ?? agent.model,
     maxMinutes: x.maxMinutes ?? agent.maxMinutes,
     prompt: x.prompt ?? agent.prompt,
@@ -969,7 +970,7 @@ async function next(runId: number, phase: Phase, text: string, session: string |
     const note: ReviewNote = { kind: phase === "final" ? "final" : "review", verdict, text: body.slice(0, 8000), at: Date.now(), model: otherModel(e.model) };
     const reviews = [...flow.reviews, note];
     const round = phase === "review" ? flow.round + 1 : flow.round;
-    patchFlow(runId, { reviews, round });
+    patchFlow(runId, { reviews, round, fixedSinceReview: false });
     log(runId, `${phase === "final" ? "Final check" : `Review round ${round}`}: ${verdict}`);
     if (look) {
       const research = agent.job.kind === "research" && !run.workflowRunId;
@@ -991,7 +992,7 @@ async function next(runId: number, phase: Phase, text: string, session: string |
   const fresh = getRun(runId)!;
   const summary = fresh.result || firstLine(stripMarkers(text)) || "Finished.";
   if (phase === "work") patchFlow(runId, { workSession: session, workSummary: summary });
-  if (phase === "fix") patchFlow(runId, { fixes: flow.fixes + 1 });
+  if (phase === "fix") patchFlow(runId, { fixes: flow.fixes + 1, fixedSinceReview: true });
   if (phase === "polish") patchFlow(runId, { polished: true });
 
   if (look) {
@@ -1106,7 +1107,7 @@ async function finishLook(runId: number, report: string) {
 export function carefulLine(flow: Flow | undefined): string | null {
   if (!flow?.careful || !flow.reviews.length) return null;
   const last = flow.reviews[flow.reviews.length - 1];
-  const bits = [last.verdict === "passed" ? "Reviewed ✓" : "Reviewed: a few things still need a look"];
+  const bits = [last.verdict === "passed" ? "Reviewed ✓" : flow.fixedSinceReview ? "Reviewed and corrected ✓" : "Reviewed: a few things still need a look"];
   if (flow.fixes) bits.push(`${flow.fixes} ${flow.fixes === 1 ? "fix" : "fixes"} made`);
   if (flow.polished) bits.push("optimized");
   return bits.join(" · ");

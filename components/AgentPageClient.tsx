@@ -382,7 +382,7 @@ function carefulText(run: Run): string | null {
   const f = run.extra.flow;
   if (!f?.careful || !f.reviews.length) return null;
   const last = f.reviews[f.reviews.length - 1];
-  const bits = [last.verdict === "passed" ? "Reviewed ✓" : "Reviewed: a few things still need a look"];
+  const bits = [last.verdict === "passed" ? "Reviewed ✓" : f.fixedSinceReview ? "Reviewed and corrected ✓" : "Reviewed: a few things still need a look"];
   if (f.fixes) bits.push(`${f.fixes} ${f.fixes === 1 ? "fix" : "fixes"} made`);
   if (f.polished) bits.push("optimized");
   return bits.join(" · ");
