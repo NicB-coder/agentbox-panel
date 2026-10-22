@@ -49,6 +49,7 @@ export function startBackground() {
     try {
       tickSchedules();
       startQueued();
+      import("./helper").then((m) => m.answerWaitingHelper()).catch(() => {});
     } catch (e) {
       console.warn("[scheduler]", e);
     }

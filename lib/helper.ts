@@ -72,7 +72,30 @@ export function outOfUsage(): { until: number | null } | null {
 }
 
 const outOfUsageText = (until: number | null) =>
-  `You're out of Claude usage right now${until ? `, so I can't answer until it resets at **${clockOf(until)}** (in ${untilWords(until)})` : ", so I can't answer until it resets"}. Your question is saved here. Ask again after that.\n\nThe usage meter at the top shows the countdown.`;
+  `You're out of Claude usage right now, so I'll answer this by myself ${until ? `at **${clockOf(until)}**, when it resets (in ${untilWords(until)})` : "as soon as it resets"}. You don't need to ask again.\n\nThe usage meter at the top shows the countdown.`;
+
+// When the reply should be tried again: the real reset time, or in 30 minutes if it isn't known.
+const retryAt = (until: number | null) => (until && until > Date.now() ? until + 60_000 : Date.now() + 30 * 60_000);
+
+// Replies that waited for usage: answer them now that it's back (called by the background loop).
+export function answerWaitingHelper() {
+  if (outOfUsage()) return;
+  const rows = db().prepare("SELECT id FROM helper_messages WHERE status = 'done' AND role = 'helper' AND meta LIKE '%\"waiting\"%'").all() as { id: number }[];
+  for (const { id } of rows) {
+    const m = getMessage(id);
+    const w = m?.meta.waiting;
+    if (!m || !w || w.until > Date.now() || busyChat(m.chatId)) continue;
+    const { waiting: _w, ...rest } = m.meta;
+    updateMessage(id, { text: "", status: "streaming", meta: rest });
+    const gen: Gen = { chatId: m.chatId, msgId: id, text: "", status: null, listeners: new Set(), child: null };
+    gens.set(id, gen);
+    try {
+      run(gen, w.question, w.ctx, w.userMsgId);
+    } catch (e) {
+      finish(gen, `I couldn't start just now (${(e as Error).message}). Try again in a moment.`, {}, "error");
+    }
+  }
+}
 
 // A reply cut off by a panel restart.
 export function recoverHelper() {
@@ -176,7 +199,7 @@ export function sendMessage(chatId: number, text: string, ctx: HelperContext): {
 
   const out = outOfUsage();
   if (out) {
-    const reply = addMessage({ chatId, role: "helper", text: outOfUsageText(out.until) });
+    const reply = addMessage({ chatId, role: "helper", text: outOfUsageText(out.until), meta: { waiting: { question: text, ctx, userMsgId: user.id, until: retryAt(out.until) } } });
     return { user, reply };
   }
 
@@ -323,7 +346,7 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
     if (failed) {
       const usage = failed.startsWith("You're out");
       textOut = usage ? failed : textOut ? `${textOut}\n\n_${failed}_` : failed;
-      finish(gen, textOut, meta, usage ? "done" : "error");
+      finish(gen, textOut, usage ? { ...meta, waiting: { question: text, ctx, userMsgId, until: retryAt(usageState().limitedUntil) } } : meta, usage ? "done" : "error");
       return;
     }
     if (!textOut) {
@@ -345,7 +368,7 @@ function finish(gen: Gen, raw: string, meta: HelperMeta, status: HelperMessage["
 
 // ---------- turning the reply into chips, buttons and cards ----------
 
-const PAGE_OK = [/^\/$/, /^\/workflows$/, /^\/workflows\/new$/, /^\/inbox$/, /^\/projects$/, /^\/settings$/, /^\/help$/, /^\/agents\/new$/, /^\/agents\/\d+(\/edit)?$/, /^\/workflows\/\d+$/];
+const PAGE_OK = [/^\/$/, /^\/workflows$/, /^\/workflows\/new$/, /^\/inbox$/, /^\/projects$/, /^\/settings$/, /^\/help$/, /^\/agents\/new$/, /^\/agents\/\d+(\/edit)?$/, /^\/workflows\/\d+$/, /^\/connectors$/, /^\/machine$/, /^\/terminal$/, /^\/reports\/\d+$/, /^\/settings#update$/];
 const PR_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 
 export function pageOk(p: string): boolean {
@@ -395,7 +418,10 @@ export function chipFor(kind: string, ref: string, label: string): { href: strin
 const prNumber = (url: string) => url.match(/\/pull\/(\d+)/)?.[1] ?? "";
 const repoOf = (url: string) => url.match(/github\.com\/[\w.-]+\/([\w.-]+)\/pull/)?.[1] ?? "the project";
 
-const PAGE_NAMES: Record<string, string> = { "/": "Agents", "/workflows": "Workflows", "/workflows/new": "New workflow", "/inbox": "the Inbox", "/projects": "Projects", "/settings": "Settings", "/help": "Help", "/agents/new": "the agent editor" };
+const PAGE_NAMES: Record<string, string> = {
+  "/": "Agents", "/workflows": "Workflows", "/workflows/new": "New workflow", "/inbox": "the Inbox", "/projects": "Projects", "/settings": "Settings", "/help": "Help",
+  "/agents/new": "Start a task", "/connectors": "Connectors", "/machine": "Machine", "/terminal": "Terminal", "/settings#update": "Update agentbox",
+};
 
 function pageName(p: string): string {
   if (PAGE_NAMES[p]) return PAGE_NAMES[p];
@@ -551,9 +577,11 @@ export function finalize(raw: string, meta: HelperMeta): { text: string; meta: H
       return "";
     }
     if (kind === "task") {
-      const ag = getAgent(Number(rest));
-      if (ag && ag.kind === "claude" && ag.enabled && label)
-        actions.push({ kind: "new_task", ref: String(ag.id), label: `Set up this task for ${ag.name}`, task: label.slice(0, 2000) });
+      // [[task:new|…]] opens Start a task filled in; [[task:AGENT_ID|…]] opens a follow-up on that job.
+      const ag = rest === "new" ? null : getAgent(Number(rest));
+      if (label && rest === "new") actions.push({ kind: "new_task", ref: "new", label: "Set up this task", task: label.slice(0, 2000) });
+      else if (ag && ag.kind === "claude" && ag.enabled && label)
+        actions.push({ kind: "new_task", ref: String(ag.id), label: ag.archived ? "Set up this task" : `Set up a follow-up for ${ag.name}`, task: label.slice(0, 2000) });
       return "";
     }
     const chip = chipFor(kind, rest, label);
