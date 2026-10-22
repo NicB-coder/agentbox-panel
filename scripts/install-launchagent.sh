@@ -12,7 +12,10 @@ mkdir -p "$LOG_DIR" "$HOME/Library/LaunchAgents"
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 cd "$APP_DIR"
 npm ci --no-audit --no-fund
-npm run build
+git checkout -q -- tsconfig.json next-env.d.ts 2>/dev/null || true
+NEXT_DIST_DIR=.next npm run build
+git checkout -q -- tsconfig.json next-env.d.ts 2>/dev/null || true
+echo ".next" > .active-build   # Update agentbox switches this between builds later
 
 sed -e "s#__APP_DIR__#$APP_DIR#g" -e "s#__HOME__#$HOME#g" -e "s#__LOG_DIR__#$LOG_DIR#g" \
   "$APP_DIR/launchd/$LABEL.plist" > "$PLIST"

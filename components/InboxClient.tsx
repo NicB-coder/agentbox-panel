@@ -190,9 +190,9 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               )}
               {it.kind === "pr" && (
                 <>
-                  <a href={it.prUrl} target="_blank" rel="noreferrer" className={btn.primary}>
+                  <Link href={`/changes?pr=${encodeURIComponent(it.prUrl)}`} className={btn.primary}>
                     Look at it
-                  </a>
+                  </Link>
                   <button className={btn.secondary} disabled={b} onClick={() => setConfirm(true)}>
                     Merge it
                   </button>

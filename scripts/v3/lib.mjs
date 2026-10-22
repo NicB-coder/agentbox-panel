@@ -42,7 +42,7 @@ export async function pageCheck(page, label) {
         if (!r.width || !r.height) return false;
         if (el.closest("label") && el.tagName === "INPUT") return false;
         if (el.matches(".sr-only, .sr-only *")) return false;
-        if (el.closest("pre, .prose-report")) return false;
+        if (el.closest("pre, .prose-report, .xterm")) return false;
         return r.height < 44 && r.width < 44 ? true : r.height < 44 && el.tagName !== "A" ? true : r.height < 24;
       })
       .map((el) => `${el.tagName} "${(el.textContent || el.getAttribute("aria-label") || "").trim().slice(0, 30)}" ${Math.round(el.getBoundingClientRect().height)}px`);

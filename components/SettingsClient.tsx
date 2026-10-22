@@ -1,4 +1,5 @@
 "use client";
+import UpdateBox from "./UpdateBox";
 import { useState } from "react";
 import { ErrorBox, PageTitle, Switch, post } from "./bits";
 import { refreshHeader } from "./Header";
@@ -64,6 +65,9 @@ export default function SettingsClient({ guard }: { guard: number | null }) {
         </p>
         {error && <ErrorBox message={error} onRetry={() => save(on, pct)} where="Settings" />}
       </section>
+      <div className="mt-6">
+        <UpdateBox />
+      </div>
       <section className="panel mt-6 flex flex-col gap-3 p-6 sm:p-8" aria-labelledby="tour-h">
         <h2 id="tour-h" className="text-[18px] font-semibold">
           Welcome tour

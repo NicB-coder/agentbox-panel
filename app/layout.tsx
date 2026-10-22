@@ -35,6 +35,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </main>
         <footer className="mx-auto max-w-[1112px] px-4 pb-28 lg:pb-10">
           <nav aria-label="More" className="flex flex-wrap gap-x-2 border-t border-line pt-4 text-[14px] text-muted">
+            <Link href="/machine" className="inline-flex min-h-11 items-center px-2 font-medium hover:text-ink">
+              Machine
+            </Link>
+            <Link href="/terminal" className="inline-flex min-h-11 items-center px-2 font-medium hover:text-ink">
+              Terminal
+            </Link>
             <Link href="/settings" className="inline-flex min-h-11 items-center px-2 font-medium hover:text-ink">
               Settings
             </Link>

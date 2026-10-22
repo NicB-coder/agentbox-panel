@@ -286,6 +286,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
 // The pull request is ready: what the review said, and Look at it / Merge it / Send back with a note.
 function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   const [confirm, setConfirm] = useState(false);
+  const [install, setInstall] = useState(false);
   const [noting, setNoting] = useState(false);
   const [note, setNote] = useState("");
   const careful = carefulText(run);
@@ -304,13 +305,19 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
       )}
       <div className="mt-5 flex flex-wrap gap-3">
         {run.prUrl && (
-          <a href={run.prUrl} target="_blank" rel="noreferrer" className={btn.primary}>
+          <Link href={`/changes?pr=${encodeURIComponent(run.prUrl)}`} className={btn.primary}>
             Look at it
-          </a>
+          </Link>
         )}
-        <button className={btn.secondary} disabled={!!busy} onClick={() => setConfirm(true)}>
-          Merge it
-        </button>
+        {(run.extra.project ?? "") === "agentbox-panel" ? (
+          <button className={btn.secondary} disabled={!!busy} onClick={() => setInstall(true)}>
+            Install it
+          </button>
+        ) : (
+          <button className={btn.secondary} disabled={!!busy} onClick={() => setConfirm(true)}>
+            Merge it
+          </button>
+        )}
         {r?.verdict === "needs work" && !careful && (
           <button className={btn.secondary} disabled={!!busy} onClick={() => act("sendback", `/api/runs/${run.id}/send-back`, {})}>
             Send back to fix
@@ -340,6 +347,17 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
         </form>
       )}
       <p className="mt-3 text-[14px] text-muted">When it's merged, this turns to Done by itself.</p>
+      <Confirm
+        open={install}
+        title="Install it?"
+        text="This merges it into agentbox, then updates and restarts the panel (a few minutes). If the new version doesn't come up, it goes back to the old one by itself. Watch it in Settings → Update agentbox."
+        yes="Install it"
+        onYes={() => {
+          setInstall(false);
+          act("install", `/api/runs/${run.id}/install`).then(() => location.assign("/settings#update"));
+        }}
+        onClose={() => setInstall(false)}
+      />
       <Confirm
         open={confirm}
         title="Merge this pull request?"
@@ -568,9 +586,9 @@ function History({ runs }: { runs: Run[] }) {
                 <div className="flex items-center gap-3">
                   <StatusPill status={res.status} label={res.label} />
                   {r.prUrl && (
-                    <a href={r.prUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-[14px] font-semibold text-[#2A3F9E] underline">
-                      Pull request
-                    </a>
+                    <Link href={`/changes?pr=${encodeURIComponent(r.prUrl)}`} className="inline-flex min-h-11 items-center text-[14px] font-semibold text-[#2A3F9E] underline">
+                      See what changed
+                    </Link>
                   )}
                 </div>
               </li>

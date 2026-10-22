@@ -226,6 +226,12 @@ function PhoneMenu({ open, onClose, onNewTask, onPause, pausedAll }: { open: boo
           <Icon name={pausedAll ? "play" : "pause"} color="#15171B" />
           {pausedAll ? "Resume everything" : "Pause everything"}
         </button>
+        <Link href="/machine" className={item} onClick={onClose}>
+          <Icon name="heart" color="#15171B" /> Machine
+        </Link>
+        <Link href="/terminal" className={item} onClick={onClose}>
+          <Icon name="flow" color="#15171B" /> Terminal
+        </Link>
         <Link href="/settings" className={item} onClick={onClose}>
           <Icon name="bolt" color="#15171B" /> Settings
         </Link>

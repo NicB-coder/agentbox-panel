@@ -9,3 +9,6 @@ test-results/
 next-env.d.ts
 *.tsbuildinfo
 .next-dev*/
+.active-build
+.next-a/
+.next-b/

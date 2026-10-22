@@ -51,13 +51,34 @@ export async function reviewRunPr(source: Run, opts: { model?: "opus" | "sonnet"
   return run;
 }
 
+// A pull request that agentbox didn't make (or whose job is gone): reviewed once per visit to See what changed.
+export async function reviewExternalPr(prUrl: string, project: string): Promise<void> {
+  const { getSetting, setSetting } = await import("./db");
+  const cur = getSetting<{ status: string; at: number } | null>(`review:${prUrl}`, null);
+  if (cur && (cur.status === "running" || Date.now() - cur.at < 6 * 3600_000)) return;
+  const { projectPath } = await import("./projects");
+  const repo = projectPath(project);
+  if (!repo) return;
+  const branch = await branchOf(prUrl, repo);
+  if (!branch) return;
+  const run = await startRun(helperAgentId(), {
+    task: `Review: pull request #${prUrl.split("/").pop()}`, mode: "look", trigger: "manual", project,
+    extra: { label: "Reviewer", role: "review", allowed: "look", model: "opus", maxMinutes: 20, careful: false, prompt: reviewPrompt(prUrl, null), checkoutRef: `origin/${branch}`, prReview: { prUrl, sourceRunId: null } },
+  });
+  setSetting(`review:${prUrl}`, { runId: run.id, status: "running", at: Date.now() });
+}
+
 // Called when a reviewer run ends: copy its findings onto the run whose pull request it reviewed.
 export function onReviewEnded(reviewRun: Run) {
   const src = reviewRun.extra.prReview?.sourceRunId;
   const source = src ? getRun(src) : null;
-  if (!source) return;
   const text = reviewRun.result ?? "";
   const verdict = /VERDICT:\s*needs work/i.test(text) ? "needs work" : "passed";
+  if (!source) {
+    const url = reviewRun.extra.prReview?.prUrl;
+    if (url) import("./db").then((m) => m.setSetting(`review:${url}`, { runId: reviewRun.id, status: reviewRun.status === "done" ? "done" : "stopped", verdict, text: text.replace(/^\s*VERDICT:.*$/gim, "").trim().slice(0, 8000), at: Date.now() }));
+    return;
+  }
   patchExtra(source.id, {
     review: { runId: reviewRun.id, status: reviewRun.status === "done" ? "done" : "stopped", verdict, text: text.replace(/^\s*VERDICT:.*$/gim, "").trim().slice(0, 8000), at: Date.now() },
   });

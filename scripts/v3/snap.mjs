@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const [path, size, out, ...clicks] = process.argv.slice(2);
 const b = await chromium.launch();
 const p = await b.newPage({ viewport: size === "phone" ? { width: 390, height: 844 } : { width: 1366, height: 900 } });
-await p.goto("http://127.0.0.1:3100" + path, { waitUntil: "networkidle" });
+await p.goto("http://127.0.0.1:3100" + path, { waitUntil: "load" });
 for (const c of clicks) {
   if (c.startsWith("wait:")) await p.waitForTimeout(Number(c.slice(5)));
   else if (c.startsWith("full")) continue;

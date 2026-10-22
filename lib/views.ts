@@ -1,5 +1,6 @@
 import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent, runsWithStatus } from "./db";
 import { readHeartbeat } from "./heartbeat";
+import { lowDisk } from "./machine";
 import { inboxCount } from "./inbox";
 import { usageState } from "./usage";
 import { bigUsage, canContinue, carefulLine } from "./runner";
@@ -214,7 +215,10 @@ export function homeState(): HomeState {
   ];
   const u = usageState();
   const queued = views.filter((v) => v.status === "queued").length;
-  const usageNote = u.limited
+  const disk = lowDisk();
+  const usageNote = disk?.low
+    ? `Disk space is running low (${disk.freeGb} GB left). See the Machine page.`
+    : u.limited
     ? `You're out of Claude usage${u.limitedUntil ? ` until ${clockOf(u.limitedUntil)}` : " for now"}. New runs wait and start by themselves after that.`
     : queued
       ? `${queued} ${queued === 1 ? "run is" : "runs are"} waiting for usage to reset.`

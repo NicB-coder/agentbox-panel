@@ -1,3 +1,4 @@
+import UpdateBox from "@/components/UpdateBox";
 import Link from "next/link";
 import HelpTourButton from "@/components/HelpTourButton";
 import AskHelperButton from "@/components/helper/AskHelperButton";
@@ -70,6 +71,10 @@ export default function Help() {
           ))}
         </dl>
       </section>
+
+      <div className="mt-6">
+        <UpdateBox />
+      </div>
 
       <section className="panel mt-6 p-6 sm:p-8" aria-labelledby="safe-h">
         <h2 id="safe-h" className="text-[22px] font-bold">

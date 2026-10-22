@@ -102,7 +102,7 @@ function saveBrief(agentId: number, text: string) {
 }
 
 // A new task → a new agent named after the job. Starts now unless it's scheduled.
-export async function createTask(t: TaskInput): Promise<{ agent: Agent; runId: number | null }> {
+export async function createTask(t: TaskInput, opts: { onBranch?: { branch: string; prUrl: string } } = {}): Promise<{ agent: Agent; runId: number | null }> {
   const { mode, allowed } = modeFor(t.freedom, t.askEachStep);
   const active = listAgents().filter((a) => a.kind === "claude" && !a.archived);
   const fromBrief = !t.task && t.brief ? t.brief.name.replace(/\.(md|txt)$/i, "").replace(/[-_]+/g, " ") : "";
@@ -130,7 +130,7 @@ export async function createTask(t: TaskInput): Promise<{ agent: Agent; runId: n
   if (t.brief) saveBrief(agent.id, t.brief.text);
   betterName(agent.id, prompt, t.kind).catch(() => {});
   if (t.scheduleKind !== "manual") return { agent: getAgent(agent.id)!, runId: null };
-  const run = await startRun(agent.id, { task: "", trigger: "manual" });
+  const run = await startRun(agent.id, { task: "", trigger: "manual", extra: opts.onBranch ? { onBranch: opts.onBranch } : undefined });
   return { agent: getAgent(agent.id)!, runId: run.id };
 }
 

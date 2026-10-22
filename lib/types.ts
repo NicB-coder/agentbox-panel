@@ -116,6 +116,7 @@ export type RunExtra = {
   held?: boolean; // a scheduled run held back while a big job works
   waitedFor?: string; // why it's queued, in words
   usageStartWeek?: number | null; // big jobs: the weekly meter when it started
+  onBranch?: { branch: string; prUrl: string }; // work on someone else's pull request branch
   checkoutRef?: string; // look at this ref (e.g. a pull request's branch) instead of making a new branch
   prReview?: { prUrl: string; sourceRunId: number | null }; // this run reviews a pull request
   review?: { runId: number; status: "running" | "done" | "stopped"; verdict?: "passed" | "needs work"; text?: string; at: number }; // a review of this run's pull request
@@ -136,6 +137,7 @@ export type Flow = {
   polished: boolean;
   workSession: string | null; // the builder's conversation, continued for fixes and polish
   lastFix?: boolean;
+  workSummary?: string; // what the build itself did (fix and polish write their own summaries)
   subSteps?: Step[]; // the builder's own plan while it builds (Careful mode)
   big?: { milestones: Milestone[]; index: number; handoff: string; weekCarry: number; weekStart: number | null; lastWeek: number | null; budgetPct: number };
 };

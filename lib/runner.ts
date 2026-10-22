@@ -313,7 +313,11 @@ async function prepare(agent: Agent, run: Run, repo: string | null) {
     log(run.id, `Looking at ${run.extra.checkoutRef} in ${dir}`);
   } else {
     const base = await baseRef(repo);
-    const prev = run.extra.followUp || run.trigger === "schedule" ? await continuation(agent, run, repo) : null;
+    const prev = run.extra.onBranch
+      ? { branch: run.extra.onBranch.branch, prUrl: run.extra.onBranch.prUrl }
+      : run.extra.followUp || run.trigger === "schedule"
+        ? await continuation(agent, run, repo)
+        : null;
     let branch: string;
     let dir: string;
     if (prev?.dir) {
@@ -973,7 +977,7 @@ async function next(runId: number, phase: Phase, text: string, session: string |
   // A builder session finished: work, fix, polish.
   const fresh = getRun(runId)!;
   const summary = fresh.result || firstLine(stripMarkers(text)) || "Finished.";
-  if (phase === "work") patchFlow(runId, { workSession: session });
+  if (phase === "work") patchFlow(runId, { workSession: session, workSummary: summary });
   if (phase === "fix") patchFlow(runId, { fixes: flow.fixes + 1 });
   if (phase === "polish") patchFlow(runId, { polished: true });
 
@@ -1061,8 +1065,8 @@ function finishBuild(runId: number) {
   const run = getRun(runId)!;
   const agent = getAgent(run.agentId)!;
   const big = run.extra.flow?.big;
-  const summary = big ? `Finished all ${big.milestones.length} milestones: ${big.milestones.map((m) => m.title).join(", ")}.` : run.result || "Finished.";
-  if (big) updateRun(runId, { result: summary });
+  const summary = big ? `Finished all ${big.milestones.length} milestones: ${big.milestones.map((m) => m.title).join(", ")}.` : run.extra.flow?.workSummary || run.result || "Finished.";
+  updateRun(runId, { result: summary });
   if (run.workflowRunId) return finishStep(agent, run, summary, summary);
   return shipIt(agent, run, summary);
 }
