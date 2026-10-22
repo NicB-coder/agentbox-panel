@@ -14,7 +14,7 @@ export function tickSchedules(now = Date.now()) {
   if (pausedAll() || process.env.AGENTBOX_NO_SCHEDULE === "1") return;
   for (const a of listAgents()) {
     if (a.kind !== "claude") continue;
-    if (!a.enabled || a.paused || a.scheduleKind === "manual") {
+    if (!a.enabled || a.paused || a.archived || a.scheduleKind === "manual") {
       if (a.nextRunAt !== null) setNextRunAt(a.id, null);
       continue;
     }

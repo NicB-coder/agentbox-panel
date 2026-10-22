@@ -1,5 +1,21 @@
 # NOTES
 
+# v3: simpler, fully in the panel, deep research
+
+## v3 — Decisions I made
+
+- **HELPER.md doesn't exist** in the repo (or anywhere I could find). I used the Helper sections of NOTES.md (v2.1) and the code instead.
+- **Leftovers (section 0) were already on `main`**: Create it twice, fixed labels for risky buttons, pruning busy chats, the tools secret and the 25 unit tests all merged in #10 (commit 12caf61). Nothing left to do there.
+- **The premade agents are archived once**, the first time v3 starts (a `v3Migrated` setting makes sure it never happens again, so if you unarchive one it stays). Their history and pull requests are kept. Heartbeat stays on the grid. Workflow steps that point at Builder or Reviewer still work.
+- **New task names the agent after the job**: a quick guess straight away ("Read README"), then a better 2–4 word name from Claude Haiku a few seconds later ("Project README summary"). If you rename it yourself first, your name wins. Colors rotate so the grid stays varied; the icon follows the kind of job (hammer = build, eye = look only, book = research, moon = scheduled).
+- **The agent editor is now "Settings"** on each job (same Freedom / Careful / When controls as the Start a task panel). It's there to change the schedule or name; the page nudges you to **Add a follow-up** for new work instead of rewriting the job.
+- **Follow-ups**: if the job's pull request is still open, the follow-up works on that same branch and the same pull request gets the new commits. If an earlier run stopped part-way, the follow-up continues in that same copy. Otherwise it starts a fresh branch. The follow-up's prompt includes the job, every earlier run with its result and pull request, and the follow-up itself. The Inbox shows a shared pull request once.
+- **Follow-ups don't have a "When does it run?"**: a follow-up is "do this next", so it starts now. Scheduling belongs to the job itself (Settings).
+- **"Add an agent" is gone**: the dashed tile is now **Start a task**, and old `/agents/new` links open the Start a task panel.
+- **Freedom mapping**: Look only = reads and reports; Check with me first = Plan first (you approve its plan, then it works and opens a pull request); On its own = auto, always a pull request. "Ask me each step" (under More options) still exists for the rare times you want it.
+- **"Ask Claude to fix this"** now starts its own new job on agentbox-panel ("Check with me first", Careful) instead of borrowing Builder.
+- **Dev copy for testing**: `scripts/dev-copy.sh` (port 3100, its own copy of the database, schedules and Discord off, its own build folder; run numbers in the copy start 10,000 higher so their branches never clash with real ones).
+
 # v2.1: the Helper chat bubble
 
 ## v2.1: What Nic should click first

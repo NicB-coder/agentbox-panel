@@ -5,7 +5,7 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import type { HelperAction, HelperCard, HelperMessage } from "@/lib/helperTypes";
 import { Confirm, post } from "../bits";
 import { refreshHeader } from "../Header";
-import { openNewTask } from "../NewTaskButton";
+import { openNewTask } from "../TaskPanel";
 import { AgentIcon, Icon, btn } from "../ui";
 
 // One message in the Helper chat: plain paragraphs and bullets, clickable chips,

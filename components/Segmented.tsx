@@ -25,7 +25,7 @@ export default function Segmented<T extends string>({
         {legend}
         {tip && <InfoTip text={tip} label={legend} />}
       </legend>
-      <div className="flex flex-wrap gap-1 rounded-[16px] bg-soft p-1">
+      <div className={`${options.length === 4 ? "grid grid-cols-2 sm:flex" : "flex flex-wrap"} gap-1 rounded-[16px] bg-soft p-1`}>
         {options.map((o) => (
           <label
             key={o.value}

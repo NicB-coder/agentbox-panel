@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  LOG_DIR, activeRun, addRunUsage, createRun, denyPendingForRun, getAgent, getRun, getSetting, pendingApprovalForRun, runsWithStatus, updateRun,
+  LOG_DIR, activeRun, addRunUsage, createRun, denyPendingForRun, getAgent, getRun, getSetting, listRuns, pendingApprovalForRun, runsWithStatus, updateRun,
 } from "./db";
 import { notify } from "./notify";
 import { projectPath } from "./projects";
@@ -16,6 +16,7 @@ import { clockOf } from "./words";
 // Anything that goes wrong ends in Stopped with a plain reason.
 
 const WORKTREES = path.join(os.homedir(), "agents", "worktrees");
+const DATA_DIR_BRIEFS = path.join(LOG_DIR, "..", "briefs");
 const HOOK = path.join(process.cwd(), "scripts", "agentbox-hook.mjs");
 const PANEL_URL = `http://127.0.0.1:${process.env.PORT || 3000}`;
 const PATH = [path.join(os.homedir(), ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(":");
@@ -119,18 +120,19 @@ export async function startRun(agentId: number, opts: StartOpts): Promise<Run> {
   if (agent.kind === "claude" && activeRun(agentId)) throw new Error("It's already working on something.");
   const project = opts.project ?? agent.project;
   const repo = projectPath(project);
-  if (!repo) throw new Error(`Can't find the project "${project}" on this Mac.`);
+  if (!repo && !(project === "" && agent.job.kind === "research")) throw new Error(`Can't find the project "${project}" on this Mac.`);
 
   const mode = opts.mode ?? agent.mode;
   const extra = opts.extra ?? {};
   const allowed = extra.allowed ?? agent.allowed;
-  const task = opts.task?.trim() || (opts.trigger === "schedule" ? "Scheduled run" : "Its usual job");
+  const firstOfJob = !opts.task?.trim() && opts.trigger === "manual" && agent.kind === "claude" && !listRuns(agentId, 1).length;
+  const task = opts.task?.trim() || (opts.trigger === "schedule" ? "Scheduled run" : firstOfJob ? firstLine(agent.prompt).slice(0, 200) || "Its usual job" : "Its usual job");
   const blocked = usageBlocked();
   const run = createRun({
     agentId, task, mode, trigger: opts.trigger, steps: defaultSteps(lookOnly(allowed, mode)),
     status: blocked.blocked ? "queued" : "working",
     activity: blocked.blocked ? `${WAITING_FOR_USAGE}${blocked.until ? ` at ${clockOf(blocked.until)}` : ""}` : undefined,
-    workflowRunId: opts.workflowRunId, stepId: opts.stepId, extra: { ...extra, project },
+    workflowRunId: opts.workflowRunId, stepId: opts.stepId, extra: { ...extra, project, ...(firstOfJob ? { jobStart: true } : {}) },
   });
   const by = opts.trigger === "schedule" ? "the schedule" : opts.trigger === "workflow" ? "a workflow" : "Nic";
   log(run.id, `Run started by ${by} · task: ${task} · mode: ${mode} · allowed: ${allowed} · model: ${extra.model ?? agent.model}`);
@@ -140,7 +142,7 @@ export async function startRun(agentId: number, opts: StartOpts): Promise<Run> {
   }
 
   // Prepare the worktree, then start Claude. Runs in the background; the page polls for progress.
-  prepareAndSpawn(agent, run, repo).catch((e) => finishStopped(run.id, "It couldn't get started.", String(e)));
+  prepareAndSpawn(agent, getRun(run.id)!, repo).catch((e) => finishStopped(run.id, "It couldn't get started.", String(e)));
   return getRun(run.id)!;
 }
 
@@ -153,7 +155,7 @@ export function startQueued() {
     if (agent.kind === "claude" && runsWithStatus("working", "waiting").some((r) => r.agentId === agent.id)) continue;
     const project = run.extra.project ?? agent.project;
     const repo = projectPath(project);
-    if (!repo) {
+    if (!repo && project !== "") {
       finishStopped(run.id, `Can't find the project "${project}" on this Mac.`);
       continue;
     }
@@ -171,7 +173,7 @@ async function baseRef(repo: string): Promise<string> {
   return "HEAD";
 }
 
-async function prepareAndSpawn(agent: Agent, run: Run, repo: string) {
+async function prepareAndSpawn(agent: Agent, run: Run, repo: string | null) {
   if (run.extra.worktree) {
     // A workflow step: everyone works in the workflow's shared folder and branch.
     updateRun(run.id, { branch: run.extra.branch ?? null, worktree: run.extra.worktree, activity: "Reading the task…" });
@@ -180,17 +182,66 @@ async function prepareAndSpawn(agent: Agent, run: Run, repo: string) {
     spawnClaude(agent, fresh, run.mode === "plan" ? "plan" : "work", buildPrompt(agent, fresh));
     return;
   }
+  if (!repo) {
+    // Research without a project: an empty folder of its own.
+    const dir = path.join(os.homedir(), "agents", "research", `run-${run.id}`);
+    fs.mkdirSync(dir, { recursive: true });
+    log(run.id, `Working in its own empty folder ${dir}`);
+    updateRun(run.id, { worktree: dir, activity: "Reading the question…" });
+    putBrief(agent, dir);
+    spawnClaude(agent, getRun(run.id)!, run.mode === "plan" ? "plan" : "work", buildPrompt(agent, getRun(run.id)!));
+    return;
+  }
   const base = await baseRef(repo);
-  const branch = `agent/${agent.slug}-${slug(run.task, 4) || "run"}-${run.id}`;
-  const dir = path.join(WORKTREES, run.extra.project ?? agent.project, branch.replace(/\//g, "-"));
-  fs.mkdirSync(path.dirname(dir), { recursive: true });
-  const wt = await sh("git", ["worktree", "add", "-b", branch, dir, base], repo);
-  if (!wt.ok) throw new Error(`git worktree add failed: ${wt.err}`);
-  log(run.id, `Made a fresh copy on branch ${branch} from ${base} at ${dir}`);
-  updateRun(run.id, { branch, worktree: dir, activity: "Reading the task…" });
-
+  const prev = run.extra.followUp || run.trigger === "schedule" ? await continuation(agent, run, repo) : null;
+  let branch: string;
+  let dir: string;
+  if (prev?.dir) {
+    ({ branch, dir } = prev as { branch: string; dir: string });
+    log(run.id, `Continuing the job in the same copy on branch ${branch}`);
+  } else {
+    branch = prev?.branch ?? `agent/${agent.slug}-${slug(run.task, 4) || "run"}-${run.id}`;
+    dir = path.join(WORKTREES, run.extra.project ?? agent.project, `${branch.replace(/\//g, "-")}${prev?.branch ? `-${run.id}` : ""}`);
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    const wt = prev?.branch
+      ? await sh("git", ["worktree", "add", "-B", branch, dir, `origin/${branch}`], repo)
+      : await sh("git", ["worktree", "add", "-b", branch, dir, base], repo);
+    if (!wt.ok) throw new Error(`git worktree add failed: ${wt.err}`);
+    log(run.id, prev?.branch ? `Made a fresh copy of the job's branch ${branch} (its pull request is still open)` : `Made a fresh copy on branch ${branch} from ${base} at ${dir}`);
+  }
+  updateRun(run.id, { branch, worktree: dir, activity: "Reading the task…", ...(prev?.prUrl ? { prUrl: prev.prUrl } : {}) });
+  putBrief(agent, dir);
   const first = run.mode === "plan" ? "plan" : "work";
-  spawnClaude(agent, getRun(run.id)!, first, buildPrompt(agent, run));
+  spawnClaude(agent, getRun(run.id)!, first, buildPrompt(agent, getRun(run.id)!));
+}
+
+// Where a follow-up continues: the copy of an earlier run that stopped part-way, or the branch of a pull request that's still open.
+async function continuation(agent: Agent, run: Run, repo: string): Promise<{ branch: string; dir?: string; prUrl?: string } | null> {
+  const earlier = listRuns(agent.id, 20).filter((r) => r.id !== run.id && !r.workflowRunId && r.branch);
+  for (const r of earlier) {
+    if (r.status === "review" && r.prUrl) {
+      const state = await sh("gh", ["pr", "view", r.prUrl, "--json", "state", "--jq", ".state"], repo, 30_000);
+      if (state.ok && state.out !== "OPEN") continue;
+      const dir = r.worktree && fs.existsSync(r.worktree) && !runsWithStatus("working", "waiting").some((x) => x.worktree === r.worktree) ? r.worktree : undefined;
+      return { branch: r.branch!, dir, prUrl: r.prUrl };
+    }
+    if (r.status === "stopped" && r.worktree && fs.existsSync(r.worktree) && run.extra.followUp) return { branch: r.branch!, dir: r.worktree };
+    if (r.status === "done" || r.status === "stopped") return null; // the last piece of this job is finished: start fresh
+  }
+  return null;
+}
+
+// A long brief is stored with the job and put in the copy as .agentbox/brief.md (never committed).
+function putBrief(agent: Agent, dir: string) {
+  if (!agent.job.brief) return;
+  try {
+    const text = fs.readFileSync(path.join(DATA_DIR_BRIEFS, `agent-${agent.id}.md`), "utf8");
+    fs.mkdirSync(path.join(dir, ".agentbox"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".agentbox", "brief.md"), text);
+    fs.writeFileSync(path.join(dir, ".agentbox", ".gitignore"), "*\n");
+  } catch {
+    /* no brief file */
+  }
 }
 
 function rules(agent: Agent, run: Run): string {
@@ -214,8 +265,25 @@ function rules(agent: Agent, run: Run): string {
 
 function buildPrompt(agent: Agent, run: Run): string {
   if (run.workflowRunId) return `${eff(agent, run).prompt}`;
-  const job = `Your job, in Nic's words:\n${agent.prompt}`;
-  if (run.task === "Its usual job" || run.task === "Scheduled run") return `${job}\n\nDo your job now.`;
+  const brief = agent.job.brief ? `\n\nNic attached a brief for this job (${agent.job.brief}). Read it first, all of it: .agentbox/brief.md in your folder. Don't commit that folder.` : "";
+  const job = `Your job, in Nic's words:\n${agent.prompt}${brief}`;
+  if (run.extra.followUp) {
+    const earlier = listRuns(agent.id, 8).filter((r) => r.id !== run.id && !r.workflowRunId).reverse();
+    const lines = earlier.map((r, i) => `${i + 1}. ${r.extra.jobStart ? "The job itself" : `"${r.task.slice(0, 300)}"`} → ${r.status === "stopped" ? `stopped (${r.stopReason ?? "no reason"})` : r.status === "review" ? "pull request open" : r.status}${r.result ? `: ${firstLine(r.result).slice(0, 300)}` : ""}${r.prUrl ? ` (${r.prUrl})` : ""}`);
+    const pr = earlier.filter((r) => r.prUrl).at(-1)?.prUrl;
+    return [
+      job,
+      "",
+      "This is a follow-up on the same job. What happened so far:",
+      ...(lines.length ? lines : ["(nothing yet)"]),
+      "",
+      run.branch ? `You're on the job's branch ${run.branch}, so the earlier work is already here (see git log).` : "",
+      pr ? `Its pull request is ${pr}. Read it and its comments first: gh pr view ${pr} --comments` : "",
+      "",
+      `Nic's follow-up:\n${run.task}`,
+    ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n");
+  }
+  if (run.extra.jobStart || run.task === "Its usual job" || run.task === "Scheduled run") return `${job}\n\nDo your job now.`;
   return `${job}\n\nThis time, Nic asked you to:\n${run.task}`;
 }
 
@@ -473,7 +541,7 @@ async function onExit(runId: number, phase: "plan" | "work", code: number | null
   const fresh = getRun(runId)!;
   const summary = fresh.result || firstLine(stripMarkers(st.result.text)) || "Finished.";
   if (fresh.workflowRunId) return finishStep(agent, fresh, summary, stripMarkers(st.result.text));
-  if (lookOnly(agent.allowed, run.mode)) {
+  if (lookOnly(eff(agent, run).allowed, run.mode)) {
     allStepsDone(runId);
     const report = stripMarkers(st.result.text);
     const result = fresh.result && report && !report.startsWith(fresh.result) ? `${fresh.result}\n\n${report}` : report || summary;

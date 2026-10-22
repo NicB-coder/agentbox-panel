@@ -124,7 +124,7 @@ export function ErrorBox({ message, onRetry, where, compact }: { message: string
         )}
         {asked ? (
           <Link href={`/agents/${asked.agentId}`} className={btn.link + " !text-[#A11B12]"}>
-            Builder is looking into it. See how it's going
+            An agent is looking into it. See how it's going
           </Link>
         ) : (
           <button type="button" className={btn.secondary} onClick={ask} disabled={busy}>

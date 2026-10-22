@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Agent, AgentInput, Approval, Idea, Run, RunExtra, Step, Workflow, WorkflowInput, WorkflowRun, WorkflowVersion } from "./types";
 import { SEED_AGENTS } from "./seed";
 import { DEFAULT_LIMITS } from "./wf";
+import { jobOf } from "./job";
 
 export const DATA_DIR = process.env.AGENTBOX_DATA_DIR || path.join(process.cwd(), "data");
 export const LOG_DIR = path.join(DATA_DIR, "logs");
@@ -78,6 +79,7 @@ export function db(): Database.Database {
   g.__agentboxDb = d;
   seedIfEmpty(d);
   ensureHelper(d);
+  migrateV3(d);
   return d;
 }
 
@@ -94,6 +96,9 @@ function migrate(d: Database.Database) {
   add("tokens", "INTEGER NOT NULL DEFAULT 0");
   add("dismissed", "INTEGER NOT NULL DEFAULT 0");
   add("extra", "TEXT NOT NULL DEFAULT '{}'");
+  const agentCols = cols("agents");
+  if (!agentCols.has("archived")) d.exec("ALTER TABLE agents ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+  if (!agentCols.has("job")) d.exec("ALTER TABLE agents ADD COLUMN job TEXT NOT NULL DEFAULT '{}'");
   d.exec(`
     CREATE INDEX IF NOT EXISTS runs_wf ON runs(workflow_run_id);
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -170,6 +175,13 @@ function migrate(d: Database.Database) {
   `);
 }
 
+// v3: one agent per job. The premade agents are archived once (their history stays); Heartbeat stays.
+function migrateV3(d: Database.Database) {
+  if (d.prepare("SELECT 1 FROM settings WHERE key = 'v3Migrated'").get()) return;
+  d.prepare("UPDATE agents SET archived = 1, next_run_at = NULL WHERE kind = 'claude' AND slug IN ('builder','reviewer','site-checker','overnight')").run();
+  d.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('v3Migrated', 'true')").run();
+}
+
 // The hidden agent that runs workflow steps which don't use one of Nic's agents.
 function ensureHelper(d: Database.Database) {
   if (d.prepare("SELECT 1 FROM agents WHERE kind = 'helper'").get()) return;
@@ -218,7 +230,7 @@ type AgentRow = {
   id: number; slug: string; name: string; color: string; icon: string; prompt: string; project: string;
   schedule_kind: string; schedule_days: string; schedule_time: string; allowed: string; mode: string;
   max_minutes: number; model: string; notify: string; enabled: number; paused: number; kind: string;
-  next_run_at: number | null; created_at: number;
+  next_run_at: number | null; created_at: number; archived: number; job: string;
 };
 
 function toAgent(r: AgentRow): Agent {
@@ -235,6 +247,7 @@ function toAgent(r: AgentRow): Agent {
     enabled: !!r.enabled, paused: !!r.paused,
     kind: r.kind as Agent["kind"],
     nextRunAt: r.next_run_at, createdAt: r.created_at,
+    archived: !!r.archived, job: jobOf(JSON.parse(r.job || "{}")),
   };
 }
 
@@ -252,12 +265,14 @@ function slugify(s: string) {
 }
 
 function insertAgentRow(d: Database.Database, a: AgentInput, slug: string, kind: string, paused: boolean, now: number) {
-  return d.prepare(`INSERT INTO agents
-    (slug,name,color,icon,prompt,project,schedule_kind,schedule_days,schedule_time,allowed,mode,max_minutes,model,notify,enabled,paused,kind,created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  const hasJob = (d.prepare("PRAGMA table_info(agents)").all() as { name: string }[]).some((c) => c.name === "job");
+  const cols = "slug,name,color,icon,prompt,project,schedule_kind,schedule_days,schedule_time,allowed,mode,max_minutes,model,notify,enabled,paused,kind,created_at";
+  const vals = [
     slug, a.name, a.color, a.icon, a.prompt, a.project, a.scheduleKind, JSON.stringify(a.scheduleDays), a.scheduleTime,
     a.allowed, a.mode, a.maxMinutes, a.model, JSON.stringify(a.notify), a.enabled ? 1 : 0, paused ? 1 : 0, kind, now,
-  ).lastInsertRowid as number;
+  ];
+  if (hasJob) return d.prepare(`INSERT INTO agents (${cols},job) VALUES (${vals.map(() => "?").join(",")},?)`).run(...vals, JSON.stringify(a.job ?? {})).lastInsertRowid as number;
+  return d.prepare(`INSERT INTO agents (${cols}) VALUES (${vals.map(() => "?").join(",")})`).run(...vals).lastInsertRowid as number;
 }
 
 export function createAgent(a: AgentInput): Agent {
@@ -270,12 +285,21 @@ export function createAgent(a: AgentInput): Agent {
 }
 
 export function updateAgent(id: number, a: AgentInput): Agent | null {
+  const job = a.job ?? getAgent(id)?.job ?? {};
   db().prepare(`UPDATE agents SET name=?, color=?, icon=?, prompt=?, project=?, schedule_kind=?, schedule_days=?,
-    schedule_time=?, allowed=?, mode=?, max_minutes=?, model=?, notify=?, enabled=?, next_run_at=NULL WHERE id=? AND kind='claude'`).run(
+    schedule_time=?, allowed=?, mode=?, max_minutes=?, model=?, notify=?, enabled=?, job=?, next_run_at=NULL WHERE id=? AND kind='claude'`).run(
     a.name, a.color, a.icon, a.prompt, a.project, a.scheduleKind, JSON.stringify(a.scheduleDays), a.scheduleTime,
-    a.allowed, a.mode, a.maxMinutes, a.model, JSON.stringify(a.notify), a.enabled ? 1 : 0, id,
+    a.allowed, a.mode, a.maxMinutes, a.model, JSON.stringify(a.notify), a.enabled ? 1 : 0, JSON.stringify(job), id,
   );
   return getAgent(id);
+}
+
+export function setArchived(id: number, archived: boolean) {
+  db().prepare("UPDATE agents SET archived = ?, next_run_at = NULL WHERE id = ? AND kind = 'claude'").run(archived ? 1 : 0, id);
+}
+
+export function renameAgent(id: number, name: string) {
+  db().prepare("UPDATE agents SET name = ? WHERE id = ?").run(name, id);
 }
 
 export function deleteAgent(id: number) {

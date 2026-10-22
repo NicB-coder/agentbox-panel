@@ -18,6 +18,10 @@ export async function notify(agent: Agent, kind: NotifyOn, text: string) {
 }
 
 export async function sendDiscord(content: string): Promise<boolean> {
+  if (process.env.AGENTBOX_NO_DISCORD === "1") {
+    console.log(`[notify] (dev copy, not sent) ${content.slice(0, 300)}`);
+    return true;
+  }
   const url = await webhook();
   if (!url) {
     console.warn("[notify] no Discord webhook in the Keychain");

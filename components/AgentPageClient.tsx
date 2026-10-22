@@ -2,12 +2,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { AgentPageState } from "@/lib/views";
-import type { Approval, PillStatus, Run, WorkMode } from "@/lib/types";
-import { ago, clockOf, duration, MODE_WORDS, agentSentence, plainText } from "@/lib/words";
+import type { Agent, Approval, PillStatus, Run } from "@/lib/types";
+import { ago, clockOf, duration, agentSentence, plainText } from "@/lib/words";
+import { FREEDOM_WORDS, freedomOf } from "@/lib/job";
 import { AgentIcon, StatusPill, btn } from "./ui";
 import { usePoll } from "./usePoll";
-import ModePicker from "./ModePicker";
-import { ErrorBox } from "./bits";
+import { Confirm, ErrorBox } from "./bits";
+import { openTaskPanel } from "./TaskPanel";
 
 async function post(url: string, body: unknown = {}) {
   const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -20,6 +21,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
   const { data, refresh } = usePoll<AgentPageState>(`/api/agents/${id}/state`, initial);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [archiveAsk, setArchiveAsk] = useState(false);
   const { view, schedule, runs, heartbeat } = data;
   const a = view.agent;
   const isHeartbeat = a.kind === "heartbeat";
@@ -58,23 +60,48 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
         </div>
         {!isHeartbeat && (
           <div className="flex flex-wrap gap-3">
-            <button className={btn.primary} disabled={working || !a.enabled || !!busy} onClick={() => act("run", `/api/agents/${id}/run`, {})}>
-              {busy === "run" ? "Starting…" : "Run now"}
-            </button>
-            <button className={btn.secondary} disabled={!!busy} onClick={() => act("pause", `/api/agents/${id}/pause`, { paused: !a.paused })}>
-              {a.paused ? "Resume" : "Pause"}
-            </button>
+            {a.scheduleKind !== "manual" ? (
+              <>
+                <button className={btn.primary} disabled={working || !a.enabled || !!busy} onClick={() => act("run", `/api/agents/${id}/run`, {})}>
+                  {busy === "run" ? "Starting…" : "Run now"}
+                </button>
+                <button className={btn.secondary} disabled={!!busy} onClick={() => act("pause", `/api/agents/${id}/pause`, { paused: !a.paused })}>
+                  {a.paused ? "Resume" : "Pause"}
+                </button>
+              </>
+            ) : (
+              <button className={btn.primary} disabled={working || !!busy} onClick={() => openFollowUp(a)}>
+                Add a follow-up
+              </button>
+            )}
             {working && (
               <button className={btn.danger} disabled={!!busy} onClick={() => act("stop", `/api/agents/${id}/stop`)}>
                 {busy === "stop" ? "Stopping…" : "Stop"}
               </button>
             )}
             <Link href={`/agents/${id}/edit`} className={btn.secondary}>
-              Edit
+              Settings
             </Link>
+            {!working && (
+              <button className={btn.secondary} disabled={!!busy} onClick={() => (a.archived ? act("archive", `/api/agents/${id}/archive`, { archived: false }) : setArchiveAsk(true))}>
+                {a.archived ? "Unarchive" : "Archive"}
+              </button>
+            )}
           </div>
         )}
       </div>
+      {a.archived && <p className="mt-4 rounded-[14px] bg-soft px-4 py-3 text-[15px] text-muted">This job is archived. Its history is kept. Add a follow-up or press Unarchive to bring it back to the grid.</p>}
+      <Confirm
+        open={archiveAsk}
+        title={`Archive ${a.name}?`}
+        text="It leaves the grid and goes to Archived, with all its history. Schedules stop. You can bring it back any time."
+        yes="Archive"
+        onYes={() => {
+          setArchiveAsk(false);
+          act("archive", `/api/agents/${id}/archive`, { archived: true });
+        }}
+        onClose={() => setArchiveAsk(false)}
+      />
       {error && (
         <div className="mt-4">
           <ErrorBox message={error} onRetry={() => setError("")} where={`${a.name}'s page`} />
@@ -84,7 +111,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-6">
           {isHeartbeat ? <HeartbeatNow data={data} /> : <RightNow data={data} act={act} busy={busy} />}
-          {!isHeartbeat && <GiveTask id={id} defaultMode={a.mode} disabled={working || !a.enabled} onStarted={refresh} />}
+          {!isHeartbeat && <FollowUp agent={a} disabled={working} />}
           {isHeartbeat ? <HeartbeatHistory data={data} /> : <History runs={runs} />}
         </div>
         <aside className="flex flex-col gap-6">
@@ -96,7 +123,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
           </section>
           <section className="panel p-6" aria-labelledby="about-h">
             <h2 id="about-h" className="text-[18px] font-semibold">
-              What it does
+              The job
             </h2>
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-muted">{a.prompt}</p>
             {!isHeartbeat && <p className="mt-4 text-[15px] leading-relaxed">{agentSentence(a)}</p>}
@@ -145,7 +172,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: (l: string, 
         <>
           <p className="mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
           <p className="mt-1 text-[15px] text-muted">
-            {run.status === "waiting" ? "Waiting for you" : run.activity ?? "Working on it"} · started {ago(run.startedAt)} · {MODE_WORDS[run.mode].label}
+            {run.status === "waiting" ? "Waiting for you" : run.activity ?? "Working on it"} · started {ago(run.startedAt)} · {FREEDOM_WORDS[freedomOf({ mode: run.mode, allowed: run.extra.allowed ?? view.agent.allowed })].label}
           </p>
           <Steps run={run} />
           {pending && pending.kind === "tool" && <AskBox approval={pending} act={act} busy={busy} />}
@@ -248,51 +275,45 @@ function PlanBox({ run, act, busy }: { run: Run; act: (l: string, u: string, b?:
   );
 }
 
-function GiveTask({ id, defaultMode, disabled, onStarted }: { id: number; defaultMode: WorkMode; disabled: boolean; onStarted: () => void }) {
+export function openFollowUp(a: Agent, task?: string) {
+  openTaskPanel({
+    task,
+    followUp: { id: a.id, name: a.name, project: a.project, kind: a.job.kind, freedom: freedomOf(a), careful: a.job.careful, model: a.model, connectors: a.job.connectors },
+  });
+}
+
+// Follow-ups continue the same job; they open the shared Start a task panel.
+function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
   const [task, setTask] = useState("");
-  const [mode, setMode] = useState<WorkMode>(defaultMode);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   return (
     <section className="panel p-6 sm:p-8" aria-labelledby="give-h">
       <h2 id="give-h" className="text-[18px] font-semibold">
-        Give it a task
+        Add a follow-up
       </h2>
+      <p className="mt-1 text-[15px] text-muted">It continues this job: same project, same branch and pull request if one is open.</p>
       <form
-        className="mt-4 flex flex-col gap-5"
-        onSubmit={async (e) => {
+        className="mt-4 flex flex-col gap-4"
+        onSubmit={(e) => {
           e.preventDefault();
-          if (!task.trim()) return setError("Write what you want it to do first.");
-          setBusy(true);
-          setError("");
-          try {
-            await post(`/api/agents/${id}/run`, { task, mode });
-            setTask("");
-            onStarted();
-          } catch (err) {
-            setError((err as Error).message);
-          } finally {
-            setBusy(false);
-          }
+          openFollowUp(agent, task);
+          setTask("");
         }}
       >
         <label className="flex flex-col gap-2">
-          <span className="sr-only">The task</span>
+          <span className="sr-only">What should it do next?</span>
           <textarea
             value={task}
             onChange={(e) => setTask(e.target.value)}
             rows={3}
-            placeholder="For example: Make the header look right on phones."
+            placeholder="For example: Make the buttons bigger on phones."
             className="rounded-[14px] border border-[#C9CDD4] p-3 text-[15px] leading-relaxed"
           />
         </label>
-        <ModePicker value={mode} onChange={setMode} legend="How should it work with you this time?" />
-        {error && <ErrorBox compact message={error} where="Give it a task" />}
-        <div>
-          <button type="submit" className={btn.primary} disabled={busy || disabled}>
-            {busy ? "Starting…" : "Start"}
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" className={btn.primary} disabled={disabled}>
+            Next
           </button>
-          {disabled && <span className="ml-3 text-[14px] text-muted">It's busy right now. You can start a new task when it's done.</span>}
+          {disabled && <span className="text-[14px] text-muted">It's working right now. You can add a follow-up when it's done.</span>}
         </div>
       </form>
     </section>
@@ -315,7 +336,7 @@ function History({ runs }: { runs: Run[] }) {
         History
       </h2>
       {runs.length === 0 ? (
-        <p className="mt-3 text-[15px] text-muted">No runs yet. Give it a task or press Run now.</p>
+        <p className="mt-3 text-[15px] text-muted">No runs yet.</p>
       ) : (
         <ul className="mt-2 divide-y divide-line">
           {runs.map((r) => {

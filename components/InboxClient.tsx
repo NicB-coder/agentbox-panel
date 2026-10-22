@@ -6,7 +6,7 @@ import type { InboxItem } from "@/lib/types";
 import { ago } from "@/lib/words";
 import { Confirm, EmptyState, ErrorBox, InfoTip, PageTitle, post } from "./bits";
 import { refreshHeader } from "./Header";
-import { openNewTask } from "./NewTaskButton";
+import { openNewTask } from "./TaskPanel";
 import { AgentIcon, btn, field } from "./ui";
 import { usePoll } from "./usePoll";
 

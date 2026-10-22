@@ -38,8 +38,10 @@ export function inboxItems(): InboxItem[] {
     items.push({ key: `plan${run.id}`, kind: "plan", at: run.startedAt, title: run.task, ...who(run), runId: run.id, text: run.plan });
   }
 
-  for (const run of runsWithStatus("review")) {
-    if (!run.prUrl) continue;
+  const seenPr = new Set<string>();
+  for (const run of runsWithStatus("review").reverse()) {
+    if (!run.prUrl || seenPr.has(run.prUrl)) continue; // follow-ups share one pull request: show it once
+    seenPr.add(run.prUrl);
     items.push({ key: `pr${run.id}`, kind: "pr", at: run.endedAt ?? run.startedAt, title: run.task, ...who(run), runId: run.id, prUrl: run.prUrl, text: run.result ?? "It finished and opened a pull request." });
   }
 

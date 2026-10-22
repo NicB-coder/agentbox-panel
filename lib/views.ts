@@ -152,11 +152,30 @@ export type HomeState = {
   needs: number;
   usageNote: string | null;
   views: AgentView[];
+  archived: AgentView[];
 };
+
+// Running agents and anything that needs Nic first, then the rest (newest first).
+const RANK: Partial<Record<AgentView["status"], number>> = { needs: 0, working: 1, queued: 2 };
+function sortViews(views: AgentView[]): AgentView[] {
+  return [...views].sort((a, b) => {
+    const ra = RANK[a.status] ?? 9;
+    const rb = RANK[b.status] ?? 9;
+    if (ra !== rb) return ra - rb;
+    if (a.agent.kind === "heartbeat" || b.agent.kind === "heartbeat") return a.agent.kind === "heartbeat" ? 1 : -1;
+    return lastTouch(b) - lastTouch(a);
+  });
+}
+function lastTouch(v: AgentView) {
+  const r = v.activeRun ?? listRuns(v.agent.id, 1)[0];
+  return Math.max(v.agent.createdAt, r ? r.endedAt ?? r.startedAt : 0);
+}
 
 export function homeState(): HomeState {
   const hb = readHeartbeat();
-  const views = listAgents().map((a) => agentView(a, hb));
+  const all = listAgents();
+  const views = sortViews(all.filter((a) => !a.archived).map((a) => agentView(a, hb)));
+  const archived = sortViews(all.filter((a) => a.archived).map((a) => agentView(a, hb)));
   const working = views.filter((v) => v.status === "working").length;
   const needs = inboxCount();
   const h = new Date().getHours();
@@ -172,7 +191,7 @@ export function homeState(): HomeState {
     : queued
       ? `${queued} ${queued === 1 ? "run is" : "runs are"} waiting for usage to reset.`
       : null;
-  return { greeting, summary: parts.join(" · "), needs, usageNote, views };
+  return { greeting, summary: parts.join(" · "), needs, usageNote, views, archived };
 }
 
 export type AgentPageState = {

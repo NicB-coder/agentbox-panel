@@ -1,5 +1,7 @@
+"use client";
 import Link from "next/link";
 import type { AgentView } from "@/lib/types";
+import { openTaskPanel } from "./TaskPanel";
 import { AgentIcon, PILL_LABEL, StatusPill } from "./ui";
 
 export function AgentTile({ v }: { v: AgentView }) {
@@ -34,16 +36,18 @@ function statusWord(v: AgentView) {
   return PILL_LABEL[v.status];
 }
 
-export function AddAgentTile() {
+export function StartTaskTile() {
   return (
-    <Link
-      href="/agents/new"
-      className="tile flex flex-col items-center justify-center gap-3 !border-2 !border-dashed !border-dash !shadow-none text-muted hover:text-ink"
+    <button
+      type="button"
+      onClick={() => openTaskPanel()}
+      className="tile flex w-full flex-col items-center justify-center gap-3 !border-2 !border-dashed !border-dash !shadow-none text-muted hover:text-ink"
     >
       <span className="flex h-12 w-12 items-center justify-center rounded-full bg-soft text-[28px] leading-none" aria-hidden="true">
         +
       </span>
-      <span className="text-[17px] font-semibold">Add an agent</span>
-    </Link>
+      <span className="text-[17px] font-semibold">Start a task</span>
+      <span className="max-w-[200px] text-center text-[14px] leading-snug">Each task gets its own agent</span>
+    </button>
   );
 }

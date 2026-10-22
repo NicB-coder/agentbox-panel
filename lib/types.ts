@@ -7,6 +7,23 @@ export type Model = "sonnet" | "opus";
 export type NotifyOn = "finished" | "needs_ok" | "problems";
 export type AgentKind = "claude" | "heartbeat" | "helper"; // helper: hidden, runs workflow steps that have no agent of their own
 
+// v3: one agent per job. "Freedom" replaces "allowed to do" + "how should it work with me".
+export type Freedom = "look" | "check" | "auto";
+export type JobKind = "build" | "research";
+
+export type JobSettings = {
+  kind: JobKind;
+  careful: boolean; // build → review → fix → polish → final review
+  askEachStep: boolean;
+  connectors: string[]; // connector ids it may use
+  big: boolean; // milestone by milestone, with a usage budget instead of a time cap
+  budgetPct: number; // big jobs: most of the weekly usage it may use, in points
+  holdSmall: boolean; // big jobs: hold small scheduled runs while it works
+  autoInstall: boolean; // big jobs on agentbox-panel: install when finished
+  saveReport: boolean; // research: save the report in the project as a pull request
+  brief: string | null; // name of an attached brief file
+};
+
 export type Agent = {
   id: number;
   slug: string;
@@ -28,9 +45,11 @@ export type Agent = {
   kind: AgentKind;
   nextRunAt: number | null;
   createdAt: number;
+  archived: boolean;
+  job: JobSettings;
 };
 
-export type AgentInput = Omit<Agent, "id" | "slug" | "kind" | "nextRunAt" | "createdAt" | "paused">;
+export type AgentInput = Omit<Agent, "id" | "slug" | "kind" | "nextRunAt" | "createdAt" | "paused" | "archived" | "job"> & { job?: JobSettings };
 
 export type RunStatus = "queued" | "working" | "waiting" | "review" | "done" | "stopped";
 
@@ -76,6 +95,11 @@ export type RunExtra = {
   branch?: string;
   baseRef?: string;
   project?: string;
+  // v3
+  followUp?: boolean; // continues the job: same branch and pull request if one is open
+  jobStart?: boolean; // the first run of a job: its task is the job itself
+  careful?: boolean;
+  connectors?: string[];
 };
 
 export type Approval = {
