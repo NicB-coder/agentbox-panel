@@ -4,7 +4,7 @@ export const HELP_PARTS = [
   {
     icon: "sparkle",
     title: "Agents",
-    text: "An agent is an AI helper with one job, written in your own words. Give it a task and it works in its own copy of your project, then sends you a pull request: a proposal you can look at before anything changes for real.",
+    text: "Every task you start becomes its own agent, named after the job. It works in its own copy of your project and sends you a pull request: a proposal you can look at before anything changes for real. Careful mode has a second AI review and fix it first. Want more on the same job? Add a follow-up.",
     link: { href: "/", label: "See your agents" },
   },
   {
@@ -16,25 +16,28 @@ export const HELP_PARTS = [
   {
     icon: "inbox",
     title: "The Inbox",
-    text: "Everything that needs you lands here: an agent asking for your OK, a plan to approve, a pull request to look at, or something that went wrong. Most things can be answered right there. There's also a list for jotting down ideas.",
+    text: "Everything that needs you lands here: an agent asking for your OK, a plan to approve, a pull request to look at, or something that went wrong. Things that shipped and finished reports show up too, until you open them. Most things can be answered right there. There's also a list for jotting down ideas.",
     link: { href: "/inbox", label: "Open the Inbox" },
   },
   {
     icon: "bolt",
     title: "The usage meter",
-    text: "Your Claude plan lets you use a certain amount every few hours (a session) and every week. The meter at the top shows how much of this session is used and when it resets. If you run out, new runs wait and start by themselves after the reset.",
+    text: "Your Claude plan lets you use a certain amount every few hours (a session) and every week. The meter at the top shows how much of this session is used and when it resets. If you run out, nothing is lost: agents wait (\"Waiting · back at 3:00 PM\") and carry on by themselves after the reset.",
     link: { href: "/settings", label: "Usage settings" },
   },
   {
     icon: "bulb",
     title: "The Helper",
-    text: "The round chat bubble in the bottom-right corner of every page. Ask it what anything means, what your agents are doing, or why something stopped (it reads the real log). It can also draft a new agent or workflow for you to check. It only looks and suggests: nothing happens until you click.",
+    text: "The round chat bubble in the bottom-right corner of every page. Ask it what anything means, what your agents are doing, or why something stopped (it reads the real log). It can also set up a task or draft a workflow for you to check. It only looks and suggests: nothing happens until you click.",
     link: null,
   },
 ];
 
 export const HELP_WORDS: [string, string][] = [
-  ["Pull request", "A proposed change. You look at it on GitHub and press Merge if you like it. Nothing changes in your real project until then."],
+  ["Careful / Quick", "Careful (the default): after it builds, a second AI reviews the work, it fixes what's found, polishes it and checks once more, before you see it. Quick: just does it."],
+  ["Freedom", "Look only: reads and reports. Check with me first: shows you a plan and waits. On its own: works by itself and sends a pull request."],
+  ["Follow-up", "More work on the same job: same project, same pull request if it's still open, and it knows what it did before."],
+  ["Pull request", "A proposed change. Press Look at it to see what changed (with before and after pictures), then Merge it if you like it. Nothing changes in your real project until then."],
   ["Main", "The real, official version of your project. Agents never change it directly."],
   ["Merge / Ship", "Putting a pull request's changes into main."],
   ["Project", "A GitHub repo copied onto this Mac, where agents do their work."],

@@ -11,8 +11,8 @@ const STEPS = [
   },
   {
     icon: "hammer",
-    title: "Agents do the work",
-    text: "Each tile on the Agents page is one agent. Click a tile to give it a task, see what it's doing right now, and read what it did before. Nothing it does goes into your main code until you say so.",
+    title: "Every task gets its own agent",
+    text: "Press New task, say what you want, and press Start. It becomes an agent named after the job, with its own tile. Click a tile to see what it's doing right now or add a follow-up. Nothing goes into your main code until you say so.",
   },
   {
     icon: "flow",

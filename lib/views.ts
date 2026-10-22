@@ -7,7 +7,7 @@ import { inboxCount } from "./inbox";
 import { usageState } from "./usage";
 import { bigUsage, canContinue, carefulLine } from "./runner";
 import type { Agent, AgentView, HeartbeatInfo, Run } from "./types";
-import { ago, clock, clockOf, duration, inWords, nextRunAfter, scheduleWords } from "./words";
+import { ago, clock, clockOf, duration, inWords, nextRunAfter, plainText, scheduleWords } from "./words";
 
 // "Step 3 of 6 · Final check"
 export function progressOf(run: Run): { step: number; of: number; label: string } | null {
@@ -18,7 +18,8 @@ export function progressOf(run: Run): { step: number; of: number; label: string 
   return { step: at + 1, of: run.steps.length, label: run.steps[at].label };
 }
 
-function firstSentence(s: string) {
+function firstSentence(raw: string) {
+  const s = plainText(raw);
   const m = s.match(/^[^.!?]*[.!?]/);
   return (m ? m[0] : s).trim();
 }

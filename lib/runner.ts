@@ -337,6 +337,8 @@ async function prepare(agent: Agent, run: Run, repo: string | null) {
       log(run.id, prev?.branch ? `Made a fresh copy of the job's branch ${branch} (its pull request is still open)` : `Made a fresh copy on branch ${branch} from ${base} at ${dir}`);
     }
     updateRun(run.id, { branch, worktree: dir, activity: "Reading the task…", ...(prev?.prUrl ? { prUrl: prev.prUrl } : {}) });
+    // The follow-up takes over the open pull request: earlier runs of it are continued, not waiting for Nic.
+    if (prev?.prUrl) db().prepare("UPDATE runs SET status = 'done', result = COALESCE(result, '') || ' (Continued in a follow-up.)' WHERE pr_url = ? AND status = 'review' AND id != ?").run(prev.prUrl, run.id);
     putBrief(agent, dir);
   }
 

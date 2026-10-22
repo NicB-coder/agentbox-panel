@@ -14,7 +14,7 @@ import { listProjects } from "./projects";
 import type { WfStep } from "./types";
 import { ingestRateLimitEvent, markLimited, usageState } from "./usage";
 import { parseAgentInput } from "./validate";
-import { STEP_INFO, cleanLimits, cleanSteps, flowSentence, stepTitle, workflowProblems } from "./wf";
+import { STEP_INFO, stepIconOf, cleanLimits, cleanSteps, flowSentence, stepTitle, workflowProblems } from "./wf";
 import { agentRefs } from "./workflowViews";
 import { agentSentence, clockOf } from "./words";
 import { COLOR_CHOICES } from "./choices";
@@ -541,7 +541,7 @@ function workflowCard(raw: Record<string, unknown>): HelperCard {
     type: "workflow", draft, sentence: flowSentence(draft, agents),
     steps: steps.map((s) => {
       const a = s.type === "agent" && s.agentId != null ? agents.find((x) => x.id === s.agentId) : null;
-      return { title: stepTitle(s, agents), icon: a?.icon ?? STEP_INFO[s.type].icon, color: a?.color ?? STEP_INFO[s.type].color };
+      return { title: stepTitle(s, agents), icon: a?.icon ?? stepIconOf(s), color: a?.color ?? STEP_INFO[s.type].color };
     }),
     problem: problems[0] ?? null,
   };

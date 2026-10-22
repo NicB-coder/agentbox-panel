@@ -223,7 +223,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
 
           <div className="flex flex-col gap-2">
             <Label as="label" htmlFor={taskId} tip={follow ? "What it should do next on this same job. It already knows what it did before." : research ? "Your question in plain words. Say what you'll use the answer for, so it knows what matters." : "Say what you want, what a good result looks like, and anything it should never do."}>
-              {follow ? "What should it do next?" : research ? "What do you want to know?" : "What should it do?"}
+              {follow ? (research ? "What else do you want to know?" : "What should it do next?") : research ? "What do you want to know?" : "What should it do?"}
             </Label>
             <textarea
               id={taskId}
@@ -232,7 +232,9 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               rows={6}
               placeholder={
                 follow
-                  ? "For example: The snake game is too fast on phones. Slow it down a bit."
+                  ? follow.kind === "research"
+                    ? "For example: Which of these matters most on older iPhones?"
+                    : "For example: The snake game is too fast on phones. Slow it down a bit."
                   : research
                     ? "For example: Which free website hosts are best for a student's portfolio, and what are the catches?"
                     : "For example: Make an arcade website with 4 small games. It should work on phones too."
@@ -285,7 +287,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
 
           {follow ? (
             <p className="text-[15px] text-muted">
-              Same project ({follow.project || "none"}), same branch and pull request if one is open.
+              {follow.kind === "research" ? "It builds on the earlier report." : `Same project (${follow.project || "none"}), same branch and pull request if one is open.`}
             </p>
           ) : (
             <ProjectSelect

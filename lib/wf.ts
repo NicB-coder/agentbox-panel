@@ -337,3 +337,9 @@ export function workflowProblems(w: WorkflowInput, agents: AgentRef[], projects:
   }
   return [...new Set(p)];
 }
+
+// A step's icon: Look steps (fresh agents that only look) get the eye.
+export function stepIconOf(s: WfStep): string {
+  if (s.type === "agent" && s.agentId == null && (s.freedom ?? (s.mode === "look" ? "look" : "auto")) === "look") return "eye";
+  return STEP_INFO[s.type].icon;
+}

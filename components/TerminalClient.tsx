@@ -11,7 +11,27 @@ export default function TerminalClient({ cmd }: { cmd: string }) {
   const [status, setStatus] = useState<"connecting" | "ready" | "closed" | "error">("connecting");
   const [line, setLine] = useState("");
   const [gen, setGen] = useState(0);
-  const send = (data: string) => idRef.current && post("/api/terminal/input", { id: idRef.current, data }).catch(() => setStatus("closed"));
+  // Keystrokes go out one batch at a time, in order (separate requests could arrive shuffled).
+  const pending = useRef("");
+  const sending = useRef(false);
+  const flush = async () => {
+    if (sending.current || !pending.current || !idRef.current) return;
+    sending.current = true;
+    const data = pending.current;
+    pending.current = "";
+    try {
+      await post("/api/terminal/input", { id: idRef.current, data });
+    } catch {
+      setStatus("closed");
+    } finally {
+      sending.current = false;
+      if (pending.current) flush();
+    }
+  };
+  const send = (data: string) => {
+    pending.current += data;
+    flush();
+  };
 
   useEffect(() => {
     let es: EventSource | null = null;

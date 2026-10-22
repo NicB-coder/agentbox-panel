@@ -1,7 +1,7 @@
 import { getRun, getWfRun, getWorkflow, listAgents, listVersions, listWfRuns, listWorkflows, pendingApprovalForRun } from "./db";
 import { listProjects } from "./projects";
 import type { PillStatus, Run, Workflow, WorkflowRun, WorkflowVersion } from "./types";
-import { STEP_INFO, flowSentence, stepTitle, type AgentRef } from "./wf";
+import { STEP_INFO, stepIconOf, flowSentence, stepTitle, type AgentRef } from "./wf";
 import { ago } from "./words";
 import { activeWfRun } from "./workflowRunner";
 
@@ -39,7 +39,7 @@ export function workflowTile(w: Workflow, agents = agentRefs()): WorkflowTile {
     id: w.id, name: w.name, sentence: flowSentence(w, agents), status, note, current,
     chips: w.steps.map((s) => {
       const a = s.type === "agent" && s.agentId != null ? agents.find((x) => x.id === s.agentId) : null;
-      return { icon: a?.icon ?? STEP_INFO[s.type].icon, color: a?.color ?? STEP_INFO[s.type].color };
+      return { icon: a?.icon ?? stepIconOf(s), color: a?.color ?? STEP_INFO[s.type].color };
     }),
     timeLabel: active ? `started ${ago(active.startedAt)}` : last ? `last run ${ago(last.endedAt ?? last.startedAt)}` : "never run",
   };

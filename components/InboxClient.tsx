@@ -137,7 +137,7 @@ function NoticeRow({ n, act }: { n: Notice; act: Act }) {
             {isNew && <span className="rounded-full bg-[#1E6B34] px-2 py-0.5 text-[12px] font-bold text-white">New</span>}
           </p>
           <h3 id={`n${n.id}-t`} className="mt-1 text-[17px] font-semibold leading-snug">
-            {n.title.replace(/^Shipped: /, "")}
+            {n.title.replace(/^(Shipped|Report): /, "")}
           </h3>
           {n.text && <p className="mt-2 text-[15px] leading-relaxed text-muted">{n.text}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -215,7 +215,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
           {it.kind === "pr" && it.careful && <p className="mt-2 text-[15px] font-semibold text-[#1E6B34]">{it.careful}</p>}
           {it.kind === "pr" && !it.careful && it.review && <ReviewFindings review={it.review} />}
           {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed") && (
-            <p className="mt-2 text-[15px] leading-relaxed text-muted">{it.text}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted">{plainText(it.text)}</p>
           )}
           {it.kind === "approval" && more && it.detail && <pre className="mt-3 max-h-72 overflow-auto rounded-[14px] bg-soft p-4 text-[12px] whitespace-pre-wrap">{it.detail}</pre>}
 

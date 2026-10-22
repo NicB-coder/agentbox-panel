@@ -299,7 +299,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   return (
     <>
       <p className="clamp-3 mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
-      <p className="mt-1 text-[15px] text-muted">{run.result ?? "It finished and opened a pull request for you."}</p>
+      <p className="mt-1 text-[15px] text-muted">{run.result ? plainText(run.result) : "It finished and opened a pull request for you."}</p>
       {careful && <p className="mt-3 text-[15px] font-semibold text-[#1E6B34]">{careful}</p>}
       {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>}
       {!careful && r?.status === "done" && (
@@ -526,7 +526,9 @@ function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
       <h2 id="give-h" className="text-[18px] font-semibold">
         Add a follow-up
       </h2>
-      <p className="mt-1 text-[15px] text-muted">It continues this job: same project, same branch and pull request if one is open.</p>
+      <p className="mt-1 text-[15px] text-muted">
+        {agent.job.kind === "research" ? "Ask more about the same topic. It builds on the earlier report." : "It continues this job: same project, same branch and pull request if one is open."}
+      </p>
       <form
         className="mt-4 flex flex-col gap-4"
         onSubmit={(e) => {
@@ -541,7 +543,7 @@ function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
             value={task}
             onChange={(e) => setTask(e.target.value)}
             rows={3}
-            placeholder="For example: Make the buttons bigger on phones."
+            placeholder={agent.job.kind === "research" ? "For example: Which of these matters most on older iPhones?" : "For example: Make the buttons bigger on phones."}
             className="rounded-[14px] border border-[#C9CDD4] p-3 text-[15px] leading-relaxed"
           />
         </label>
