@@ -58,7 +58,8 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
   const pending = run ? pendingApprovalForRun(run.id) : null;
   const recent = listRuns(a.id, 20);
   const last: Run | undefined = recent[0];
-  const review = recent.find((r) => r.status === "review");
+  // An open pull request shows, unless a newer run of the same job stopped (that's what Nic needs to see first).
+  const review = recent[0]?.status === "stopped" ? undefined : recent.find((r) => r.status === "review");
   const now = Date.now();
 
   const base = { agent: a, activeRun: run, pendingApproval: pending, waitingForOk: false };

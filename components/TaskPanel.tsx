@@ -48,7 +48,7 @@ async function followUpOf(id: number): Promise<TaskPanelOpen["followUp"] | null>
 }
 
 // Features that switch on as they're finished (never show a half-built one).
-export const TASK_FEATURES = { research: false, big: false, connectors: false };
+export const TASK_FEATURES = { research: false, big: true, connectors: false };
 
 type Brief = { name: string; text: string };
 

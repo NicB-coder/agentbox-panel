@@ -194,8 +194,8 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
   const { view, runs } = data;
   const run = view.activeRun;
   const pending = view.pendingApproval;
-  const review = runs.find((r) => r.status === "review");
   const last = runs[0];
+  const review = last?.status === "stopped" ? undefined : runs.find((r) => r.status === "review");
   const freedom = (r: Run) => FREEDOM_WORDS[freedomOf({ mode: r.mode, allowed: r.extra.allowed ?? view.agent.allowed })].label;
   return (
     <section className="panel p-6 sm:p-8" aria-labelledby="now-h" aria-live="polite">
@@ -204,7 +204,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
       </h2>
       {run ? (
         <>
-          <p className="mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
+          <p className="clamp-3 mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
           {run.status === "queued" ? (
             <p className="mt-2 rounded-[14px] bg-soft px-4 py-3 text-[15px] font-medium">
               {run.activity ?? "Waiting"}. {run.extra.resume ? "It carries on by itself, right where it left off." : "It starts by itself."}
@@ -292,7 +292,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   const r = run.extra.review;
   return (
     <>
-      <p className="mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
+      <p className="clamp-3 mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
       <p className="mt-1 text-[15px] text-muted">{run.result ?? "It finished and opened a pull request for you."}</p>
       {careful && <p className="mt-3 text-[15px] font-semibold text-[#1E6B34]">{careful}</p>}
       {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>}

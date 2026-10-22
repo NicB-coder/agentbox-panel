@@ -942,6 +942,7 @@ async function next(runId: number, phase: Phase, text: string, session: string |
     await checkpoint(runId, `finished milestone ${big.index + 1} of ${big.milestones.length}: ${big.milestones[big.index].title}. ${summary}`);
     if (nextIndex < big.milestones.length) return startMilestone(runId);
     patchFlow(runId, { workSession: session });
+    updateRun(runId, { result: `Finished all ${big.milestones.length} milestones: ${big.milestones.map((m) => m.title).join(", ")}.` });
     if (flow.careful) return startReview(runId, false);
     return finishBuild(runId);
   }
@@ -1059,7 +1060,9 @@ async function hasChanges(run: Run): Promise<boolean> {
 function finishBuild(runId: number) {
   const run = getRun(runId)!;
   const agent = getAgent(run.agentId)!;
-  const summary = run.result || "Finished.";
+  const big = run.extra.flow?.big;
+  const summary = big ? `Finished all ${big.milestones.length} milestones: ${big.milestones.map((m) => m.title).join(", ")}.` : run.result || "Finished.";
+  if (big) updateRun(runId, { result: summary });
   if (run.workflowRunId) return finishStep(agent, run, summary, summary);
   return shipIt(agent, run, summary);
 }
