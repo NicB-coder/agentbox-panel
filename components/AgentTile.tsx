@@ -25,7 +25,7 @@ export function AgentTile({ v }: { v: AgentView }) {
         )}
       </div>
       <div className="flex items-center justify-between gap-3">
-        <StatusPill status={v.status} />
+        <StatusPill status={v.status} label={v.pillLabel} />
         <span className="truncate text-[13px] text-muted">{v.timeLabel}</span>
       </div>
     </Link>

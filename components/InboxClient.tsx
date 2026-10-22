@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { InboxState } from "@/lib/inbox";
 import type { InboxItem } from "@/lib/types";
-import { ago } from "@/lib/words";
+import { ago, plainText } from "@/lib/words";
 import { Confirm, EmptyState, ErrorBox, InfoTip, PageTitle, post } from "./bits";
 import { refreshHeader } from "./Header";
 import { openNewTask } from "./TaskPanel";
@@ -97,7 +97,9 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
   const [confirm, setConfirm] = useState(false);
   const [done, setDone] = useState("");
   const b = !!busy;
-  const tone = it.kind === "failed" || it.kind === "wf_failed" ? "#A11B12" : "#8A4600";
+  const soft = it.kind === "failed" && (it.stopKind === "time" || it.stopKind === "budget");
+  const tone = (it.kind === "failed" && !soft) || it.kind === "wf_failed" ? "#A11B12" : "#8A4600";
+  const word = it.kind === "failed" ? (it.stopKind === "time" ? "Ran out of time" : it.stopKind === "budget" ? "Used its budget" : it.stopKind === "signin" ? "Needs signing in" : "Stopped") : KIND_WORD[it.kind];
 
   return (
     <article className="panel p-5 sm:p-6" aria-labelledby={`${it.key}-t`}>
@@ -106,7 +108,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-x-2 text-[14px]">
             <span className="font-semibold" style={{ color: tone }}>
-              {KIND_WORD[it.kind]}
+              {word}
             </span>
             <span className="text-muted">
               · {it.who} · {ago(it.at)}
@@ -125,6 +127,8 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
           {it.kind === "plan" && (
             <div className={`mt-3 overflow-hidden rounded-[14px] bg-soft p-4 text-[15px] leading-relaxed whitespace-pre-wrap ${more ? "" : "max-h-40"}`}>{it.text}</div>
           )}
+          {it.kind === "pr" && it.careful && <p className="mt-2 text-[15px] font-semibold text-[#1E6B34]">{it.careful}</p>}
+          {it.kind === "pr" && !it.careful && it.review && <ReviewFindings review={it.review} />}
           {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed") && (
             <p className="mt-2 text-[15px] leading-relaxed text-muted">{it.text}</p>
           )}
@@ -187,16 +191,26 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               {it.kind === "pr" && (
                 <>
                   <a href={it.prUrl} target="_blank" rel="noreferrer" className={btn.primary}>
-                    Look at the pull request
+                    Look at it
                   </a>
                   <button className={btn.secondary} disabled={b} onClick={() => setConfirm(true)}>
                     Merge it
                   </button>
                   {done ? (
                     <span className="text-[14px] font-medium text-[#1E6B34]">{done}</span>
-                  ) : (
-                    <button className={btn.secondary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/ask-review`, {}, () => setDone("Reviewer is on it."))}>
-                      Ask Reviewer to check it
+                  ) : it.review?.verdict === "needs work" && !it.careful ? (
+                    <button className={btn.secondary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/send-back`, {}, () => setDone("Sent back. It's fixing them."))}>
+                      Send back to fix
+                    </button>
+                  ) : null}
+                  {!done && it.review?.status !== "running" && (
+                    <button className={btn.link} aria-expanded={more} onClick={() => setMore(!more)}>
+                      More
+                    </button>
+                  )}
+                  {more && !done && it.review?.status !== "running" && (
+                    <button className={btn.secondary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/ask-review`, {}, () => setDone("A second reviewer is on it."))}>
+                      Get a second opinion
                     </button>
                   )}
                   <Confirm
@@ -214,12 +228,26 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               )}
               {it.kind === "failed" && (
                 <>
-                  {it.canRetry && (
-                    <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/retry`)}>
-                      Try again
+                  {it.stopKind === "time" && it.canContinue ? (
+                    <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/continue`, { addMinutes: 30 })}>
+                      Keep going (+30 min)
                     </button>
+                  ) : it.stopKind === "budget" && it.canContinue ? (
+                    <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/continue`, { addBudget: 20 })}>
+                      Raise the budget (+20%)
+                    </button>
+                  ) : it.stopKind === "signin" ? (
+                    <Link href="/machine#accounts" className={btn.primary}>
+                      Sign in again
+                    </Link>
+                  ) : (
+                    it.canRetry && (
+                      <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/retry`)}>
+                        {it.canContinue ? "Pick up where it stopped" : "Try again"}
+                      </button>
+                    )
                   )}
-                  <FixButton error={`${it.who} stopped while doing "${it.title}": ${it.text}`} />
+                  {it.stopKind === "error" && <FixButton error={`${it.who} stopped while doing "${it.title}": ${it.text}`} />}
                   <button className={btn.link} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/dismiss`)}>
                     Dismiss
                   </button>
@@ -270,13 +298,33 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
   );
 }
 
+function ReviewFindings({ review }: { review: NonNullable<Extract<InboxItem, { kind: "pr" }>["review"]> }) {
+  const [open, setOpen] = useState(false);
+  if (review.status === "running") return <p className="mt-2 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>;
+  if (review.status === "stopped" || !review.verdict) return null;
+  const ok = review.verdict === "passed";
+  return (
+    <div className="mt-2">
+      <p className={`text-[15px] font-semibold ${ok ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{ok ? "Reviewed ✓ Nothing to fix." : "The reviewer found things to fix."}</p>
+      {review.text && (
+        <>
+          <button className={btn.link + " !text-[14px]"} aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? "Hide what it found" : "What it found"}
+          </button>
+          {open && <div className="mt-1 max-h-80 overflow-auto rounded-[14px] bg-soft p-4 text-[14px] leading-relaxed whitespace-pre-wrap">{plainText(review.text)}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function FixButton({ error }: { error: string }) {
   const [state, setState] = useState<"" | "busy" | number>("");
   const [err, setErr] = useState("");
   if (typeof state === "number")
     return (
       <Link href={`/agents/${state}`} className={btn.link}>
-        Builder is on it
+        An agent is on it
       </Link>
     );
   return (

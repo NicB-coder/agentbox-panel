@@ -1,9 +1,19 @@
-import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent } from "./db";
+import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent, runsWithStatus } from "./db";
 import { readHeartbeat } from "./heartbeat";
 import { inboxCount } from "./inbox";
 import { usageState } from "./usage";
+import { bigUsage, canContinue, carefulLine } from "./runner";
 import type { Agent, AgentView, HeartbeatInfo, Run } from "./types";
-import { ago, clock, clockOf, inWords, nextRunAfter, scheduleWords } from "./words";
+import { ago, clock, clockOf, duration, inWords, nextRunAfter, scheduleWords } from "./words";
+
+// "Step 3 of 6 · Final check"
+export function progressOf(run: Run): { step: number; of: number; label: string } | null {
+  if (!run.steps.length) return null;
+  const i = run.steps.findIndex((s) => s.state === "now");
+  const at = i >= 0 ? i : run.steps.filter((s) => s.state === "done").length;
+  if (at >= run.steps.length) return null;
+  return { step: at + 1, of: run.steps.length, label: run.steps[at].label };
+}
 
 function firstSentence(s: string) {
   const m = s.match(/^[^.!?]*[.!?]/);
@@ -57,9 +67,12 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
     return {
       ...base,
       status: "queued",
+      pillLabel: "Waiting",
       task: run.task,
       summary: run.activity ?? "Waiting for usage to reset",
-      timeLabel: `asked ${ago(run.startedAt, now)}`,
+      timeLabel: run.extra.resume ? `back at ${clockOf(run.extra.resume.until)}` : `asked ${ago(run.startedAt, now)}`,
+      progress: progressOf(run),
+      elapsedMs: run.extra.activeMs ?? 0,
     };
   }
   if (run && (pending || run.status === "waiting")) {
@@ -73,20 +86,24 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
     };
   }
   if (run) {
+    const elapsedMs = run.extra.activeMs ?? now - run.startedAt;
     return {
       ...base,
       status: "working",
       task: run.task,
       summary: run.activity ?? "Working on it.",
-      timeLabel: `started ${ago(run.startedAt, now)}`,
+      timeLabel: duration(elapsedMs) === "under a minute" ? "just started" : `${duration(elapsedMs)} so far`,
+      progress: progressOf(run),
+      elapsedMs,
     };
   }
   if (review) {
+    const careful = carefulLine(review.extra.flow);
     return {
       ...base,
       status: "needs",
       task: review.task,
-      summary: "Its pull request is ready for you to look at.",
+      summary: careful ? `Ready to merge. ${careful}.` : "Its pull request is ready for you to look at.",
       timeLabel: ago(review.endedAt ?? review.startedAt, now),
     };
   }
@@ -97,6 +114,16 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
       task: a.enabled ? "Paused" : "Switched off",
       summary: firstSentence(a.prompt),
       timeLabel: last ? ago(last.endedAt ?? last.startedAt, now) : "",
+    };
+  }
+  if (last?.status === "stopped" && (last.extra.outOfTime || last.extra.overBudget) && last.stopReason !== "You stopped it.") {
+    return {
+      ...base,
+      status: "timeout",
+      pillLabel: last.extra.overBudget ? "Used its budget" : "Ran out of time",
+      task: last.task,
+      summary: last.extra.overBudget ? "It used its usage budget. Raise the budget to let it carry on." : "It hit its time limit. Press Keep going to give it 30 more minutes.",
+      timeLabel: ago(last.endedAt ?? last.startedAt, now),
     };
   }
   if (last?.status === "stopped") {
@@ -199,6 +226,9 @@ export type AgentPageState = {
   schedule: string;
   runs: Run[];
   heartbeat: HeartbeatInfo | null;
+  bigUsed: number | null; // big jobs: points of the weekly meter used so far
+  held: { id: number; name: string; task: string }[]; // small runs waiting for this big job
+  canContinue: Record<number, boolean>;
 };
 
 export function agentPageState(id: number): AgentPageState | null {
@@ -218,7 +248,14 @@ export function agentPageState(id: number): AgentPageState | null {
     const next = nextRunFor(a);
     if (next) schedule += ` · next ${inWords(next)}`;
   }
-  return { view, schedule, runs: a.kind === "heartbeat" ? [] : listRuns(a.id, 30), heartbeat: hb };
+  const runs = a.kind === "heartbeat" ? [] : listRuns(a.id, 30);
+  const active = view.activeRun;
+  const held = active?.extra.flow?.big
+    ? runsWithStatus("queued").filter((r) => r.extra.held).map((r) => ({ id: r.id, name: getAgent(r.agentId)?.name ?? "An agent", task: r.task }))
+    : [];
+  const canContinueMap: Record<number, boolean> = {};
+  for (const r of runs.slice(0, 5)) if (r.status === "stopped") canContinueMap[r.id] = canContinue(r);
+  return { view, schedule, runs, heartbeat: hb, bigUsed: active?.extra.flow?.big ? bigUsage(active) : null, held, canContinue: canContinueMap };
 }
 
 export { clock };

@@ -96,7 +96,7 @@ export function Label({ children, tip, as = "span", htmlFor, className = "" }: {
 }
 
 // Errors in plain words, with Try again and "Ask Claude to fix this".
-export function ErrorBox({ message, onRetry, where, compact }: { message: string; onRetry?: () => void; where?: string; compact?: boolean }) {
+export function ErrorBox({ message, onRetry, where, compact, retryLabel = "Try again" }: { message: string; onRetry?: () => void; where?: string; compact?: boolean; retryLabel?: string }) {
   const [asked, setAsked] = useState<null | { agentId: number }>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -119,7 +119,7 @@ export function ErrorBox({ message, onRetry, where, compact }: { message: string
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {onRetry && (
           <button type="button" className={btn.secondary} onClick={onRetry}>
-            Try again
+            {retryLabel}
           </button>
         )}
         {asked ? (

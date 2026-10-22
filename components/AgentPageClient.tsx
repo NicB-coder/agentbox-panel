@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { AgentPageState } from "@/lib/views";
-import type { Agent, Approval, PillStatus, Run } from "@/lib/types";
+import type { Agent, Approval, PillStatus, Run, Step } from "@/lib/types";
 import { ago, clockOf, duration, agentSentence, plainText } from "@/lib/words";
 import { FREEDOM_WORDS, freedomOf } from "@/lib/job";
 import { AgentIcon, StatusPill, btn } from "./ui";
@@ -53,7 +53,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-[28px] font-bold leading-tight tracking-tight">{a.name}</h1>
-              <StatusPill status={view.status} />
+              <StatusPill status={view.status} label={view.pillLabel} />
             </div>
             <p className="text-[15px] text-muted">{a.project}</p>
           </div>
@@ -137,11 +137,11 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
   );
 }
 
-function Steps({ run }: { run: Run }) {
-  if (!run.steps.length) return null;
+function StepLine({ steps, label }: { steps: Step[]; label?: string }) {
+  if (!steps.length) return null;
   return (
-    <ol className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-2 text-[15px]" aria-label="Progress">
-      {run.steps.map((s, i) => (
+    <ol className="flex flex-wrap items-center gap-x-2 gap-y-2 text-[15px]" aria-label={label ?? "Progress"}>
+      {steps.map((s, i) => (
         <li key={i} className="flex items-center gap-2">
           {i > 0 && (
             <span className="text-[#9AA0A8]" aria-hidden="true">
@@ -158,11 +158,45 @@ function Steps({ run }: { run: Run }) {
   );
 }
 
-function RightNow({ data, act, busy }: { data: AgentPageState; act: (l: string, u: string, b?: unknown) => Promise<void>; busy: string }) {
+function Steps({ run }: { run: Run }) {
+  const sub = run.extra.flow?.subSteps ?? [];
+  const now = run.steps.find((s) => s.state === "now");
+  return (
+    <div className="mt-5 flex flex-col gap-3">
+      <StepLine steps={run.steps} />
+      {sub.length > 0 && now && (
+        <div className="rounded-[14px] bg-soft px-4 py-3 text-[14px]">
+          <p className="mb-1.5 text-[13px] font-semibold text-muted">{now.label}, step by step</p>
+          <StepLine steps={sub} label={`${now.label}, step by step`} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ProgressBar({ p, color = "#2F4FD8" }: { p: { step: number; of: number; label: string }; color?: string }) {
+  return (
+    <div className="flex items-center gap-3 text-[14px]">
+      <span className="shrink-0 font-semibold">
+        Step {p.step} of {p.of}
+      </span>
+      <span className="relative h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-[#E6E8EC]" aria-hidden="true">
+        <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.round(((p.step - 0.5) / p.of) * 100)}%`, background: color }} />
+      </span>
+      <span className="truncate text-muted">{p.label}</span>
+    </div>
+  );
+}
+
+type Act = (l: string, u: string, b?: unknown) => Promise<void>;
+
+function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: string }) {
   const { view, runs } = data;
   const run = view.activeRun;
   const pending = view.pendingApproval;
   const review = runs.find((r) => r.status === "review");
+  const last = runs[0];
+  const freedom = (r: Run) => FREEDOM_WORDS[freedomOf({ mode: r.mode, allowed: r.extra.allowed ?? view.agent.allowed })].label;
   return (
     <section className="panel p-6 sm:p-8" aria-labelledby="now-h" aria-live="polite">
       <h2 id="now-h" className="text-[18px] font-semibold">
@@ -171,36 +205,76 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: (l: string, 
       {run ? (
         <>
           <p className="mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
-          <p className="mt-1 text-[15px] text-muted">
-            {run.status === "waiting" ? "Waiting for you" : run.activity ?? "Working on it"} · started {ago(run.startedAt)} · {FREEDOM_WORDS[freedomOf({ mode: run.mode, allowed: run.extra.allowed ?? view.agent.allowed })].label}
-          </p>
+          {run.status === "queued" ? (
+            <p className="mt-2 rounded-[14px] bg-soft px-4 py-3 text-[15px] font-medium">
+              {run.activity ?? "Waiting"}. {run.extra.resume ? "It carries on by itself, right where it left off." : "It starts by itself."}
+            </p>
+          ) : (
+            <p className="mt-1 text-[15px] text-muted">
+              {run.status === "waiting" ? "Waiting for you" : run.activity ?? "Working on it"} · {view.timeLabel} · {freedom(run)}
+              {run.extra.flow?.careful ? " · Careful" : ""}
+            </p>
+          )}
+          {view.progress && run.status !== "waiting" && (
+            <div className="mt-4">
+              <ProgressBar p={view.progress} color={view.agent.color} />
+            </div>
+          )}
           <Steps run={run} />
+          {run.extra.flow?.big && <BigJob run={run} used={data.bigUsed} held={data.held} act={act} busy={busy} />}
           {pending && pending.kind === "tool" && <AskBox approval={pending} act={act} busy={busy} />}
           {run.plan && run.status === "waiting" && !pending && <PlanBox run={run} act={act} busy={busy} />}
         </>
       ) : review ? (
+        <ReadyBox run={review} act={act} busy={busy} />
+      ) : last?.status === "stopped" && view.status === "timeout" ? (
         <>
-          <p className="mt-3 text-[20px] font-semibold leading-snug">{review.task}</p>
-          <p className="mt-1 text-[15px] text-muted">{review.result ?? "It finished and opened a pull request for you."}</p>
-          {review.prUrl && (
-            <a href={review.prUrl} target="_blank" rel="noreferrer" className={`${btn.primary} mt-5`}>
-              Look at the pull request
-            </a>
-          )}
-          <p className="mt-3 text-[14px] text-muted">When you merge it on GitHub, this turns to Done by itself.</p>
+          <p className="mt-3 text-[20px] font-semibold leading-snug">{last.task}</p>
+          <div className="mt-4 rounded-[18px] bg-[#FDF0DC] p-5 text-[#8A4600]">
+            <p className="text-[16px] font-semibold">{last.extra.overBudget ? "It used its usage budget." : `It ran out of time after ${duration(last.extra.activeMs ?? 0)} of work.`}</p>
+            <p className="mt-1 text-[15px]">Its work so far is kept. It carries on right where it stopped.</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {data.canContinue[last.id] ? (
+                last.extra.overBudget ? (
+                  <button className={btn.primary} disabled={!!busy} onClick={() => act("continue", `/api/runs/${last.id}/continue`, { addBudget: 20 })}>
+                    Raise the budget (+20%)
+                  </button>
+                ) : (
+                  <button className={btn.primary} disabled={!!busy} onClick={() => act("continue", `/api/runs/${last.id}/continue`, { addMinutes: 30 })}>
+                    {busy === "continue" ? "Starting…" : "Keep going (+30 min)"}
+                  </button>
+                )
+              ) : (
+                <button className={btn.primary} disabled={!!busy} onClick={() => act("retry", `/api/runs/${last.id}/retry`)}>
+                  Try again
+                </button>
+              )}
+            </div>
+          </div>
         </>
       ) : (
         <>
           <p className="mt-3 text-[20px] font-semibold leading-snug">{view.task}</p>
-          {!(view.status === "stopped" && runs[0]?.status === "stopped") && <p className="mt-1 text-[15px] text-muted">{view.summary}</p>}
-          {view.status === "stopped" && runs[0]?.status === "stopped" && (
+          {!(view.status === "stopped" && last?.status === "stopped") && <p className="mt-1 text-[15px] text-muted">{view.summary}</p>}
+          {view.status === "stopped" && last?.status === "stopped" && (
             <div className="mt-5">
-              <ErrorBox
-                compact
-                message={runs[0].stopReason ?? "It stopped before finishing."}
-                onRetry={() => act("retry", `/api/runs/${runs[0].id}/retry`)}
-                where={`${view.agent.name}: "${runs[0].task}"`}
-              />
+              {last.extra.signIn ? (
+                <div role="alert" className="rounded-[18px] bg-[#FDE8E6] p-5 text-[#A11B12]">
+                  <p className="text-[15px] font-semibold">{last.extra.signIn === "github" ? "GitHub needs signing in again." : "Claude Code needs signing in again."}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href="/machine#accounts" className={btn.primary}>
+                      Sign in again
+                    </Link>
+                    {data.canContinue[last.id] && (
+                      <button className={btn.secondary} disabled={!!busy} onClick={() => act("retry", `/api/runs/${last.id}/retry`)}>
+                        Pick up where it stopped
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <ErrorBox compact message={last.stopReason ?? "It stopped before finishing."} onRetry={() => act("retry", `/api/runs/${last.id}/retry`)} retryLabel={data.canContinue[last.id] ? "Pick up where it stopped" : undefined} where={`${view.agent.name}: "${last.task}"`} />
+              )}
             </div>
           )}
         </>
@@ -209,7 +283,146 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: (l: string, 
   );
 }
 
-function AskBox({ approval, act, busy }: { approval: Approval; act: (l: string, u: string, b?: unknown) => Promise<void>; busy: string }) {
+// The pull request is ready: what the review said, and Look at it / Merge it / Send back with a note.
+function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
+  const [confirm, setConfirm] = useState(false);
+  const [noting, setNoting] = useState(false);
+  const [note, setNote] = useState("");
+  const careful = carefulText(run);
+  const r = run.extra.review;
+  return (
+    <>
+      <p className="mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
+      <p className="mt-1 text-[15px] text-muted">{run.result ?? "It finished and opened a pull request for you."}</p>
+      {careful && <p className="mt-3 text-[15px] font-semibold text-[#1E6B34]">{careful}</p>}
+      {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>}
+      {!careful && r?.status === "done" && (
+        <div className="mt-3">
+          <p className={`text-[15px] font-semibold ${r.verdict === "passed" ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{r.verdict === "passed" ? "Reviewed ✓ Nothing to fix." : "The reviewer found things to fix:"}</p>
+          {r.verdict !== "passed" && r.text && <div className="mt-2 max-h-72 overflow-auto rounded-[14px] bg-soft p-4 text-[14px] leading-relaxed whitespace-pre-wrap">{plainText(r.text)}</div>}
+        </div>
+      )}
+      <div className="mt-5 flex flex-wrap gap-3">
+        {run.prUrl && (
+          <a href={run.prUrl} target="_blank" rel="noreferrer" className={btn.primary}>
+            Look at it
+          </a>
+        )}
+        <button className={btn.secondary} disabled={!!busy} onClick={() => setConfirm(true)}>
+          Merge it
+        </button>
+        {r?.verdict === "needs work" && !careful && (
+          <button className={btn.secondary} disabled={!!busy} onClick={() => act("sendback", `/api/runs/${run.id}/send-back`, {})}>
+            Send back to fix
+          </button>
+        )}
+        <button className={btn.secondary} disabled={!!busy} onClick={() => setNoting(!noting)} aria-expanded={noting}>
+          Send back with a note
+        </button>
+      </div>
+      {noting && (
+        <form
+          className="mt-4 flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (note.trim()) act("note", `/api/runs/${run.id}/send-back`, { note }).then(() => setNoting(false));
+          }}
+        >
+          <label className="flex flex-col gap-2">
+            <span className="text-[15px] font-semibold">What should it change?</span>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="rounded-[14px] border border-[#C9CDD4] bg-white p-3 text-[15px]" />
+          </label>
+          <div>
+            <button type="submit" className={btn.primary} disabled={!!busy || !note.trim()}>
+              Send it back
+            </button>
+          </div>
+        </form>
+      )}
+      <p className="mt-3 text-[14px] text-muted">When it's merged, this turns to Done by itself.</p>
+      <Confirm
+        open={confirm}
+        title="Merge this pull request?"
+        text="Its changes go into main, the real version of your project. You can't undo this from here."
+        yes="Merge it"
+        onYes={() => {
+          setConfirm(false);
+          act("merge", `/api/runs/${run.id}/merge`);
+        }}
+        onClose={() => setConfirm(false)}
+      />
+    </>
+  );
+}
+
+function carefulText(run: Run): string | null {
+  const f = run.extra.flow;
+  if (!f?.careful || !f.reviews.length) return null;
+  const last = f.reviews[f.reviews.length - 1];
+  const bits = [last.verdict === "passed" ? "Reviewed ✓" : "Reviewed: a few things still need a look"];
+  if (f.fixes) bits.push(`${f.fixes} ${f.fixes === 1 ? "fix" : "fixes"} made`);
+  if (f.polished) bits.push("optimized");
+  return bits.join(" · ");
+}
+
+// Big jobs: the milestone checklist, usage against its budget, and the small runs it's holding back.
+function BigJob({ run, used, held, act, busy }: { run: Run; used: number | null; held: AgentPageState["held"]; act: Act; busy: string }) {
+  const big = run.extra.flow!.big!;
+  const budget = big.budgetPct;
+  return (
+    <div className="mt-6 flex flex-col gap-5 rounded-[18px] border border-line p-5">
+      <div>
+        <h3 className="text-[16px] font-semibold">Milestones</h3>
+        {big.milestones.length === 0 ? (
+          <p className="mt-1 text-[15px] text-muted">It's reading the job and splitting it into milestones.</p>
+        ) : (
+          <ol className="mt-2 flex flex-col gap-2">
+            {big.milestones.map((m, i) => (
+              <li key={i} className="flex gap-3 text-[15px]">
+                <span aria-hidden="true" className={m.state === "now" ? "text-[#2A3F9E]" : m.state === "done" ? "text-[#1E6B34]" : "text-muted"}>
+                  {m.state === "done" ? "✓" : m.state === "now" ? "●" : "○"}
+                </span>
+                <span className="min-w-0">
+                  <span className={m.state === "now" ? "font-semibold text-[#2A3F9E]" : m.state === "done" ? "" : "text-muted"}>
+                    {i + 1}. {m.title}
+                  </span>
+                  <span className="sr-only">{m.state === "done" ? " (done)" : m.state === "now" ? " (doing now)" : " (later)"}</span>
+                  {m.summary && <span className="block text-[14px] text-muted">{m.summary}</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+      <div>
+        <p className="flex flex-wrap items-center justify-between gap-2 text-[15px]">
+          <span className="font-semibold">Usage</span>
+          <span className="text-muted">{used === null ? "checking…" : `about ${used}% of your week, budget ${budget}%`}</span>
+        </p>
+        <span className="mt-2 block h-2 overflow-hidden rounded-full bg-[#E6E8EC]" aria-hidden="true">
+          <span className="block h-full rounded-full bg-[#7048C8]" style={{ width: `${Math.min(100, ((used ?? 0) / Math.max(1, budget)) * 100)}%` }} />
+        </span>
+        <button className={`${btn.link} mt-1`} disabled={!!busy} onClick={() => act("budget", `/api/runs/${run.id}/budget`, { add: 20 })}>
+          Raise the budget (+20%)
+        </button>
+      </div>
+      {held.length > 0 && (
+        <div>
+          <h3 className="text-[16px] font-semibold">Waiting for it to finish</h3>
+          <ul className="mt-1 text-[15px] text-muted">
+            {held.map((h) => (
+              <li key={h.id}>
+                {h.name}: {h.task}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AskBox({ approval, act, busy }: { approval: Approval; act: Act; busy: string }) {
   const [show, setShow] = useState(false);
   return (
     <div className="mt-6 rounded-[18px] bg-[#FDF0DC] p-5">
@@ -233,7 +446,7 @@ function AskBox({ approval, act, busy }: { approval: Approval; act: (l: string, 
   );
 }
 
-function PlanBox({ run, act, busy }: { run: Run; act: (l: string, u: string, b?: unknown) => Promise<void>; busy: string }) {
+function PlanBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   const [changing, setChanging] = useState(false);
   const [msg, setMsg] = useState("");
   return (

@@ -138,6 +138,7 @@ const PILL: Record<PillStatus, { label: string; bg: string; fg: string; dot?: st
   queued: { label: "Waiting", bg: "#EEF0F3", fg: "#4A4F57" },
   running: { label: "Running", bg: "#EEF1FD", fg: "#2A3F9E" },
   on: { label: "On", bg: "#EEF0F3", fg: "#4A4F57", dot: "#1F9D55" },
+  timeout: { label: "Ran out of time", bg: "#FDF0DC", fg: "#8A4600" },
 };
 
 export const PILL_LABEL = Object.fromEntries(Object.entries(PILL).map(([k, v]) => [k, v.label])) as Record<PillStatus, string>;
