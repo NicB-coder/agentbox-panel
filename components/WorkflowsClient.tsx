@@ -43,8 +43,14 @@ export default function WorkflowsClient({ initial }: { initial: WorkflowsListSta
 }
 
 function Tile({ t }: { t: WorkflowTile }) {
+  const live = t.status === "running" || t.status === "needs";
   return (
-    <Link href={`/workflows/${t.id}`} className="tile relative flex flex-col overflow-hidden p-8 sm:p-9" aria-label={`${t.name}. ${t.sentence}`}>
+    <Link
+      href={`/workflows/${t.id}`}
+      className="tile relative flex flex-col overflow-hidden p-8 sm:p-9"
+      style={live ? { background: "color-mix(in srgb, #7048C8 7%, white)" } : undefined}
+      aria-label={`${t.name}. ${t.current ? `On step ${t.current.index + 1} of ${t.current.of}: ${t.current.title}. ` : ""}${t.sentence}`}
+    >
       <span className="absolute inset-x-0 top-0 h-[6px]" style={{ background: "#7048C8", opacity: 0.55 }} aria-hidden="true" />
       <div className="flex items-center gap-3">
         <span className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
@@ -60,14 +66,33 @@ function Tile({ t }: { t: WorkflowTile }) {
           {t.chips.map((c, i) => (
             <span key={i} className="flex items-center gap-1">
               {i > 0 && <span className="text-[11px] text-[#9AA0A8]">→</span>}
-              <span className="flex h-7 w-7 items-center justify-center rounded-[9px]" style={{ background: `${c.color}1A` }}>
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-[9px] ${t.current?.index === i ? "glow" : ""}`}
+                style={{ background: `${c.color}1A`, outline: t.current?.index === i ? `2px solid ${c.color}` : undefined, ["--glow" as string]: c.color }}
+              >
                 <Icon name={c.icon} color={c.color} size={14} />
               </span>
             </span>
           ))}
         </span>
-        <p className="clamp-3 text-[15px] font-semibold leading-snug">{t.sentence}</p>
-        {t.note && <p className={`clamp-2 text-[14px] leading-snug ${t.status === "needs" ? "font-semibold text-[#8A4600]" : "text-muted"}`}>{t.note}</p>}
+        {t.current ? (
+          <>
+            <p className="text-[15px] font-semibold leading-snug">
+              Step {t.current.index + 1} of {t.current.of}: {t.current.title}
+            </p>
+            {t.note && (
+              <p className={`flex items-start gap-2 text-[14px] leading-snug ${t.status === "needs" ? "font-semibold text-[#8A4600]" : "text-ink"}`}>
+                {t.status === "running" && <span className="pulse mt-[5px] h-2 w-2 shrink-0 rounded-full bg-[#7048C8]" aria-hidden="true" />}
+                <span className="clamp-2">{t.note}</span>
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="clamp-3 text-[15px] font-semibold leading-snug">{t.sentence}</p>
+            {t.note && <p className={`clamp-2 text-[14px] leading-snug ${t.status === "needs" ? "font-semibold text-[#8A4600]" : "text-muted"}`}>{t.note}</p>}
+          </>
+        )}
       </div>
       <div className="flex items-center justify-between gap-3">
         <StatusPill status={t.status} />

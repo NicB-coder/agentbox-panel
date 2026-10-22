@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { WfStep, WfStepRun, WfStepState } from "@/lib/types";
-import { STEP_INFO, hasFailPath, stepSubtitle, stepTitle, type AgentRef } from "@/lib/wf";
+import { STEP_INFO, stepIconOf, hasFailPath, stepSubtitle, stepTitle, type AgentRef } from "@/lib/wf";
 import { Icon } from "../ui";
 import { plainText } from "@/lib/words";
 
@@ -26,7 +26,7 @@ export function stepColor(s: WfStep, agents: AgentRef[]) {
 
 export function stepIcon(s: WfStep, agents: AgentRef[]) {
   if (s.type === "agent" && s.agentId != null) return agents.find((a) => a.id === s.agentId)?.icon ?? "sparkle";
-  return STEP_INFO[s.type].icon;
+  return stepIconOf(s);
 }
 
 const STATE_WORD: Record<WfStepState, string> = {

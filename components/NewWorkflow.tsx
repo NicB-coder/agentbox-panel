@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { STEP_INFO, TEMPLATES, templateWorkflow, type AgentRef, type TemplateKey } from "@/lib/wf";
+import { STEP_INFO, stepIconOf, TEMPLATES, templateWorkflow, type AgentRef, type TemplateKey } from "@/lib/wf";
 import { BackLink, ErrorBox, InfoTip, post } from "./bits";
 import ProjectSelect from "./ProjectSelect";
 import { Icon, btn } from "./ui";
@@ -106,7 +106,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
                         <span key={s.id} className="flex items-center gap-1.5">
                           {i > 0 && <span className="text-[#9AA0A8]">→</span>}
                           <span className="flex h-8 w-8 items-center justify-center rounded-[10px]" style={{ background: `${color}1A` }}>
-                            <Icon name={a?.icon ?? STEP_INFO[s.type].icon} color={color} size={16} />
+                            <Icon name={a?.icon ?? stepIconOf(s)} color={color} size={16} />
                           </span>
                         </span>
                       );

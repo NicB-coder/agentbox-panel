@@ -7,8 +7,8 @@
 	<string>com.agentbox.panel</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/opt/homebrew/bin/npm</string>
-		<string>start</string>
+		<string>/bin/zsh</string>
+		<string>__APP_DIR__/scripts/start-panel.sh</string>
 	</array>
 	<key>WorkingDirectory</key>
 	<string>__APP_DIR__</string>
@@ -20,6 +20,10 @@
 		<string>production</string>
 		<key>NEXT_TELEMETRY_DISABLED</key>
 		<string>1</string>
+		<key>PORT</key>
+		<string>3000</string>
+		<key>AGENTBOX_PANEL_LABEL</key>
+		<string>com.agentbox.panel</string>
 	</dict>
 	<key>RunAtLoad</key>
 	<true/>

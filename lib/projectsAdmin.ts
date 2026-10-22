@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { canPreview } from "./preview";
 import { PROJECTS_DIR, listProjects } from "./projects";
 
 // The Projects page: what's cloned under ~/projects, and adding more with gh.
@@ -23,6 +24,7 @@ export type ProjectInfo = {
   lastActivity: number | null;
   lastMessage: string | null;
   prs: { number: number; title: string; url: string; draft: boolean }[];
+  playable: boolean;
 };
 
 type G = typeof globalThis & { __projCache?: { at: number; list: ProjectInfo[] } };
@@ -35,13 +37,14 @@ export async function projectInfos(fresh = false): Promise<ProjectInfo[]> {
       const dir = path.join(PROJECTS_DIR, name);
       const [repo, log, prs] = await Promise.all([
         sh("gh", ["repo", "view", "--json", "nameWithOwner,url"], dir, 20_000),
-        sh("git", ["log", "-1", "--format=%ct%n%s"], dir, 10_000),
+        sh("git", ["fetch", "origin", "--prune"], dir, 30_000).then(() => sh("git", ["log", "-1", "--format=%ct%n%s", "origin/HEAD"], dir, 10_000)),
         sh("gh", ["pr", "list", "--state", "open", "--json", "number,title,url,isDraft", "--limit", "10"], dir, 20_000),
       ]);
       const r = repo.ok ? (JSON.parse(repo.out) as { nameWithOwner: string; url: string }) : null;
       const [ts, msg] = log.out.split("\n");
+      const playable = await canPreview(name);
       return {
-        name, repo: r?.nameWithOwner ?? null, url: r?.url ?? null,
+        name, repo: r?.nameWithOwner ?? null, url: r?.url ?? null, playable,
         lastActivity: ts ? Number(ts) * 1000 : null, lastMessage: msg ?? null,
         prs: prs.ok ? (JSON.parse(prs.out || "[]") as { number: number; title: string; url: string; isDraft: boolean }[]).map((p) => ({ number: p.number, title: p.title, url: p.url, draft: p.isDraft })) : [],
       };

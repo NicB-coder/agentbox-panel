@@ -2,7 +2,8 @@ import {
   getAgent, getRun, getWfRun, getWorkflow, listIdeas, pendingApprovals, recentStoppedRuns, recentStoppedWfRuns, runsWithStatus, wfRunsWithStatus,
 } from "./db";
 import type { Agent, Idea, InboxItem, Run } from "./types";
-import { PAUSED_ALL } from "./runner";
+import { listNotices, unopenedNotices, type Notice } from "./notices";
+import { OUT_OF_TIME, OVER_BUDGET, PAUSED_ALL, canContinue, carefulLine } from "./runner";
 
 // Everything that needs Nic, newest first.
 
@@ -38,18 +39,26 @@ export function inboxItems(): InboxItem[] {
     items.push({ key: `plan${run.id}`, kind: "plan", at: run.startedAt, title: run.task, ...who(run), runId: run.id, text: run.plan });
   }
 
-  for (const run of runsWithStatus("review")) {
-    if (!run.prUrl) continue;
-    items.push({ key: `pr${run.id}`, kind: "pr", at: run.endedAt ?? run.startedAt, title: run.task, ...who(run), runId: run.id, prUrl: run.prUrl, text: run.result ?? "It finished and opened a pull request." });
+  const seenPr = new Set<string>();
+  for (const run of runsWithStatus("review").reverse()) {
+    if (!run.prUrl || seenPr.has(run.prUrl)) continue; // follow-ups share one pull request: show it once
+    seenPr.add(run.prUrl);
+    items.push({
+      key: `pr${run.id}`, kind: "pr", at: run.endedAt ?? run.startedAt, title: run.task, ...who(run), runId: run.id, prUrl: run.prUrl,
+      text: run.result ?? "It finished and opened a pull request.", careful: carefulLine(run.extra.flow), reviewedHere: !!run.extra.flow?.reviews.length,
+      review: run.extra.review ?? null,
+    });
   }
 
   const since = Date.now() - WEEK;
   for (const run of recentStoppedRuns(since)) {
-    if (userStopped(run.stopReason) || run.stopReason === "The pull request was closed without merging.") continue;
+    if (userStopped(run.stopReason) || run.stopReason === "The pull request was closed without merging." || run.extra.prReview) continue;
     const a = getAgent(run.agentId) as Agent | null;
+    const stopKind = run.extra.signIn ? "signin" : run.stopReason === OUT_OF_TIME ? "time" : run.stopReason === OVER_BUDGET ? "budget" : "error";
     items.push({
       key: `fail${run.id}`, kind: "failed", at: run.endedAt ?? run.startedAt, title: run.task, ...who(run), runId: run.id, agentId: run.agentId,
-      text: run.stopReason ?? "It stopped before finishing.", canRetry: !!a && a.kind === "claude" && a.enabled,
+      text: stopKind === "time" ? "It hit its time limit before finishing. Its work so far is kept." : stopKind === "budget" ? "It used its usage budget. Its work so far is kept." : run.stopReason ?? "It stopped before finishing.",
+      canRetry: !!a && a.kind === "claude" && a.enabled, canContinue: canContinue(run), stopKind, signIn: run.extra.signIn,
     });
   }
 
@@ -77,11 +86,11 @@ export function inboxItems(): InboxItem[] {
 }
 
 export function inboxCount(): number {
-  return inboxItems().length;
+  return inboxItems().length + unopenedNotices();
 }
 
-export type InboxState = { items: InboxItem[]; ideas: Idea[] };
+export type InboxState = { items: InboxItem[]; ideas: Idea[]; notices: Notice[] };
 
 export function inboxState(): InboxState {
-  return { items: inboxItems(), ideas: listIdeas() };
+  return { items: inboxItems(), ideas: listIdeas(), notices: listNotices() };
 }

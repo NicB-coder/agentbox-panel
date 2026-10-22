@@ -48,6 +48,7 @@ export type HelperMeta = {
   cards?: HelperCard[];
   created?: { index: number; kind: "agent" | "workflow"; id: number; href: string }[]; // cards Nic pressed Create it on
   tools?: string[]; // what it looked up, in plain words
+  waiting?: { question: string; ctx: HelperContext; userMsgId: number; until: number }; // out of usage: answered by itself after the reset
 };
 
 export type HelperMessage = {

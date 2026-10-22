@@ -5,13 +5,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { HeaderState, UsageView } from "@/lib/types";
 import { clockOf } from "@/lib/words";
 import { Confirm, post } from "./bits";
-import NewTaskButton, { openNewTask } from "./NewTaskButton";
 import OnlineDot from "./OnlineDot";
+import TaskPanel, { openTaskPanel, type Connector } from "./TaskPanel";
 import Tour from "./Tour";
 import { Icon, btn } from "./ui";
-import type { WorkMode } from "@/lib/types";
-
-type AgentPick = { id: number; name: string; mode: WorkMode };
 
 // Everyone shares this, so the badge, meter and pause button stay in step across pages.
 export function useHeaderState(initial: HeaderState) {
@@ -47,9 +44,10 @@ const NAV = [
   { href: "/", label: "Agents", icon: "sparkle", match: (p: string) => p === "/" || p.startsWith("/agents") },
   { href: "/workflows", label: "Workflows", icon: "flow", match: (p: string) => p.startsWith("/workflows") },
   { href: "/inbox", label: "Inbox", icon: "inbox", match: (p: string) => p.startsWith("/inbox") },
+  { href: "/projects", label: "Projects", icon: "folder", match: (p: string) => p.startsWith("/projects") },
 ];
 
-export default function Header({ initial, agents }: { initial: HeaderState; agents: AgentPick[] }) {
+export default function Header({ initial, projects, connectors }: { initial: HeaderState; projects: string[]; connectors: Connector[] }) {
   const data = useHeaderState(initial);
   const path = usePathname() ?? "/";
   const [confirm, setConfirm] = useState(false);
@@ -109,9 +107,13 @@ export default function Header({ initial, agents }: { initial: HeaderState; agen
 
           <div className="ml-auto flex items-center gap-2">
             <UsageMeter u={data.usage} />
-            <NewTaskButton agents={agents} buttonClassName="hidden lg:block" />
+            <span className="hidden lg:block">
+              <button type="button" className={`${btn.pill} whitespace-nowrap`} onClick={() => openTaskPanel()}>
+                New task
+              </button>
+            </span>
             <div className="hidden items-center gap-2 lg:flex">
-              <button type="button" className={btn.secondary + " !rounded-full !px-4"} onClick={() => (data.pausedAll ? togglePause() : setConfirm(true))} disabled={busy}>
+              <button type="button" className={btn.secondary + " !rounded-full !px-4 whitespace-nowrap"} onClick={() => (data.pausedAll ? togglePause() : setConfirm(true))} disabled={busy}>
                 {data.pausedAll ? "Resume everything" : "Pause everything"}
               </button>
             </div>
@@ -143,7 +145,7 @@ export default function Header({ initial, agents }: { initial: HeaderState; agen
 
       {/* Phone: tabs at the bottom, everything else in the menu. */}
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        <ul className="mx-auto grid max-w-[560px] grid-cols-3">
+        <ul className="mx-auto grid max-w-[560px] grid-cols-4">
           {NAV.map((n) => {
             const on = n.match(path);
             return (
@@ -172,7 +174,7 @@ export default function Header({ initial, agents }: { initial: HeaderState; agen
         pausedAll={data.pausedAll}
         onNewTask={() => {
           setMenu(false);
-          openNewTask();
+          openTaskPanel();
         }}
         onPause={() => {
           setMenu(false);
@@ -191,6 +193,7 @@ export default function Header({ initial, agents }: { initial: HeaderState; agen
         onClose={() => setConfirm(false)}
       />
       <Tour done={data.tourDone} />
+      <TaskPanel projects={projects} connectors={connectors} />
     </>
   );
 }
@@ -223,8 +226,14 @@ function PhoneMenu({ open, onClose, onNewTask, onPause, pausedAll }: { open: boo
           <Icon name={pausedAll ? "play" : "pause"} color="#15171B" />
           {pausedAll ? "Resume everything" : "Pause everything"}
         </button>
-        <Link href="/projects" className={item} onClick={onClose}>
-          <Icon name="folder" color="#15171B" /> Projects
+        <Link href="/connectors" className={item} onClick={onClose}>
+          <Icon name="bulb" color="#15171B" /> Connectors
+        </Link>
+        <Link href="/machine" className={item} onClick={onClose}>
+          <Icon name="heart" color="#15171B" /> Machine
+        </Link>
+        <Link href="/terminal" className={item} onClick={onClose}>
+          <Icon name="flow" color="#15171B" /> Terminal
         </Link>
         <Link href="/settings" className={item} onClick={onClose}>
           <Icon name="bolt" color="#15171B" /> Settings
@@ -316,8 +325,8 @@ function UsageMeter({ u }: { u: UsageView }) {
         <span className="relative h-1.5 w-8 overflow-hidden rounded-full bg-[#D5D9DF] sm:w-10" aria-hidden="true">
           <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${s.limited ? 100 : Math.min(100, pct ?? 0)}%`, background: tone.bar }} />
         </span>
-        <span className="hidden xl:inline">{long}</span>
-        <span className="xl:hidden">{short}</span>
+        <span className="hidden 2xl:inline">{long}</span>
+        <span className="2xl:hidden">{short}</span>
       </button>
       {open && (
         <div id={panelId} className="fixed inset-x-3 top-[72px] z-40 rounded-[24px] border border-line bg-white p-5 shadow-[0_20px_60px_rgba(21,23,27,0.18)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[380px]">

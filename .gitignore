@@ -8,4 +8,7 @@ screenshots/tmp/
 test-results/
 next-env.d.ts
 *.tsbuildinfo
-.next-dev/
+.next-dev*/
+.active-build
+.next-a/
+.next-b/

@@ -94,7 +94,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
             <EmptyState icon="folder" title="No projects yet" text="Add one below: paste a GitHub repo, pick one of the bot's, or make a brand new one." />
           </div>
         ) : (
-          <ul className="mt-4 grid gap-6 md:grid-cols-2">
+          <ul className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2">
             {list.map((p) => (
               <li key={p.name} className="panel flex flex-col gap-3 p-6">
                 <div className="flex items-center gap-3">
@@ -112,6 +112,13 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
                     )}
                   </div>
                 </div>
+                {p.playable && (
+                  <div>
+                    <a href={`/preview/${p.name}/live/`} target="_blank" rel="noreferrer" className={btn.primary}>
+                      <Icon name="play" color="#fff" size={16} /> Play
+                    </a>
+                  </div>
+                )}
                 <p className="text-[14px] text-muted">
                   {p.lastActivity ? `Last change ${ago(p.lastActivity)}${p.lastMessage ? `: “${p.lastMessage.slice(0, 80)}”` : ""}` : "No changes yet"}
                 </p>
@@ -123,7 +130,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
                     <ul className="mt-1 flex flex-col">
                       {p.prs.slice(0, 5).map((pr) => (
                         <li key={pr.number}>
-                          <a href={pr.url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center gap-2 text-[14px] underline">
+                          <a href={`/changes?pr=${encodeURIComponent(pr.url)}`} className="flex min-h-11 items-center gap-2 text-[14px] underline">
                             <span className="truncate">
                               #{pr.number} {pr.title}
                             </span>

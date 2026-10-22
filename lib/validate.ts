@@ -1,4 +1,5 @@
 import type { AgentInput, Allowed, Model, NotifyOn, ScheduleKind, WorkMode } from "./types";
+import { jobOf } from "./job";
 
 const SCHEDULES: ScheduleKind[] = ["manual", "hourly", "daily", "days"];
 const ALLOWED: Allowed[] = ["look", "suggest", "make"];
@@ -14,8 +15,9 @@ export function parseAgentInput(body: unknown, projects: string[]): { ok: true; 
   if (name.length > 40) return { ok: false, error: "Keep the name under 40 characters." };
   const prompt = String(b.prompt ?? "").trim();
   if (prompt.length < 10) return { ok: false, error: "Tell it what to do in a sentence or two." };
+  const job = b.job ? jobOf(b.job) : undefined;
   const project = String(b.project ?? "");
-  if (!projects.includes(project)) return { ok: false, error: "Pick a project from the list." };
+  if (!projects.includes(project) && !(project === "" && job?.kind === "research")) return { ok: false, error: "Pick a project from the list." };
   const scheduleKind = b.scheduleKind as ScheduleKind;
   if (!SCHEDULES.includes(scheduleKind)) return { ok: false, error: "Pick when it should run." };
   const scheduleDays = Array.isArray(b.scheduleDays) ? [...new Set((b.scheduleDays as unknown[]).map(Number).filter((d) => d >= 0 && d <= 6))] : [];
@@ -29,7 +31,7 @@ export function parseAgentInput(body: unknown, projects: string[]): { ok: true; 
   const model = b.model as Model;
   if (!MODELS.includes(model)) return { ok: false, error: "Pick Fast or Smartest." };
   const maxMinutes = Math.round(Number(b.maxMinutes));
-  if (!(maxMinutes >= 5 && maxMinutes <= 120)) return { ok: false, error: "Run time must be between 5 and 120 minutes." };
+  if (!(maxMinutes >= 5 && maxMinutes <= 240)) return { ok: false, error: "The time limit must be between 5 minutes and 4 hours." };
   const notify = Array.isArray(b.notify) ? (b.notify as NotifyOn[]).filter((n) => NOTIFY.includes(n)) : [];
   const color = String(b.color ?? "");
   if (!/^#[0-9A-Fa-f]{6}$/.test(color)) return { ok: false, error: "Pick a color." };
@@ -37,6 +39,6 @@ export function parseAgentInput(body: unknown, projects: string[]): { ok: true; 
   if (!/^[a-z]{2,12}$/.test(icon)) return { ok: false, error: "Pick an icon." };
   return {
     ok: true,
-    agent: { name, prompt, project, scheduleKind, scheduleDays, scheduleTime, allowed, mode, model, maxMinutes, notify, color, icon, enabled: b.enabled !== false },
+    agent: { name, prompt, project, scheduleKind, scheduleDays, scheduleTime, allowed, mode, model, maxMinutes, notify, color, icon, enabled: b.enabled !== false, ...(job ? { job } : {}) },
   };
 }

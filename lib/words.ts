@@ -128,14 +128,14 @@ export const SCHEDULE_WORDS: Record<ScheduleKind, string> = {
   days: "Certain days",
 };
 
-// "Every night at 2:00 AM, Site Checker will look at portfolio on its own and tell you only if something's wrong."
-export function agentSentence(a: Pick<AgentInput, "name" | "project" | "scheduleKind" | "scheduleDays" | "scheduleTime" | "allowed" | "mode" | "notify" | "enabled">): string {
+// "Every night at 2:00 AM, Site Checker will look at portfolio without changing anything and tell you only if something's wrong."
+export function agentSentence(a: Pick<AgentInput, "name" | "project" | "scheduleKind" | "scheduleDays" | "scheduleTime" | "allowed" | "mode" | "notify" | "enabled"> & { job?: { careful?: boolean; kind?: string } }): string {
   const name = a.name.trim() || "This agent";
-  const project = a.project || "your project";
+  const project = a.project || (a.job?.kind === "research" ? "the web" : "your project");
   if (!a.enabled) return `${name} is switched off, so it won't run until you turn it back on.`;
 
   let when: string;
-  if (a.scheduleKind === "manual") when = "Whenever you ask";
+  if (a.scheduleKind === "manual") when = "When you start it";
   else if (a.scheduleKind === "hourly") when = "Every hour";
   else if (a.scheduleKind === "daily") when = `Every ${partOfDay(a.scheduleTime)} at ${clock(a.scheduleTime)}`;
   else {
@@ -144,9 +144,14 @@ export function agentSentence(a: Pick<AgentInput, "name" | "project" | "schedule
   }
 
   const lookOnly = a.allowed === "look" || a.mode === "look";
-  const verb = lookOnly ? `look at ${project}` : a.allowed === "make" ? `work on ${project}` : `suggest changes to ${project}`;
-  const how =
-    a.mode === "plan" ? "after you OK its plan" : a.mode === "ask" ? "checking with you before each step" : lookOnly ? "without changing anything" : "on its own";
+  const research = a.job?.kind === "research";
+  let verb: string;
+  if (research) verb = `research ${a.project ? `for ${a.project}` : "the question"} and write you a report`;
+  else if (lookOnly) verb = `look at ${project} without changing anything`;
+  else if (a.mode === "plan") verb = `work on ${project} once you OK its plan`;
+  else if (a.mode === "ask") verb = `work on ${project}, checking with you before each step`;
+  else verb = `work on ${project} on its own and send you a pull request`;
+  const careful = a.job?.careful === false ? "" : research ? ", checked against its sources," : lookOnly ? "" : ", reviewed and fixed before you see it,";
 
   const n = new Set(a.notify);
   let tell: string;
@@ -156,7 +161,7 @@ export function agentSentence(a: Pick<AgentInput, "name" | "project" | "schedule
   else if (n.has("needs_ok")) tell = n.has("problems") ? "tell you when it needs your OK or something goes wrong" : "tell you when it needs your OK";
   else tell = "tell you only if something's wrong";
 
-  return `${when}, ${name} will ${verb} ${how} and ${tell}.`;
+  return `${when}, ${name} will ${verb}${careful} and ${tell}.`;
 }
 
 export function agentAsInput(a: Agent): AgentInput {
@@ -176,4 +181,21 @@ export function plainText(s: string): string {
 
 export function times(n: number): string {
   return n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
+}
+
+// "today at 6:00 PM", "tomorrow at 2:00 AM", "Friday at 9:00 AM".
+export function dayAt(ms: number, now = Date.now()): string {
+  const d = new Date(ms);
+  const today = new Date(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(today.getDate() + 1);
+  const day =
+    d.toDateString() === today.toDateString()
+      ? "today"
+      : d.toDateString() === tomorrow.toDateString()
+        ? "tomorrow"
+        : d.getTime() - now < 6 * 86400_000
+          ? d.toLocaleDateString("en-US", { weekday: "long" })
+          : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${day} at ${clockOf(ms)}`;
 }

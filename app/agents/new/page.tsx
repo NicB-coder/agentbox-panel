@@ -1,26 +1,6 @@
-import AgentEditor from "@/components/AgentEditor";
-import { listProjects } from "@/lib/projects";
-import type { AgentInput } from "@/lib/types";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+// v3: there's no blank agent editor any more. Every task becomes its own agent, so this opens Start a task.
 export default function NewAgent() {
-  const projects = listProjects();
-  const blank: AgentInput = {
-    name: "",
-    color: "#2F4FD8",
-    icon: "sparkle",
-    prompt: "",
-    project: projects[0] ?? "",
-    scheduleKind: "manual",
-    scheduleDays: [1, 2, 3, 4, 5],
-    scheduleTime: "02:00",
-    allowed: "suggest",
-    mode: "auto",
-    maxMinutes: 30,
-    model: "sonnet",
-    notify: ["finished", "needs_ok", "problems"],
-    enabled: true,
-  };
-  return <AgentEditor id={null} initial={blank} projects={projects} />;
+  redirect("/?new=1");
 }

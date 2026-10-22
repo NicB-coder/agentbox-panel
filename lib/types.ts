@@ -7,6 +7,23 @@ export type Model = "sonnet" | "opus";
 export type NotifyOn = "finished" | "needs_ok" | "problems";
 export type AgentKind = "claude" | "heartbeat" | "helper"; // helper: hidden, runs workflow steps that have no agent of their own
 
+// v3: one agent per job. "Freedom" replaces "allowed to do" + "how should it work with me".
+export type Freedom = "look" | "check" | "auto";
+export type JobKind = "build" | "research";
+
+export type JobSettings = {
+  kind: JobKind;
+  careful: boolean; // build → review → fix → polish → final review
+  askEachStep: boolean;
+  connectors: string[]; // connector ids it may use
+  big: boolean; // milestone by milestone, with a usage budget instead of a time cap
+  budgetPct: number; // big jobs: most of the weekly usage it may use, in points
+  holdSmall: boolean; // big jobs: hold small scheduled runs while it works
+  autoInstall: boolean; // big jobs on agentbox-panel: install when finished
+  saveReport: boolean; // research: save the report in the project as a pull request
+  brief: string | null; // name of an attached brief file
+};
+
 export type Agent = {
   id: number;
   slug: string;
@@ -28,9 +45,11 @@ export type Agent = {
   kind: AgentKind;
   nextRunAt: number | null;
   createdAt: number;
+  archived: boolean;
+  job: JobSettings;
 };
 
-export type AgentInput = Omit<Agent, "id" | "slug" | "kind" | "nextRunAt" | "createdAt" | "paused">;
+export type AgentInput = Omit<Agent, "id" | "slug" | "kind" | "nextRunAt" | "createdAt" | "paused" | "archived" | "job"> & { job?: JobSettings };
 
 export type RunStatus = "queued" | "working" | "waiting" | "review" | "done" | "stopped";
 
@@ -76,6 +95,59 @@ export type RunExtra = {
   branch?: string;
   baseRef?: string;
   project?: string;
+  // v3
+  followUp?: boolean; // continues the job: same branch and pull request if one is open
+  jobStart?: boolean; // the first run of a job: its task is the job itself
+  careful?: boolean;
+  connectors?: string[];
+  big?: boolean;
+  // the run engine (v3): which session is going, where it is in Careful mode, waits and limits
+  flow?: Flow;
+  proc?: ProcState;
+  seq?: number; // how many sessions this run has started
+  resume?: { phase: Phase; prompt: string; session: string | null; until: number; why: "usage" | "restart" | "signin" };
+  last?: { phase: Phase; prompt: string; session: string | null }; // what was going when it stopped, for Keep going
+  activeMs?: number; // time it has spent working (not waiting for Nic or for usage)
+  lastTickAt?: number;
+  stopReq?: string | null;
+  outOfTime?: boolean;
+  overBudget?: boolean;
+  signIn?: "claude" | "github";
+  held?: boolean; // a scheduled run held back while a big job works
+  waitedFor?: string; // why it's queued, in words
+  usageStartWeek?: number | null; // big jobs: the weekly meter when it started
+  onBranch?: { branch: string; prUrl: string }; // work on someone else's pull request branch
+  checkoutRef?: string; // look at this ref (e.g. a pull request's branch) instead of making a new branch
+  prReview?: { prUrl: string; sourceRunId: number | null }; // this run reviews a pull request
+  review?: { runId: number; status: "running" | "done" | "stopped"; verdict?: "passed" | "needs work"; text?: string; at: number }; // a review of this run's pull request
+};
+
+export type Phase = "plan" | "work" | "review" | "fix" | "polish" | "final" | "outline" | "milestone";
+
+export type ReviewNote = { kind: "review" | "final"; verdict: "passed" | "needs work"; text: string; at: number; model: Model };
+
+export type Milestone = { title: string; state: "todo" | "now" | "done"; summary?: string };
+
+export type Flow = {
+  careful: boolean;
+  stage: Phase;
+  round: number; // review rounds done
+  fixes: number; // fix passes made
+  reviews: ReviewNote[];
+  polished: boolean;
+  workSession: string | null; // the builder's conversation, continued for fixes and polish
+  lastFix?: boolean;
+  fixedSinceReview?: boolean; // a fix came after the last review
+  workSummary?: string; // what the build itself did (fix and polish write their own summaries)
+  subSteps?: Step[]; // the builder's own plan while it builds (Careful mode)
+  big?: { milestones: Milestone[]; index: number; handoff: string; weekCarry: number; weekStart: number | null; lastWeek: number | null; budgetPct: number };
+};
+
+export type StreamState = { result: null | { text: string; isError: boolean; subtype: string }; sawStepMarker: boolean; edited: boolean; limited: boolean; authError: boolean };
+
+export type ProcState = {
+  key: string; label: string; out: string; err: string; exit: string; pidFile: string; plist: string | null; startedAt: number;
+  phase: Phase; offset: number; state: StreamState; session: string | null; prompt: string;
 };
 
 export type Approval = {
@@ -91,7 +163,7 @@ export type Approval = {
   decidedAt: number | null;
 };
 
-export type PillStatus = "working" | "needs" | "done" | "stopped" | "scheduled" | "paused" | "off" | "ready" | "queued" | "running" | "on";
+export type PillStatus = "working" | "needs" | "done" | "stopped" | "scheduled" | "paused" | "off" | "ready" | "queued" | "running" | "on" | "timeout";
 
 // What the home page and agent page need to draw one agent.
 export type AgentView = {
@@ -103,6 +175,9 @@ export type AgentView = {
   timeLabel: string;
   activeRun: Run | null;
   pendingApproval: Approval | null;
+  pillLabel?: string; // e.g. "Ran out of time"
+  progress?: { step: number; of: number; label: string } | null; // "step 3 of 5"
+  elapsedMs?: number; // time so far
 };
 
 export type HeartbeatRun = {
@@ -171,12 +246,16 @@ export type WfStep = {
   scheduleDays?: number[];
   scheduleTime?: string;
   label?: string; // GitHub issue label
+  task?: string; // start step: what this workflow should make (the default task for Run now, Test run and automatic runs)
   // agent / research / review
   agentId?: number | null; // null = quick step
   prompt?: string;
   mode?: WorkMode;
   maxMinutes?: number;
   model?: Model;
+  freedom?: Freedom; // agent steps (v3): replaces mode
+  careful?: boolean; // agent steps (v3): build → review → fix inside the step
+  connectors?: string[]; // agent steps (v3): apps it may use
   // check
   checks?: CheckKind[];
   pagePath?: string; // "/" or a full https:// address
@@ -256,7 +335,7 @@ export type Idea = { id: number; text: string; createdAt: number };
 export type InboxItem =
   | { key: string; kind: "approval"; at: number; title: string; who: string; color: string; icon: string; approvalId: number; text: string; detail: string | null; link: string }
   | { key: string; kind: "plan"; at: number; title: string; who: string; color: string; icon: string; runId: number; text: string; link: string }
-  | { key: string; kind: "pr"; at: number; title: string; who: string; color: string; icon: string; runId: number; prUrl: string; text: string; link: string }
-  | { key: string; kind: "failed"; at: number; title: string; who: string; color: string; icon: string; runId: number; agentId: number; text: string; link: string; canRetry: boolean }
+  | { key: string; kind: "pr"; at: number; title: string; who: string; color: string; icon: string; runId: number; prUrl: string; text: string; link: string; careful: string | null; reviewedHere: boolean; review: RunExtra["review"] | null }
+  | { key: string; kind: "failed"; at: number; title: string; who: string; color: string; icon: string; runId: number; agentId: number; text: string; link: string; canRetry: boolean; canContinue: boolean; stopKind: "time" | "budget" | "signin" | "error"; signIn?: "claude" | "github" }
   | { key: string; kind: "wf_ask" | "wf_ship"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string | null; link: string; test: boolean }
   | { key: string; kind: "wf_failed"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; workflowId: number; text: string; link: string };

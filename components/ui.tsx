@@ -138,6 +138,7 @@ const PILL: Record<PillStatus, { label: string; bg: string; fg: string; dot?: st
   queued: { label: "Waiting", bg: "#EEF0F3", fg: "#4A4F57" },
   running: { label: "Running", bg: "#EEF1FD", fg: "#2A3F9E" },
   on: { label: "On", bg: "#EEF0F3", fg: "#4A4F57", dot: "#1F9D55" },
+  timeout: { label: "Ran out of time", bg: "#FDF0DC", fg: "#8A4600" },
 };
 
 export const PILL_LABEL = Object.fromEntries(Object.entries(PILL).map(([k, v]) => [k, v.label])) as Record<PillStatus, string>;
@@ -146,7 +147,7 @@ export function StatusPill({ status, label }: { status: PillStatus; label?: stri
   const p = PILL[status];
   return (
     <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-semibold leading-none whitespace-nowrap" style={{ background: p.bg, color: p.fg }}>
-      <span className={`h-2 w-2 rounded-full ${status === "working" || status === "running" ? "pulse" : ""}`} style={{ background: p.dot ?? p.fg }} aria-hidden="true" />
+      <span className={`h-2 w-2 rounded-full ${status === "working" || status === "running" || status === "needs" ? "pulse" : ""}`} style={{ background: p.dot ?? p.fg }} aria-hidden="true" />
       {label ?? p.label}
     </span>
   );

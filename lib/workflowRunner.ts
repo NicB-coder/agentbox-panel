@@ -12,6 +12,8 @@ import { projectPath } from "./projects";
 import { PAUSED_ALL, USAGE_STOP, pausedAll, startRun, stopRun } from "./runner";
 import type { Model, Run, RunExtra, WfStep, WfStepRun, Workflow, WorkflowRun, WorkMode } from "./types";
 import { usageBlocked, usageState } from "./usage";
+import { freedomOf, modeFor } from "./job";
+import { REPORT_FORMAT, RESEARCH_METHOD } from "./research";
 import { flowSentence, stepTitle, type AgentRef } from "./wf";
 import { clockOf, nextRunAfter, plainText } from "./words";
 
@@ -104,7 +106,7 @@ export async function startWorkflow(workflowId: number, opts: StartWfOpts): Prom
   const stepRuns: Record<string, WfStepRun> = {};
   for (const s of wf.steps) stepRuns[s.id] = freshStepRun();
   const wr = createWfRun({
-    workflowId, status: busyRun ? "queued" : "running", test: !!opts.test, input: (opts.input ?? "").trim().slice(0, 8000),
+    workflowId, status: busyRun ? "queued" : "running", test: !!opts.test, input: ((opts.input ?? "").trim() || (wf.steps[0]?.task ?? "").trim()).slice(0, 8000),
     trigger: opts.trigger, triggerRef: opts.triggerRef ?? (opts.prBranch ? `branch:${opts.prBranch}` : null), steps: wf.steps, stepRuns,
   });
   if (!busyRun) begin(wr.id).catch((e) => stopWorkflow(wr.id, "It couldn't get started.", { detail: String(e) }));
@@ -278,7 +280,7 @@ function stepRunConfig(wr: WorkflowRun, wf: Workflow, step: WfStep): { agentId: 
       agentId: helperAgentId(), mode: "auto",
       extra: {
         ...base, role: "research", allowed: "suggest", model: step.model ?? "sonnet", maxMinutes: step.maxMinutes ?? 20,
-        prompt: `${ctx}\n\nYour job: research this task before anyone builds it. Look things up (web search is fine) and look at the existing code. Write what you learn to research.md at the top of this folder: the goal in one line, the key facts (with links), a recommended approach, and things to watch out for. Keep it under 150 lines. Don't change any other file.${step.prompt?.trim() ? `\n\nNic's notes for the research:\n${step.prompt.trim()}` : ""}`,
+        prompt: `${ctx}\n\nYour job: research this task before anyone builds it, the same careful way agentbox's research tasks work.\n\n${RESEARCH_METHOD}\n\nAlso look at the existing code. Write what you learn to research.md at the top of this folder, in this format (and add a "## Recommended approach" section after the short answer, for the builder):\n${REPORT_FORMAT}\n\nDon't change any other file. Commit research.md.${step.prompt?.trim() ? `\n\nNic's notes for the research:\n${step.prompt.trim()}` : ""}`,
       },
     };
   }
@@ -293,16 +295,17 @@ function stepRunConfig(wr: WorkflowRun, wf: Workflow, step: WfStep): { agentId: 
   }
   // Agent step: one of Nic's agents, or a quick step with its own short prompt.
   const agent = step.agentId != null ? getAgent(step.agentId) : null;
-  const look = (step.mode ?? agent?.mode) === "look" || agent?.allowed === "look";
+  const freedom = step.freedom ?? (step.mode === "look" ? "look" : step.mode === "plan" ? "check" : agent ? freedomOf(agent) : "auto");
+  const look = freedom === "look" || agent?.allowed === "look";
   const outcome = look ? "\n\nAt the very end, on its own line, write OUTCOME: all good  or  OUTCOME: problems found" : "";
   const job = agent ? `Your usual job, in Nic's words:\n${agent.prompt}` : `Your job:\n${step.prompt ?? ""}`;
   const extraNote = agent && step.prompt?.trim() ? `\n\nFor this step, Nic adds:\n${step.prompt.trim()}` : "";
   const finish = look ? "" : "\n\nCommit your changes with a clear message when you're done. Don't push and don't open a pull request: the workflow does that.";
   return {
     agentId: agent ? agent.id : helperAgentId(),
-    mode: step.mode ?? agent?.mode ?? "auto",
+    mode: step.freedom ? modeFor(freedom, step.mode === "ask").mode : step.mode ?? agent?.mode ?? "auto",
     extra: {
-      ...base, role: agent ? "agent" : "quick", allowed: agent ? (agent.allowed === "make" ? "suggest" : agent.allowed) : look ? "look" : "suggest",
+      ...base, role: agent ? "agent" : "quick", allowed: look ? "look" : "suggest", careful: !!step.careful, connectors: step.connectors ?? [],
       model: (agent ? step.model ?? agent.model : step.model ?? "sonnet") as Model, maxMinutes: step.maxMinutes ?? agent?.maxMinutes ?? 30,
       prompt: `${ctx}\n\n${job}${extraNote}${outcome}${finish}`,
     },
@@ -505,6 +508,7 @@ async function ship(wrId: number, step: WfStep) {
   }
   setStep(wrId, step.id, { state: "done", endedAt: Date.now(), note: "Merged into main." });
   updateWfRun(wrId, { current: wr.current + 1, status: "running", waiting: null });
+  import("./notices").then((m) => m.onWorkflowShipped(wrId)).catch((e) => console.warn("[workflow] notice", e));
   return advance(wrId);
 }
 
@@ -525,10 +529,11 @@ async function tell(wr: WorkflowRun, step: WfStep): Promise<string> {
     const r = await sh("gh", ["issue", "create", "--title", `${wf.name}: problems found ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, "--body", `${report || lines.join("\n")}\n\n<sub>Opened by the ${wf.name} workflow in agentbox</sub>`], dir);
     issueUrl = r.ok ? r.out.split("\n").filter((l) => l.startsWith("http")).pop() ?? "" : "";
   }
-  const msg = [`agentbox · ${wf.name}${wr.input ? ` · ${wr.input.split("\n")[0].slice(0, 100)}` : ""}`, ...lines.slice(-6), wr.prUrl ? `Pull request: ${wr.prUrl}` : "", issueUrl ? `Issue: ${issueUrl}` : ""]
-    .filter(Boolean)
-    .join("\n");
-  const ok = await sendDiscord(msg);
+  const shippedIt = earlier.some((s) => s.type === "ship" && wr.stepRuns[s.id]?.state === "done");
+  const name = `${wf.name}${wr.input ? `: ${wr.input.split("\n")[0].slice(0, 100)}` : ""}`;
+  const title = shippedIt ? `Shipped: ${name}` : problems ? `Problems found: ${name}` : `Finished: ${name}`;
+  const msg = [...lines.slice(-6).map((l) => l.slice(0, 400)), wr.prUrl ? `Pull request: ${wr.prUrl}` : "", issueUrl ? `Issue: ${issueUrl}` : ""].filter(Boolean).join("\n");
+  const ok = await sendDiscord(msg, { title, url: wr.prUrl ?? undefined, ping: shippedIt ? "shipped" : undefined });
   return ok ? `Sent you a Discord message${issueUrl ? " and opened an issue" : ""}.` : `Couldn't send the Discord message${issueUrl ? ", but opened an issue" : ""}.`;
 }
 

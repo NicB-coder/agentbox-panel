@@ -298,6 +298,21 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
         </div>
       </div>
 
+      {!live && (
+        <div className="mt-6 flex flex-col gap-2">
+          <Label as="label" htmlFor="wf-task" tip="The task every run works on, unless you type a different one when you press Run now or Test run. Automatic runs (on a schedule) always use this.">
+            What should this workflow make?
+          </Label>
+          <textarea
+            id="wf-task"
+            value={def.steps[0]?.task ?? ""}
+            onChange={(e) => update({ ...def, steps: def.steps.map((x, i) => (i === 0 ? { ...x, task: e.target.value } : x)) }, "task")}
+            rows={3}
+            placeholder="For example: An arcade website with 4 small games that work on phones too."
+            className="max-w-[860px] rounded-[14px] border border-[#C9CDD4] p-4 text-[16px] leading-relaxed"
+          />
+        </div>
+      )}
       <p className="mt-5 max-w-[860px] text-[17px] font-medium leading-relaxed" aria-live="polite">
         {sentence}
       </p>
@@ -429,6 +444,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
         onClose={() => setRunDialog(null)}
         onStart={(input) => startRun(runDialog === "test", input)}
         hasShip={def.steps.some((s) => s.type === "ship")}
+        task={def.steps[0]?.task ?? ""}
       />
       <Confirm
         open={confirmDelete}
@@ -691,10 +707,13 @@ function Versions({ open, id, onClose, onRestore }: { open: boolean; id: number;
   );
 }
 
-function RunDialog({ kind, busy, onClose, onStart, hasShip }: { kind: null | "test" | "run"; busy: boolean; onClose: () => void; onStart: (input: string) => void; hasShip: boolean }) {
+function RunDialog({ kind, busy, onClose, onStart, hasShip, task }: { kind: null | "test" | "run"; busy: boolean; onClose: () => void; onStart: (input: string) => void; hasShip: boolean; task: string }) {
   const ref = useDialog(kind !== null);
   const titleId = useId();
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(task);
+  useEffect(() => {
+    if (kind !== null) setInput(task); // prefilled with the workflow's task, editable for this run
+  }, [kind, task]);
   return (
     <dialog ref={ref} aria-labelledby={titleId} onClose={onClose} className="m-auto w-[min(560px,calc(100vw-32px))] rounded-[24px] p-0 backdrop:bg-black/30">
       <form
@@ -713,7 +732,7 @@ function RunDialog({ kind, busy, onClose, onStart, hasShip }: { kind: null | "te
           </p>
         )}
         <label className="flex flex-col gap-2">
-          <span className="text-[15px] font-semibold">What should it work on? (optional)</span>
+          <span className="text-[15px] font-semibold">What should it make this time?</span>
           <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={4} placeholder="For example: Add a dark mode switch to the settings page." className="rounded-[14px] border border-[#C9CDD4] p-3 text-[15px] leading-relaxed" />
         </label>
         <div className="flex justify-end gap-3">
