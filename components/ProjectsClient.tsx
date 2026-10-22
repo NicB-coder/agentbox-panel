@@ -94,7 +94,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
             <EmptyState icon="folder" title="No projects yet" text="Add one below: paste a GitHub repo, pick one of the bot's, or make a brand new one." />
           </div>
         ) : (
-          <ul className="mt-4 grid gap-6 md:grid-cols-2">
+          <ul className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2">
             {list.map((p) => (
               <li key={p.name} className="panel flex flex-col gap-3 p-6">
                 <div className="flex items-center gap-3">

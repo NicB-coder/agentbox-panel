@@ -23,7 +23,7 @@ STATUS="${STATUS:-$DATA_DIR/update.json}"
 BRANCH="${BRANCH:-main}"
 LOG="${STATUS%.json}.log"
 UID_NUM=$(id -u)
-STEPS='["Check for a new version","Download it","Install","Build it","Test the new version","Switch over","Check it is up"]'
+STEPS='["Check for a new version","Download it","Install","Build it","Test the new version","Switch over","Check that it started"]'
 STARTED=$(date +%s)000
 : > "$LOG"
 

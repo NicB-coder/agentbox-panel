@@ -28,7 +28,7 @@ export default function HomeClient({ initial }: { initial: HomeState }) {
           {data.needs > 0 ? (
             <>
               {data.summary.split(" · ")[0]} ·{" "}
-              <Link href="/inbox" className="font-semibold text-[#8A4600] underline underline-offset-2">
+              <Link href="/inbox" className="inline-flex min-h-11 items-center font-semibold text-[#8A4600] underline underline-offset-2">
                 {data.summary.split(" · ")[1]}
               </Link>
             </>
