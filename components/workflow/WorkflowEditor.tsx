@@ -11,6 +11,7 @@ import { refreshHeader } from "../Header";
 import ProjectSelect from "../ProjectSelect";
 import { Icon, StatusPill, btn, field } from "../ui";
 import { usePoll } from "../usePoll";
+import { useHelperContext } from "../helper/helperStore";
 import Canvas, { type LiveInfo } from "./Canvas";
 import RunStepPanel from "./RunStepPanel";
 import StepPanel from "./StepPanel";
@@ -114,6 +115,13 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
   const selIndex = steps.findIndex((s) => s.id === selected);
   const sel = selIndex >= 0 ? steps[selIndex] : null;
   const sentence = flowSentence(live ? { steps: viewing!.steps, limits: def.limits } : def, agents);
+  // Tell the Helper which step is open, and which run is on the canvas.
+  useHelperContext({ workflowId: id, wfRunId: viewing?.id, stepId: sel?.id, stepLabel: sel ? stepTitle(sel, agents) : undefined, editing: dirtyNote(def, saved) });
+  // The Helper's "Start a test run" button opens this page with ?test=1.
+  useEffect(() => {
+    if (params.get("test") === "1") setRunDialog("test");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const problems = workflowProblems(def, agents, data.projects);
   const enabled = data.workflow.enabled;
   const manualStart = (def.steps[0]?.trigger ?? "manual") === "manual";
@@ -722,3 +730,7 @@ function RunDialog({ kind, busy, onClose, onStart, hasShip }: { kind: null | "te
 }
 
 export { field };
+
+function dirtyNote(def: WorkflowInput, saved: string): string | undefined {
+  return JSON.stringify(def) !== saved ? "this workflow has changes that aren't saved yet" : undefined;
+}

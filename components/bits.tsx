@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Icon, btn } from "./ui";
+import { useReportError } from "./helper/helperStore";
 
 export async function post<T = Record<string, unknown>>(url: string, body: unknown = {}, method = "POST"): Promise<T> {
   let r: Response;
@@ -99,6 +100,7 @@ export function ErrorBox({ message, onRetry, where, compact }: { message: string
   const [asked, setAsked] = useState<null | { agentId: number }>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  useReportError(message); // the Helper bubble gets a dot and can explain it
   async function ask() {
     setBusy(true);
     setErr("");

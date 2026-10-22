@@ -16,7 +16,7 @@ export default function RunStepPanel({ step, run, info, agents, onClose }: { ste
   const sr = run.stepRuns[step.id];
   const runs = (sr?.runIds ?? []).map((id) => info[id]).filter(Boolean);
   return (
-    <Sheet title={stepTitle(step, agents)} icon={stepIcon(step, agents)} color={stepColor(step, agents)} onClose={onClose}>
+    <Sheet title={stepTitle(step, agents)} icon={stepIcon(step, agents)} color={stepColor(step, agents)} onClose={onClose} ask="What did this step do?">
       <div>
         <p className="text-[14px] font-semibold text-muted">{WORD[sr?.state ?? "todo"]}</p>
         {sr?.note && <p className="mt-1 text-[16px] font-semibold leading-snug">{plainText(sr.note)}</p>}

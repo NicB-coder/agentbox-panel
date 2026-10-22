@@ -137,7 +137,7 @@ export type UsageState = {
   updatedAt: number;
 };
 
-export type UsageBreakdown = { name: string; color: string; share: number; runs: number }[];
+export type UsageBreakdown = { name: string; color: string; share: number; runs: number; unit?: [string, string] }[]; // unit: e.g. ["reply", "replies"]
 
 export type UsageView = {
   state: UsageState;

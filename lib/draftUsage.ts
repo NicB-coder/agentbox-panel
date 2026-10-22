@@ -12,3 +12,16 @@ export function draftUsageToday(): { cost: number; count: number } {
   const cur = getSetting<{ day: string; cost: number; count: number }>("draftUsage", { day: "", cost: 0, count: 0 });
   return cur.day === new Date().toDateString() ? cur : { cost: 0, count: 0 };
 }
+
+// The Helper chat bubble keeps its own daily total, shown as "Helper" in the usage meter's split.
+export function addHelperUsage(costUsd: number) {
+  const today = new Date().toDateString();
+  const cur = getSetting<{ day: string; cost: number; count: number }>("helperUsage", { day: today, cost: 0, count: 0 });
+  const next = cur.day === today ? { day: today, cost: cur.cost + costUsd, count: cur.count + 1 } : { day: today, cost: costUsd, count: 1 };
+  setSetting("helperUsage", next);
+}
+
+export function helperUsageToday(): { cost: number; count: number } {
+  const cur = getSetting<{ day: string; cost: number; count: number }>("helperUsage", { day: "", cost: 0, count: 0 });
+  return cur.day === new Date().toDateString() ? cur : { cost: 0, count: 0 };
+}
