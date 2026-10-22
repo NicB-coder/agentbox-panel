@@ -1,13 +1,13 @@
 // Workflow building blocks shared by the browser and the server: step types, templates,
 // the plain-English sentence for a whole flow, and turning anything into a clean workflow.
-import type { CheckKind, Model, StartTrigger, StepType, WfLimits, WfStep, WorkflowInput, WorkMode } from "./types";
+import type { CheckKind, Freedom, Model, StartTrigger, StepType, WfLimits, WfStep, WorkflowInput, WorkMode } from "./types";
 import { clock, scheduleWords, times } from "./words";
 
-export type AgentRef = { id: number; name: string; color: string; icon: string; slug?: string; allowed?: string };
+export type AgentRef = { id: number; name: string; color: string; icon: string; slug?: string; allowed?: string; archived?: boolean };
 
 export const STEP_INFO: Record<StepType, { title: string; icon: string; color: string; help: string }> = {
   start: { title: "Start", icon: "play", color: "#2B8A3E", help: "What starts the workflow." },
-  agent: { title: "Agent step", icon: "sparkle", color: "#2F4FD8", help: "One of your agents (or a quick one-off helper) does a piece of the work." },
+  agent: { title: "Build", icon: "hammer", color: "#2F4FD8", help: "An agent does a piece of the work: builds or changes something, or just takes a look." },
   research: { title: "Research", icon: "book", color: "#7048C8", help: "Looks things up and writes research.md for the later steps to use." },
   review: { title: "Review", icon: "eye", color: "#0F7B6C", help: "A reviewer checks the work against the task and the research. Passed, or needs work." },
   check: { title: "Check", icon: "check", color: "#0E7490", help: "Hard tests, not opinions: tests pass, the page loads, no errors." },
@@ -42,10 +42,8 @@ export function newStep(type: StepType, agents: AgentRef[] = []): WfStep {
   switch (type) {
     case "start":
       return { id, type, trigger: "manual" };
-    case "agent": {
-      const builder = agents.find((a) => a.slug === "builder") ?? agents[0];
-      return { id, type, agentId: builder?.id ?? null, prompt: "", mode: "auto", maxMinutes: 30 };
-    }
+    case "agent":
+      return { id, type, agentId: null, prompt: "", freedom: "auto", careful: false, maxMinutes: 30, model: "sonnet" };
     case "research":
       return { id, type, prompt: "", maxMinutes: 20, model: "sonnet" };
     case "review":
@@ -64,7 +62,7 @@ export function newStep(type: StepType, agents: AgentRef[] = []): WfStep {
 // The title on a step tile, e.g. "Builder" or "Review".
 export function stepTitle(s: WfStep, agents: AgentRef[]): string {
   if (s.type === "agent") {
-    if (s.agentId == null) return "Quick step";
+    if (s.agentId == null) return (s.freedom ?? (s.mode === "look" ? "look" : "auto")) === "look" ? "Look" : "Build";
     return agents.find((a) => a.id === s.agentId)?.name ?? "Missing agent";
   }
   return STEP_INFO[s.type].title;
@@ -125,8 +123,9 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
       case "agent":
         {
           const a = agents.find((x) => x.id === s.agentId);
-          const look = s.mode === "look" || a?.allowed === "look";
-          parts.push(s.agentId == null ? `a quick step ${short(s.prompt) ? `does “${short(s.prompt)}”` : "does its part"}` : look ? `${stepTitle(s, agents)} takes a look` : `${stepTitle(s, agents)} works on it`);
+          const look = (s.freedom ?? (s.mode === "look" ? "look" : null)) === "look" || a?.allowed === "look";
+          const how = s.careful ? " carefully" : "";
+          parts.push(s.agentId == null ? (look ? "it takes a look" : `it builds it${how}`) : look ? `${stepTitle(s, agents)} takes a look` : `${stepTitle(s, agents)} works on it${how}`);
         }
         break;
       case "research":
@@ -169,16 +168,18 @@ export type TemplateKey = "build-review-ship" | "nightly-site-check" | "research
 
 export const TEMPLATES: { key: TemplateKey; name: string; blurb: string }[] = [
   { key: "build-review-ship", name: "Build → Review → Ship", blurb: "Research an idea, build it, get it reviewed and tested, then ship it after you say yes." },
-  { key: "nightly-site-check", name: "Nightly site check", blurb: "Every night Site Checker looks at your site. If something's wrong, you get a message and a GitHub issue." },
+  { key: "nightly-site-check", name: "Nightly site check", blurb: "Every night it looks at your site in a real browser. If something's wrong, you get a message and a GitHub issue." },
   { key: "research-report", name: "Research report", blurb: "Research a topic and write a short report as a pull request in a reports folder." },
-  { key: "issues-to-prs", name: "Ideas to pull requests", blurb: "When a GitHub issue gets the “agent” label, Builder builds it, a reviewer checks it, then it asks you." },
+  { key: "issues-to-prs", name: "Ideas to pull requests", blurb: "When a GitHub issue gets the “agent” label, it gets built, a reviewer checks it, then it asks you." },
 ];
 
 export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: string): WorkflowInput {
-  const bySlug = (slug: string) => agents.find((a) => a.slug === slug)?.id ?? null;
-  const builder = bySlug("builder") ?? agents.find((a) => a.allowed !== "look")?.id ?? null;
-  const start = (trigger: StartTrigger, more: Partial<WfStep> = {}): WfStep => ({ id: newId(), type: "start", trigger, ...more });
-  const build = (): WfStep => ({ id: newId(), type: "agent", agentId: builder, prompt: "", mode: "auto", maxMinutes: 30 });
+  void agents;
+  const start = (trigger: StartTrigger, more: Partial<WfStep> = {}): WfStep => ({ id: newId(), type: "start", trigger, task: "", ...more });
+  const build = (): WfStep => ({
+    id: newId(), type: "agent", agentId: null, freedom: "auto", careful: false, model: "sonnet", maxMinutes: 45,
+    prompt: "Build what the task asks for. Keep the change focused, test that it really works (run the tests, or open the page in a browser), and commit.",
+  });
   const review = (to: string): WfStep => ({ id: newId(), type: "review", prompt: "", maxMinutes: 15, model: "opus", onFail: to });
   const limits = { ...DEFAULT_LIMITS };
   switch (key) {
@@ -201,16 +202,13 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
       };
     }
     case "nightly-site-check": {
-      const checker = bySlug("site-checker");
       return {
         name: "Nightly site check",
         project,
         limits,
         steps: [
-          start("schedule", { scheduleKind: "daily", scheduleTime: "02:00", scheduleDays: [] }),
-          checker != null
-            ? { id: newId(), type: "agent", agentId: checker, prompt: "", mode: "look", maxMinutes: 30 }
-            : { id: newId(), type: "agent", agentId: null, prompt: "Open my site in a real browser at laptop and phone width and list anything broken.", mode: "look", maxMinutes: 30 },
+          start("schedule", { scheduleKind: "daily", scheduleTime: "02:00", scheduleDays: [], task: "Check that my site works: every page loads, links work, images show, nothing looks broken." }),
+          { id: newId(), type: "agent", agentId: null, prompt: "Open the site in a real browser at laptop and phone width and list anything broken, with where to find it. Don't change anything.", freedom: "look", careful: false, model: "sonnet", maxMinutes: 30 },
           { id: newId(), type: "tell", tellWhen: "problems", openIssue: true },
         ],
       };
@@ -224,7 +222,7 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
           start("manual"),
           { id: newId(), type: "research", prompt: "", maxMinutes: 20, model: "sonnet" },
           {
-            id: newId(), type: "agent", agentId: null, mode: "auto", maxMinutes: 15,
+            id: newId(), type: "agent", agentId: null, freedom: "auto", careful: false, model: "sonnet", maxMinutes: 15,
             prompt: "Turn research.md into a short, friendly report (one page) and save it in the reports/ folder with a clear file name. Then delete research.md.",
           },
           { id: newId(), type: "tell", tellWhen: "always", openIssue: false },
@@ -236,7 +234,7 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
         name: "Ideas to pull requests",
         project,
         limits,
-        steps: [start("issue_label", { label: "agent" }), b, review(b.id), { id: newId(), type: "ask", question: "Builder made a pull request for this issue. Look it over?" }],
+        steps: [start("issue_label", { label: "agent" }), b, review(b.id), { id: newId(), type: "ask", question: "It made a pull request for this issue. Look it over?" }],
       };
     }
   }
@@ -275,6 +273,7 @@ export function cleanSteps(raw: unknown, agentIds: number[]): WfStep[] {
         s.scheduleTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(r.scheduleTime)) ? String(r.scheduleTime) : "02:00";
       }
       if (s.trigger === "issue_label") s.label = text("label", 50).trim() || "agent";
+      s.task = text("task", 8000);
     }
     if (type === "agent" || type === "research" || type === "review") {
       s.prompt = text("prompt");
@@ -285,6 +284,8 @@ export function cleanSteps(raw: unknown, agentIds: number[]): WfStep[] {
       const aid = r.agentId == null ? null : Number(r.agentId);
       s.agentId = aid !== null && agentIds.includes(aid) ? aid : null;
       s.mode = MODES.includes(r.mode as WorkMode) ? (r.mode as WorkMode) : "auto";
+      s.freedom = (["look", "check", "auto"] as const).includes(r.freedom as "auto") ? (r.freedom as Freedom) : s.mode === "look" ? "look" : s.mode === "plan" ? "check" : "auto";
+      s.careful = r.careful === true;
     }
     if (type === "check") {
       s.checks = Array.isArray(r.checks) ? [...new Set((r.checks as CheckKind[]).filter((c) => CHECKS.includes(c)))] : ["tests"];
@@ -330,7 +331,7 @@ export function workflowProblems(w: WorkflowInput, agents: AgentRef[], projects:
   if (w.steps.length < 2) p.push("Add at least one step after Start.");
   for (const s of w.steps) {
     if (s.type === "agent" && s.agentId != null && !agents.some((a) => a.id === s.agentId)) p.push("One step uses an agent that no longer exists. Pick another.");
-    if (s.type === "agent" && s.agentId == null && !(s.prompt ?? "").trim()) p.push("A quick step needs a short note on what to do.");
+    if (s.type === "agent" && s.agentId == null && !(s.prompt ?? "").trim()) p.push("A Build or Look step needs its instructions.");
     if (s.type === "start" && s.trigger === "schedule" && s.scheduleKind === "days" && !(s.scheduleDays ?? []).length) p.push("Pick at least one day for the schedule.");
   }
   return [...new Set(p)];

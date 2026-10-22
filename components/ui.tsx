@@ -147,7 +147,7 @@ export function StatusPill({ status, label }: { status: PillStatus; label?: stri
   const p = PILL[status];
   return (
     <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-semibold leading-none whitespace-nowrap" style={{ background: p.bg, color: p.fg }}>
-      <span className={`h-2 w-2 rounded-full ${status === "working" || status === "running" ? "pulse" : ""}`} style={{ background: p.dot ?? p.fg }} aria-hidden="true" />
+      <span className={`h-2 w-2 rounded-full ${status === "working" || status === "running" || status === "needs" ? "pulse" : ""}`} style={{ background: p.dot ?? p.fg }} aria-hidden="true" />
       {label ?? p.label}
     </span>
   );

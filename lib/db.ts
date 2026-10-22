@@ -172,6 +172,20 @@ function migrate(d: Database.Database) {
       created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS helper_msgs_chat ON helper_messages(chat_id, id);
+    CREATE TABLE IF NOT EXISTS notices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      key TEXT UNIQUE,
+      title TEXT NOT NULL,
+      text TEXT NOT NULL DEFAULT '',
+      link TEXT,
+      pr_url TEXT,
+      play_url TEXT,
+      agent_id INTEGER,
+      run_id INTEGER,
+      created_at INTEGER NOT NULL,
+      opened_at INTEGER
+    );
   `);
 }
 

@@ -2,6 +2,7 @@ import {
   getAgent, getRun, getWfRun, getWorkflow, listIdeas, pendingApprovals, recentStoppedRuns, recentStoppedWfRuns, runsWithStatus, wfRunsWithStatus,
 } from "./db";
 import type { Agent, Idea, InboxItem, Run } from "./types";
+import { listNotices, unopenedNotices, type Notice } from "./notices";
 import { OUT_OF_TIME, OVER_BUDGET, PAUSED_ALL, canContinue, carefulLine } from "./runner";
 
 // Everything that needs Nic, newest first.
@@ -85,11 +86,11 @@ export function inboxItems(): InboxItem[] {
 }
 
 export function inboxCount(): number {
-  return inboxItems().length;
+  return inboxItems().length + unopenedNotices();
 }
 
-export type InboxState = { items: InboxItem[]; ideas: Idea[] };
+export type InboxState = { items: InboxItem[]; ideas: Idea[]; notices: Notice[] };
 
 export function inboxState(): InboxState {
-  return { items: inboxItems(), ideas: listIdeas() };
+  return { items: inboxItems(), ideas: listIdeas(), notices: listNotices() };
 }

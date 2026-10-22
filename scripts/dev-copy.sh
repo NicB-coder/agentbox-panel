@@ -3,6 +3,7 @@
 # no schedules, no Discord messages, its own build folder. The always-on panel isn't touched.
 #   scripts/dev-copy.sh fresh   copy the live database again first
 #   AGENTBOX_DEV_DIR=… AGENTBOX_DEV_PORT=3201 scripts/dev-copy.sh   another copy (e.g. an agent testing changes to the panel)
+#   AGENTBOX_DEV_MODE=dev scripts/dev-copy.sh   hot-reloading dev server instead of a production build
 set -euo pipefail
 APP_DIR="${0:A:h:h}"
 DEV="${AGENTBOX_DEV_DIR:-/tmp/agentbox-dev-v3}"
@@ -20,4 +21,10 @@ DIST=".next-dev"
 [[ "$PORT_NUM" != "3100" ]] && DIST=".next-dev-$PORT_NUM"
 export AGENTBOX_DATA_DIR="$DEV/data" AGENTBOX_NO_SCHEDULE=1 AGENTBOX_NO_DISCORD=1 AGENTBOX_DEV=1 NEXT_DIST_DIR="$DIST" PORT="$PORT_NUM" NEXT_TELEMETRY_DISABLED=1
 cd "$APP_DIR"
-exec npx next dev -H 127.0.0.1 -p "$PORT_NUM"
+if [[ "${AGENTBOX_DEV_MODE:-build}" == "dev" ]]; then
+  exec npx next dev -H 127.0.0.1 -p "$PORT_NUM"
+fi
+# Default: a real production build, the same thing the always-on panel runs.
+npx next build || { echo "The build failed."; exit 1; }
+git checkout -q -- tsconfig.json next-env.d.ts 2>/dev/null || true
+exec npx next start -H 127.0.0.1 -p "$PORT_NUM"

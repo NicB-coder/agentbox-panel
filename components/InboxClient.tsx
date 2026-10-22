@@ -7,7 +7,8 @@ import { ago, plainText } from "@/lib/words";
 import { Confirm, EmptyState, ErrorBox, InfoTip, PageTitle, post } from "./bits";
 import { refreshHeader } from "./Header";
 import { openNewTask } from "./TaskPanel";
-import { AgentIcon, btn, field } from "./ui";
+import type { Notice } from "@/lib/notices";
+import { AgentIcon, Icon, btn, field } from "./ui";
 import { usePoll } from "./usePoll";
 
 type Wf = { id: number; name: string };
@@ -16,6 +17,7 @@ export default function InboxClient({ initial, workflows }: { initial: InboxStat
   const { data, refresh } = usePoll<InboxState>("/api/inbox", initial);
   const [error, setError] = useState<{ msg: string; retry?: () => void } | null>(null);
   const [busy, setBusy] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
 
   useEffect(() => {
     const again = () => refresh();
@@ -39,9 +41,37 @@ export default function InboxClient({ initial, workflows }: { initial: InboxStat
   }
 
   const n = data.items.length;
+  const fresh = data.notices.filter((x) => !x.openedAt).length;
+  const shown = data.notices.filter((x) => (filter === "shipped" ? x.kind === "shipped" : filter === "reports" ? x.kind === "report" : filter === "all" ? !x.openedAt : false));
+  const rows: ({ t: "item"; it: InboxItem; at: number } | { t: "notice"; nt: Notice; at: number })[] = [
+    ...(filter === "all" || filter === "needs" ? data.items.map((it) => ({ t: "item" as const, it, at: it.at })) : []),
+    ...shown.map((nt) => ({ t: "notice" as const, nt, at: nt.createdAt })),
+  ].sort((a, b) => b.at - a.at);
+  const FILTERS: [Filter, string][] = [
+    ["all", "All"],
+    ["needs", `Needs you${n ? ` (${n})` : ""}`],
+    ["shipped", "Done & shipped"],
+    ["reports", "Reports"],
+  ];
   return (
     <div>
-      <PageTitle title="Inbox" sub={n ? `${n} ${n === 1 ? "thing needs" : "things need"} you. Newest first.` : "Everything that needs you shows up here."} />
+      <PageTitle
+        title="Inbox"
+        sub={n || fresh ? [n ? `${n} ${n === 1 ? "thing needs" : "things need"} you` : "", fresh ? `${fresh} new` : ""].filter(Boolean).join(" · ") + ". Newest first." : "Everything that needs you shows up here."}
+      />
+      <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Show">
+        {FILTERS.map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={filter === k}
+            onClick={() => setFilter(k)}
+            className={`inline-flex min-h-11 items-center rounded-full px-4 text-[15px] font-semibold ${filter === k ? "bg-ink text-white" : "bg-soft text-muted hover:text-ink"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {error && (
         <div className="mb-6">
           <ErrorBox message={error.msg} onRetry={error.retry} where="the Inbox" />
@@ -51,11 +81,17 @@ export default function InboxClient({ initial, workflows }: { initial: InboxStat
         <h2 id="needs-h" className="sr-only">
           Needs you
         </h2>
-        {n === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState
             icon="inbox"
-            title="Nothing needs you. Nice."
-            text="When an agent asks for your OK, opens a pull request, or something goes wrong, it lands here."
+            title={filter === "shipped" ? "Nothing shipped this week yet" : filter === "reports" ? "No reports yet" : "Nothing needs you. Nice."}
+            text={
+              filter === "shipped"
+                ? "When a pull request is merged, it shows up here with what changed and a Play button."
+                : filter === "reports"
+                  ? "Start a task and pick Research something. Its report lands here."
+                  : "When an agent asks for your OK, opens a pull request, or something goes wrong, it lands here."
+            }
             action={
               <Link href="/" className={btn.secondary}>
                 Go to your agents
@@ -64,17 +100,66 @@ export default function InboxClient({ initial, workflows }: { initial: InboxStat
           />
         ) : (
           <ul className="flex flex-col gap-4">
-            {data.items.map((it) => (
-              <li key={it.key}>
-                <Row it={it} act={act} busy={busy} />
-              </li>
-            ))}
+            {rows.map((r) =>
+              r.t === "item" ? (
+                <li key={r.it.key}>
+                  <Row it={r.it} act={act} busy={busy} />
+                </li>
+              ) : (
+                <li key={`n${r.nt.id}`}>
+                  <NoticeRow n={r.nt} act={act} />
+                </li>
+              ),
+            )}
           </ul>
         )}
       </section>
 
       <Ideas ideas={data.ideas} workflows={workflows} refresh={refresh} />
     </div>
+  );
+}
+
+type Filter = "all" | "needs" | "shipped" | "reports";
+
+// "Shipped: Arcade site" and finished reports: they stay until opened.
+function NoticeRow({ n, act }: { n: Notice; act: Act }) {
+  const open = () => fetch(`/api/notices/${n.id}`, { method: "POST" }).then(() => window.dispatchEvent(new Event("agentbox:refresh")));
+  const isNew = !n.openedAt;
+  return (
+    <article className={`panel p-5 sm:p-6 ${isNew ? "border-[#B7DFC3] bg-[#F5FBF7]" : ""}`} aria-labelledby={`n${n.id}-t`}>
+      <div className="flex items-start gap-4">
+        <AgentIcon name={n.kind === "report" ? "book" : "rocket"} color={n.kind === "report" ? "#7048C8" : "#1E6B34"} size={40} />
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-x-2 text-[14px]">
+            <span className="font-semibold text-[#1E6B34]">{n.kind === "report" ? "Report ready" : "Shipped"}</span>
+            <span className="text-muted">· {ago(n.createdAt)}</span>
+            {isNew && <span className="rounded-full bg-[#1E6B34] px-2 py-0.5 text-[12px] font-bold text-white">New</span>}
+          </p>
+          <h3 id={`n${n.id}-t`} className="mt-1 text-[17px] font-semibold leading-snug">
+            {n.title.replace(/^Shipped: /, "")}
+          </h3>
+          {n.text && <p className="mt-2 text-[15px] leading-relaxed text-muted">{n.text}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {n.link && (
+              <Link href={n.link} className={btn.primary} onClick={open}>
+                {n.kind === "report" ? "Read the report" : "See what changed"}
+              </Link>
+            )}
+            {n.playUrl && (
+              <a href={n.playUrl} target="_blank" rel="noreferrer" className={btn.secondary} onClick={open}>
+                <Icon name="play" color="#15171B" size={16} /> Play
+              </a>
+            )}
+            {isNew && (
+              <button className={btn.link} onClick={() => act(`n${n.id}`, `/api/notices/${n.id}`)}>
+                Got it
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }
 

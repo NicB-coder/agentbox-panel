@@ -1311,7 +1311,7 @@ export async function checkPullRequests() {
     if (r.out === "MERGED") {
       updateRun(run.id, { status: "done" });
       log(run.id, "Pull request merged.");
-      import("./notices").then((m) => m.onMerged(run.id)).catch(() => {});
+      await import("./notices").then((m) => m.onMerged(run.id)).catch(() => {});
     } else if (r.out === "CLOSED") {
       updateRun(run.id, { status: "stopped", stopReason: "The pull request was closed without merging." });
       log(run.id, "Pull request closed without merging.");

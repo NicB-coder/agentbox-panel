@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useRef } from "react";
-import type { CheckKind, StartTrigger, WfStep, WorkMode } from "@/lib/types";
+import type { CheckKind, StartTrigger, WfStep } from "@/lib/types";
 import { CHECK_WORDS, STEP_INFO, TRIGGER_WORDS, stepTitle, type AgentRef } from "@/lib/wf";
 import { DAY_NAMES, DAY_SHORT } from "@/lib/words";
 import { InfoTip, Label } from "../bits";
-import ModePicker from "../ModePicker";
+import { CarefulPicker, FreedomPicker } from "../controls";
+import { modeFor } from "@/lib/job";
 import Segmented from "../Segmented";
 import { btn, field } from "../ui";
 import { stepColor, stepIcon } from "./Canvas";
@@ -90,7 +91,7 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
   const timeSlider = (
     <label className="flex flex-col gap-2">
       <span className="flex items-baseline justify-between">
-        <Label tip="If this step takes longer than this, it stops so it can't run forever.">Longest it can take</Label>
+        <Label tip="The longest this step may work. It stops if it runs over, so it can't run forever.">Time limit</Label>
         <span className="text-[15px] font-semibold">{s.maxMinutes ?? 30} minutes</span>
       </span>
       <input type="range" min={5} max={120} step={5} value={s.maxMinutes ?? 30} onChange={(e) => onChange({ maxMinutes: Number(e.target.value) }, "maxMinutes")} className="h-11 w-full accent-[#15171B]" />
@@ -179,35 +180,38 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
       {s.type === "agent" && (
         <>
           <label className="flex flex-col gap-2">
-            <Label tip="Pick one of your agents to use its own job description and settings, or a quick step with just a short note.">Who does it?</Label>
+            <Label tip="Who works on this step. A fresh agent follows this step's instructions. Or pick one of your jobs to use its own description too.">Who does it?</Label>
             <select
               value={s.agentId == null ? "quick" : String(s.agentId)}
               onChange={(e) => onChange({ agentId: e.target.value === "quick" ? null : Number(e.target.value), model: e.target.value === "quick" ? s.model ?? "sonnet" : undefined })}
               className={`${field} min-h-11`}
               aria-label="Who does it?"
             >
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-              <option value="quick">Quick step (just a short note)</option>
+              <option value="quick">A fresh agent</option>
+              {agents
+                .filter((a) => !a.archived || a.id === s.agentId)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
             </select>
           </label>
           <label className="flex flex-col gap-2">
-            <Label tip={s.agentId == null ? "Say what this step should do, in a sentence or two." : "Anything extra for this step. Leave it empty and the agent does its usual job on the task."}>
-              {s.agentId == null ? "What should it do?" : "Anything extra for this step? (optional)"}
+            <Label tip={s.agentId == null ? "What this step should do with the workflow's task. A sentence or two is enough." : "Anything extra for this step. Leave it empty and the agent does its usual job on the task."}>
+              {s.agentId == null ? "This step's instructions" : "This step's instructions (optional)"}
             </Label>
             <textarea
               value={s.prompt ?? ""}
               onChange={(e) => onChange({ prompt: e.target.value }, "prompt")}
               rows={4}
-              placeholder={s.agentId == null ? "For example: Write a short summary of the changes in CHANGES.md." : "For example: Keep it to one file."}
+              placeholder={s.agentId == null ? "For example: Build what the task asks for and test it in a browser." : "For example: Keep it to one file."}
               className="rounded-[14px] border border-[#C9CDD4] p-3 text-[15px] leading-relaxed"
-              aria-label={s.agentId == null ? "What should it do?" : "Anything extra for this step?"}
+              aria-label="This step's instructions"
             />
           </label>
-          <ModePicker legend="How should it work with you?" value={s.mode ?? "auto"} onChange={(m: WorkMode) => onChange({ mode: m })} />
+          <FreedomPicker value={s.freedom ?? (s.mode === "look" ? "look" : s.mode === "plan" ? "check" : "auto")} onChange={(f) => onChange({ freedom: f, mode: modeFor(f, false).mode })} />
+          {(s.freedom ?? "auto") !== "look" && <CarefulPicker value={!!s.careful} onChange={(c) => onChange({ careful: c, maxMinutes: Math.max(s.maxMinutes ?? 30, c ? 60 : 30) })} />}
           {timeSlider}
           {s.agentId == null && modelPick("Fast is good for most steps. Smartest takes longer and uses more of your usage.")}
         </>

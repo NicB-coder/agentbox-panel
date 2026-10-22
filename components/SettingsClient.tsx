@@ -1,4 +1,5 @@
 "use client";
+import DiscordBox from "./DiscordBox";
 import UpdateBox from "./UpdateBox";
 import { useState } from "react";
 import { ErrorBox, PageTitle, Switch, post } from "./bits";
@@ -65,6 +66,9 @@ export default function SettingsClient({ guard }: { guard: number | null }) {
         </p>
         {error && <ErrorBox message={error} onRetry={() => save(on, pct)} where="Settings" />}
       </section>
+      <div className="mt-6">
+        <DiscordBox />
+      </div>
       <div className="mt-6">
         <UpdateBox />
       </div>

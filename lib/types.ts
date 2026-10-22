@@ -245,12 +245,15 @@ export type WfStep = {
   scheduleDays?: number[];
   scheduleTime?: string;
   label?: string; // GitHub issue label
+  task?: string; // start step: what this workflow should make (the default task for Run now, Test run and automatic runs)
   // agent / research / review
   agentId?: number | null; // null = quick step
   prompt?: string;
   mode?: WorkMode;
   maxMinutes?: number;
   model?: Model;
+  freedom?: Freedom; // agent steps (v3): replaces mode
+  careful?: boolean; // agent steps (v3): build → review → fix inside the step
   // check
   checks?: CheckKind[];
   pagePath?: string; // "/" or a full https:// address
