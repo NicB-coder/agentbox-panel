@@ -172,6 +172,18 @@ function migrate(d: Database.Database) {
       created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS helper_msgs_chat ON helper_messages(chat_id, id);
+    CREATE TABLE IF NOT EXISTS reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id INTEGER NOT NULL,
+      run_id INTEGER NOT NULL UNIQUE,
+      question TEXT NOT NULL,
+      title TEXT NOT NULL,
+      markdown TEXT NOT NULL,
+      reviewed TEXT,
+      project TEXT,
+      pr_url TEXT,
+      created_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS notices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       kind TEXT NOT NULL,

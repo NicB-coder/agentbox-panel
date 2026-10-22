@@ -11,6 +11,7 @@ import { cleanup, exitInfo, isAlive, launch, readNew, stopProc, tail, type ProcE
 import { projectPath } from "./projects";
 import type { Agent, Allowed, Flow, Milestone, Model, Phase, ProcState, ReviewNote, Run, RunExtra, Step, StreamState, WorkMode } from "./types";
 import { ingestRateLimitEvent, markLimited, usageBlocked, usageState } from "./usage";
+import { researchFixPrompt, researchPrompt, researchReviewPrompt } from "./research";
 import { clockOf } from "./words";
 
 // One run = a copy of the project (git worktree) on its own branch + one or more Claude Code sessions in it.
@@ -144,7 +145,8 @@ function setStageSteps(runId: number, phase: Phase) {
   const look = agent ? lookOnly(eff(agent, run).allowed, run.mode) : false;
   if (look) {
     const i = phase === "review" ? 1 : phase === "fix" ? 2 : 0;
-    return updateRun(runId, { steps: stepsOf(CAREFUL_LOOK_STAGES, i) });
+    const research = agent?.job.kind === "research" && !run.workflowRunId;
+    return updateRun(runId, { steps: stepsOf(research ? ["Research it", "Check it against the sources", "Correct the report"] : CAREFUL_LOOK_STAGES, i) });
   }
   const i = STAGE_INDEX[phase] ?? 0;
   updateRun(runId, { steps: stepsOf(CAREFUL_STAGES, i).map((s, j) => (j === 2 && i > 2 && flow.fixes === 0 ? { ...s, label: "Nothing to fix" } : s)) });
@@ -417,6 +419,15 @@ function jobText(agent: Agent): string {
 
 function buildPrompt(agent: Agent, run: Run): string {
   if (run.workflowRunId) return `${eff(agent, run).prompt}`;
+  if (agent.job.kind === "research") {
+    const project = run.extra.project ?? agent.project;
+    if (!run.extra.followUp) return researchPrompt(agent.prompt, { project: project || undefined, brief: !!agent.job.brief });
+    const before = listRuns(agent.id, 5).find((r) => r.id !== run.id && r.status === "done" && r.result);
+    return researchPrompt(
+      `${run.task}\n\n(This follows up on Nic's earlier question: "${agent.prompt.slice(0, 1500)}". Your earlier report is below; build on it, don't repeat it.)\n\n<earlier-report>\n${(before?.result ?? "").slice(0, 20000)}\n</earlier-report>`,
+      { project: project || undefined, brief: !!agent.job.brief },
+    );
+  }
   const job = jobText(agent);
   if (run.extra.followUp) {
     const earlier = listRuns(agent.id, 8).filter((r) => r.id !== run.id && !r.workflowRunId).reverse();
@@ -446,6 +457,7 @@ function whatWasAsked(agent: Agent, run: Run): string {
 
 function reviewPrompt(agent: Agent, run: Run, base: string, final: boolean): string {
   const look = lookOnly(eff(agent, run).allowed, run.mode);
+  if (agent.job.kind === "research" && !run.workflowRunId) return researchReviewPrompt(run.extra.followUp ? run.task : agent.prompt, run.result ?? "");
   if (look) {
     return [
       "An AI agent looked into something for Nic and wrote the report below. Double-check it before Nic reads it.",
@@ -960,7 +972,8 @@ async function next(runId: number, phase: Phase, text: string, session: string |
     patchFlow(runId, { reviews, round });
     log(runId, `${phase === "final" ? "Final check" : `Review round ${round}`}: ${verdict}`);
     if (look) {
-      if (verdict === "needs work" && flow.fixes === 0 && flow.workSession) return launchPhase(runId, "fix", fixPrompt(body, true), flow.workSession);
+      const research = agent.job.kind === "research" && !run.workflowRunId;
+      if (verdict === "needs work" && flow.fixes === 0 && flow.workSession) return launchPhase(runId, "fix", research ? researchFixPrompt(body) : fixPrompt(body, true), flow.workSession);
       return finishLook(runId, getRun(runId)!.result ?? "");
     }
     if (phase === "final") {
@@ -984,7 +997,8 @@ async function next(runId: number, phase: Phase, text: string, session: string |
   if (look) {
     // Keep the full report; a fix rewrites it.
     const report = stripMarkers(text);
-    const result = fresh.result && report && !report.startsWith(fresh.result) ? `${fresh.result}\n\n${report}` : report || summary;
+    const research = agent.job.kind === "research" && !fresh.workflowRunId;
+    const result = research ? report || summary : fresh.result && report && !report.startsWith(fresh.result) ? `${fresh.result}\n\n${report}` : report || summary;
     updateRun(runId, { result });
     if (flow.careful && phase === "work") return startReview(runId, false);
     return finishLook(runId, result);
@@ -1077,6 +1091,12 @@ async function finishLook(runId: number, report: string) {
   const agent = getAgent(run.agentId)!;
   if (run.workflowRunId) return finishStep(agent, run, firstLine(report), report);
   updateRun(runId, { status: "done", result: report || run.result || "Finished.", endedAt: Date.now(), activity: null, pid: null });
+  if (agent.job.kind === "research" && !run.extra.prReview) {
+    const { saveReport } = await import("./reports");
+    await saveReport(getRun(runId)!).catch((e) => log(runId, `Couldn't save the report: ${String(e)}`));
+    await removeWorktree(getRun(runId)!);
+    return;
+  }
   await removeWorktree(run);
   if (run.extra.prReview) return import("./prReview").then((m) => m.onReviewEnded(getRun(runId)!));
   notify(agent, "finished", `finished “${run.task}”. ${firstLine(report)}`);

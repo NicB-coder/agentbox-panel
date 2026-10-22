@@ -279,6 +279,7 @@ export default function HelperBubble() {
       <button
         ref={bubble}
         type="button"
+        data-helper-bubble=""
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={open ? "Close the Helper" : dot ? (errorsOnScreen ? "Helper: I can explain the error on this page" : "Helper: I have an answer for you") : "Open the Helper. Ask anything about agentbox"}

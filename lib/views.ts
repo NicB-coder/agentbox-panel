@@ -1,6 +1,8 @@
 import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent, runsWithStatus } from "./db";
 import { readHeartbeat } from "./heartbeat";
 import { lowDisk } from "./machine";
+import { listReports } from "./reports";
+import { shortAnswer } from "./research";
 import { inboxCount } from "./inbox";
 import { usageState } from "./usage";
 import { bigUsage, canContinue, carefulLine } from "./runner";
@@ -152,7 +154,7 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
       ...base,
       status: "done",
       task: last.task,
-      summary: last.result ? firstSentence(last.result) : "Finished.",
+      summary: last.result ? (a.job.kind === "research" ? shortAnswer(last.result) : firstSentence(last.result)) : "Finished.",
       timeLabel: ago(last.endedAt ?? last.startedAt, now),
     };
   }
@@ -234,6 +236,7 @@ export type AgentPageState = {
   bigUsed: number | null; // big jobs: points of the weekly meter used so far
   held: { id: number; name: string; task: string }[]; // small runs waiting for this big job
   canContinue: Record<number, boolean>;
+  reports: { id: number; runId: number; title: string }[];
 };
 
 export function agentPageState(id: number): AgentPageState | null {
@@ -260,7 +263,8 @@ export function agentPageState(id: number): AgentPageState | null {
     : [];
   const canContinueMap: Record<number, boolean> = {};
   for (const r of runs.slice(0, 5)) if (r.status === "stopped") canContinueMap[r.id] = canContinue(r);
-  return { view, schedule, runs, heartbeat: hb, bigUsed: active?.extra.flow?.big ? bigUsage(active) : null, held, canContinue: canContinueMap };
+  const reports = a.job.kind === "research" ? listReports(a.id).map((r) => ({ id: r.id, runId: r.runId, title: r.title })) : [];
+  return { view, schedule, runs, heartbeat: hb, bigUsed: active?.extra.flow?.big ? bigUsage(active) : null, held, canContinue: canContinueMap, reports };
 }
 
 export { clock };

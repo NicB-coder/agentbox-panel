@@ -13,6 +13,7 @@ import { PAUSED_ALL, USAGE_STOP, pausedAll, startRun, stopRun } from "./runner";
 import type { Model, Run, RunExtra, WfStep, WfStepRun, Workflow, WorkflowRun, WorkMode } from "./types";
 import { usageBlocked, usageState } from "./usage";
 import { freedomOf, modeFor } from "./job";
+import { REPORT_FORMAT, RESEARCH_METHOD } from "./research";
 import { flowSentence, stepTitle, type AgentRef } from "./wf";
 import { clockOf, nextRunAfter, plainText } from "./words";
 
@@ -279,7 +280,7 @@ function stepRunConfig(wr: WorkflowRun, wf: Workflow, step: WfStep): { agentId: 
       agentId: helperAgentId(), mode: "auto",
       extra: {
         ...base, role: "research", allowed: "suggest", model: step.model ?? "sonnet", maxMinutes: step.maxMinutes ?? 20,
-        prompt: `${ctx}\n\nYour job: research this task before anyone builds it. Look things up (web search is fine) and look at the existing code. Write what you learn to research.md at the top of this folder: the goal in one line, the key facts (with links), a recommended approach, and things to watch out for. Keep it under 150 lines. Don't change any other file.${step.prompt?.trim() ? `\n\nNic's notes for the research:\n${step.prompt.trim()}` : ""}`,
+        prompt: `${ctx}\n\nYour job: research this task before anyone builds it, the same careful way agentbox's research tasks work.\n\n${RESEARCH_METHOD}\n\nAlso look at the existing code. Write what you learn to research.md at the top of this folder, in this format (and add a "## Recommended approach" section after the short answer, for the builder):\n${REPORT_FORMAT}\n\nDon't change any other file. Commit research.md.${step.prompt?.trim() ? `\n\nNic's notes for the research:\n${step.prompt.trim()}` : ""}`,
       },
     };
   }

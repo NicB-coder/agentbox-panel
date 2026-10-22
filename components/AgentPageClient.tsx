@@ -112,7 +112,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
         <div className="flex min-w-0 flex-col gap-6">
           {isHeartbeat ? <HeartbeatNow data={data} /> : <RightNow data={data} act={act} busy={busy} />}
           {!isHeartbeat && <FollowUp agent={a} disabled={working} />}
-          {isHeartbeat ? <HeartbeatHistory data={data} /> : <History runs={runs} />}
+          {isHeartbeat ? <HeartbeatHistory data={data} /> : <History runs={runs} reports={data.reports} />}
         </div>
         <aside className="flex flex-col gap-6">
           <section className="panel p-6" aria-labelledby="schedule-h">
@@ -256,6 +256,11 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
         <>
           <p className="mt-3 text-[20px] font-semibold leading-snug">{view.task}</p>
           {!(view.status === "stopped" && last?.status === "stopped") && <p className="mt-1 text-[15px] text-muted">{view.summary}</p>}
+          {data.reports[0] && last?.status === "done" && data.reports[0].runId === last.id && (
+            <Link href={`/reports/${data.reports[0].id}`} className={`${btn.primary} mt-5`}>
+              Read the report
+            </Link>
+          )}
           {view.status === "stopped" && last?.status === "stopped" && (
             <div className="mt-5">
               {last.extra.signIn ? (
@@ -560,7 +565,7 @@ const RESULT: Record<Run["status"], { status: PillStatus; label: string }> = {
   stopped: { status: "stopped", label: "Stopped" },
 };
 
-function History({ runs }: { runs: Run[] }) {
+function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["reports"] }) {
   return (
     <section className="panel p-6 sm:p-8" aria-labelledby="hist-h">
       <h2 id="hist-h" className="text-[18px] font-semibold">
@@ -581,7 +586,13 @@ function History({ runs }: { runs: Run[] }) {
                     {r.endedAt ? ` · took ${duration(r.endedAt - r.startedAt)}` : ""}
                     {r.status === "stopped" && r.stopReason ? ` · ${r.stopReason}` : ""}
                   </p>
-                  {r.result && r.status !== "stopped" && <Report text={r.result} />}
+                  {reports.find((x) => x.runId === r.id) ? (
+                    <Link href={`/reports/${reports.find((x) => x.runId === r.id)!.id}`} className="inline-flex min-h-11 items-center text-[14px] font-semibold text-[#2A3F9E] underline">
+                      Read the report: {reports.find((x) => x.runId === r.id)!.title}
+                    </Link>
+                  ) : (
+                    r.result && r.status !== "stopped" && <Report text={r.result} />
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusPill status={res.status} label={res.label} />
