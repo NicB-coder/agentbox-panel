@@ -1,5 +1,52 @@
 # NOTES
 
+# v3.1: ask once, help me write good workflows, easy to edit, beginner-proof
+
+Being built milestone by milestone on an agent branch (not `build/v3.1`). Progress and handoff are in `PROGRESS.md`.
+
+## v3.1 — Why Lookout "did nothing" (milestone 1)
+
+I read the Lookout run records on a copy of the real database (read-only copy, never the live one). Workflow
+"Build → Review → Ship" (project lookout), run #2 on Oct 23:
+
+1. **The goal never reached the agents.** Nic pasted the whole Lookout brief into "What should this workflow make?"
+   (the saved goal). When he pressed Run now, the pop-up asked "What should it make this time?" and he typed
+   `Follow the details under: "What should this workflow make?"`. The runner used the typed line **instead of** the
+   saved goal (`lib/workflowRunner.ts`: typed text, or the goal only if nothing was typed). So every step was told
+   only that one sentence and nothing else.
+2. **The brief was cut off without a word.** The goal box silently kept only the first 8,000 characters
+   (`lib/wf.ts`). Nic's brief was longer, so even if it had been sent, the end of it was missing.
+3. **Nothing said so.** Research wrote "the task details were missing", Builder wrote a note saying the same, both
+   reviewers "passed" those notes, and the workflow went on to "Ship it?" as if all was well. Nic stopped it there.
+
+**Fixes:**
+- Agents now always get the saved goal, plus "For this run, Nic adds: …" when something was typed in Run now
+  (`runTaskText` in `lib/wf.ts`). The run stores only what was typed; the goal travels with the run's copy of the steps.
+- Goals can be up to 40,000 characters. Saving a longer one is refused with a plain message instead of cutting it.
+- Every step is told: if the task is missing or too unclear, change nothing and end with `STUCK: <why>`. A stuck
+  step stops the workflow with "<step> couldn't do its job: <why>", which shows in the Inbox like any stopped run.
+- No silent failures: runs that finish without changes, without a pull request, or in under 2 minutes get an Inbox
+  card "Didn't do anything" with what happened, what the agent said, what to do next, and **Try again**,
+  **Ask the Helper why**, **Dismiss**, **Open**.
+- A workflow run's page shows **What it was told** (the goal and anything added for that run), and an amber note
+  when it finished without doing anything.
+
+## v3.1 — Decisions I made
+
+- **Which runs count as "didn't do anything":** task runs that can change things and changed nothing; Look only
+  task runs that wrote nothing back; workflow runs that make changes and ended with no pull request or in under
+  2 minutes of working time (time waiting for Nic doesn't count). Look only workflows and reports are left out:
+  their result is the report, and a quick report is normal. Stopped runs already had their own Inbox card.
+- **A pull request made in under 2 minutes** keeps its normal "Pull request ready" card, with an amber line "It
+  finished in under 2 minutes. Check it did the whole job before you merge." instead of a second card.
+- **Try again** on a quiet card starts the same task or workflow fresh and clears the card. Older runs that stored
+  the goal as their typed line don't send it twice.
+- The brief name in "What it was told" comes with milestone 3 (briefs), since briefs don't exist yet.
+- The worktree has no database of its own, so `scripts/dev-copy.sh fresh` can't copy one. I made the dev copy with
+  a read-only SQLite backup of the live database (`sqlite3 "file:…?mode=ro" ".backup …"`), then ran the script
+  without `fresh` and the same clean-up it does.
+
+
 # v3: simpler, fully in the panel, deep research
 
 ## v3 — What Nic should click first

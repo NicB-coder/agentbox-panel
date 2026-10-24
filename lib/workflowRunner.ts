@@ -14,7 +14,8 @@ import type { Model, Run, RunExtra, WfStep, WfStepRun, Workflow, WorkflowRun, Wo
 import { usageBlocked, usageState } from "./usage";
 import { freedomOf, modeFor } from "./job";
 import { REPORT_FORMAT, RESEARCH_METHOD } from "./research";
-import { flowSentence, stepTitle, type AgentRef } from "./wf";
+import { flowSentence, runTaskText, stepTitle, type AgentRef } from "./wf";
+import { quietWfRun, workflowMakesChanges } from "./quiet";
 import { clockOf, nextRunAfter, plainText } from "./words";
 
 // Runs a workflow: one shared git worktree and branch, one pull request, steps one after another.
@@ -106,7 +107,7 @@ export async function startWorkflow(workflowId: number, opts: StartWfOpts): Prom
   const stepRuns: Record<string, WfStepRun> = {};
   for (const s of wf.steps) stepRuns[s.id] = freshStepRun();
   const wr = createWfRun({
-    workflowId, status: busyRun ? "queued" : "running", test: !!opts.test, input: ((opts.input ?? "").trim() || (wf.steps[0]?.task ?? "").trim()).slice(0, 8000),
+    workflowId, status: busyRun ? "queued" : "running", test: !!opts.test, input: (opts.input ?? "").trim().slice(0, 8000), // only what was typed for this run: the goal travels in steps[0]
     trigger: opts.trigger, triggerRef: opts.triggerRef ?? (opts.prBranch ? `branch:${opts.prBranch}` : null), steps: wf.steps, stepRuns,
   });
   if (!busyRun) begin(wr.id).catch((e) => stopWorkflow(wr.id, "It couldn't get started.", { detail: String(e) }));
@@ -121,7 +122,7 @@ async function begin(wrId: number) {
   updateWfRun(wrId, { status: "running", startedAt: Date.now(), usageStart: usageState().session });
   const base = await baseRef(repo);
   const prBranch = wr.triggerRef?.startsWith("branch:") ? wr.triggerRef.slice(7) : null;
-  const branch = prBranch ?? `agent/wf-${slug(wf.name, 3)}-${slug(wr.input || (wr.test ? "test" : "run"), 3)}-${wr.id}`;
+  const branch = prBranch ?? `agent/wf-${slug(wf.name, 3)}-${slug(wr.input || wr.steps[0]?.task || (wr.test ? "test" : "run"), 3)}-${wr.id}`;
   const dir = path.join(WORKTREES, wf.project, `wf-${wr.id}-${branch.replace(/\//g, "-")}`.slice(0, 120));
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   const add = prBranch
@@ -256,12 +257,14 @@ function usageUsed(wr: WorkflowRun): number | null {
 
 // ---------- agent-like steps ----------
 
-function context(wr: WorkflowRun, wf: Workflow, step: WfStep): string {
+export function context(wr: WorkflowRun, wf: Workflow, step: WfStep): string {
   const agents = agentRefs();
   const lines = [
     `You are one step ("${stepTitle(step, agents)}") in Nic's workflow "${wf.name}". The whole workflow: ${flowSentence(wf, agents)}`,
     "",
-    wr.input ? `The task for this run:\n${wr.input}` : "There's no extra task for this run: do the job described below.",
+    runTaskText(wr.steps[0]?.task ?? "", wr.input),
+    "",
+    "If the task above is missing, or too unclear to do anything useful, don't guess and don't write placeholder notes. Change nothing, and end with one line: STUCK: <one plain sentence saying what's missing>.",
     "",
     "Everyone in this workflow works in this same folder and branch. Earlier steps' work is already here.",
     "If research.md exists at the top of this folder, read it first: it's the research for this task.",
@@ -368,6 +371,14 @@ export async function onStepRunEnded(runId: number) {
   if (run.status !== "done") return;
 
   const text = run.result ?? "";
+  const stuck = text.match(/^\s*STUCK:\s*(.+)$/im)?.[1]?.trim();
+  if (stuck) {
+    // It couldn't do its job (e.g. the task never reached it): stop and say why, instead of carrying on with nothing.
+    await syncBranch(wr.id);
+    setStep(wr.id, step.id, { state: "failed", endedAt: Date.now(), note: plainText(stuck).slice(0, 280) });
+    await comment(getWfRun(wr.id)!, `**${stepTitle(step, agentRefs())} couldn't do its job:** ${stuck}`);
+    return stopWorkflow(wr.id, `${stepTitle(step, agentRefs())} couldn't do its job: ${plainText(stuck).slice(0, 240)}`, { keepStep: true });
+  }
   const summary = plainText(text.split("\n").map((l) => l.trim()).find(Boolean) ?? "Finished.").slice(0, 280);
   await syncBranch(wr.id);
   const fresh = getWfRun(wr.id)!;
@@ -476,7 +487,7 @@ async function syncBranch(wrId: number) {
   const agents = agentRefs();
   const done = wr.steps.filter((s) => ["done", "passed"].includes(wr.stepRuns[s.id]?.state ?? "") && s.type !== "start");
   const body = [
-    wr.input ? `**Task:** ${wr.input}` : `**Workflow:** ${wf.name}`,
+    about(wr) ? `**Task:** ${about(wr).slice(0, 3000)}` : `**Workflow:** ${wf.name}`,
     "",
     `This pull request is the shared workspace for the **${wf.name}** workflow in agentbox. Each step adds its work and a comment here.`,
     "",
@@ -484,12 +495,15 @@ async function syncBranch(wrId: number) {
     ...(done.length ? ["", "**Done so far:**", ...done.map((s) => `- ${stepTitle(s, agents)}: ${wr.stepRuns[s.id]?.note ?? "done"}`)] : []),
     ...(wr.test ? ["", "_This is a test run. It stops before shipping._"] : []),
   ].join("\n");
-  const title = `${wf.name}: ${(wr.input.split("\n")[0] || (wr.test ? "test run" : "run")).slice(0, 90)}`;
+  const title = `${wf.name}: ${(about(wr).split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "") || (wr.test ? "test run" : "run")).slice(0, 90)}`;
   const pr = await sh("gh", ["pr", "create", "--draft", "--base", base.replace(/^origin\//, ""), "--head", wr.branch, "--title", title, "--body", body], dir);
   const url = pr.out.split("\n").filter((l) => l.startsWith("http")).pop();
   if (url) updateWfRun(wrId, { prUrl: url });
   else console.warn("[workflow] couldn't open the pull request", pr.err);
 }
+
+// What the run is about, for titles: the line typed for this run, or else the saved goal.
+const about = (wr: WorkflowRun) => (wr.input || wr.steps[0]?.task || "").trim();
 
 async function comment(wr: WorkflowRun, body: string) {
   if (!wr.prUrl || !wr.worktree) return;
@@ -550,10 +564,13 @@ async function finish(wrId: number, summary?: string) {
   if (!wr) return;
   const merged = wr.steps.some((s) => s.type === "ship" && wr.stepRuns[s.id]?.state === "done");
   if (wr.prUrl && !merged && !wr.test && wr.worktree) await sh("gh", ["pr", "ready", wr.prUrl], wr.worktree);
+  const look = new Set(agentRefs().filter((a) => a.allowed === "look").map((a) => a.id));
+  const quiet = quietWfRun(wr, { makesChanges: workflowMakesChanges(wr.steps, look) });
   updateWfRun(wrId, {
-    status: "done", endedAt: Date.now(), waiting: null,
-    summary: summary ?? (merged ? "Shipped: merged into main." : wr.prUrl ? "Finished. The pull request has everything." : "Finished."),
+    status: "done", endedAt: Date.now(), waiting: null, quiet,
+    summary: summary ?? (merged ? "Shipped: merged into main." : wr.prUrl ? "Finished. The pull request has everything." : quiet ? "Finished without changing anything." : "Finished."),
   });
+  if (quiet) ping(wr, `finished, but ${quiet.why.charAt(0).toLowerCase()}${quiet.why.slice(1)}`);
   await removeWorktree(wr);
   startNextQueued(wr.workflowId);
 }
