@@ -120,6 +120,9 @@ export type RunExtra = {
   checkoutRef?: string; // look at this ref (e.g. a pull request's branch) instead of making a new branch
   prReview?: { prUrl: string; sourceRunId: number | null }; // this run reviews a pull request
   review?: { runId: number; status: "running" | "done" | "stopped"; verdict?: "passed" | "needs work"; text?: string; at: number }; // a review of this run's pull request
+  // v3.1
+  quiet?: Quiet; // it finished but didn't really do anything: the Inbox says so
+  quick?: boolean; // it opened a pull request in under 2 minutes: worth a closer look
 };
 
 export type Phase = "plan" | "work" | "review" | "fix" | "polish" | "final" | "outline" | "milestone";
@@ -324,7 +327,11 @@ export type WorkflowRun = {
   waitedMs: number;
   startedAt: number;
   endedAt: number | null;
+  quiet: Quiet | null; // it finished but didn't really do anything: the Inbox says so
 };
+
+// "It finished without changing anything": what happened and what to do next, in plain words.
+export type Quiet = { why: string; next: string };
 
 export type WorkflowVersion = { id: number; workflowId: number; savedAt: number; note: string; def: WorkflowInput };
 
@@ -335,7 +342,8 @@ export type Idea = { id: number; text: string; createdAt: number };
 export type InboxItem =
   | { key: string; kind: "approval"; at: number; title: string; who: string; color: string; icon: string; approvalId: number; text: string; detail: string | null; link: string }
   | { key: string; kind: "plan"; at: number; title: string; who: string; color: string; icon: string; runId: number; text: string; link: string }
-  | { key: string; kind: "pr"; at: number; title: string; who: string; color: string; icon: string; runId: number; prUrl: string; text: string; link: string; careful: string | null; reviewedHere: boolean; review: RunExtra["review"] | null }
+  | { key: string; kind: "pr"; at: number; title: string; who: string; color: string; icon: string; runId: number; prUrl: string; text: string; link: string; careful: string | null; reviewedHere: boolean; review: RunExtra["review"] | null; quick: boolean }
   | { key: string; kind: "failed"; at: number; title: string; who: string; color: string; icon: string; runId: number; agentId: number; text: string; link: string; canRetry: boolean; canContinue: boolean; stopKind: "time" | "budget" | "signin" | "error"; signIn?: "claude" | "github" }
   | { key: string; kind: "wf_ask" | "wf_ship"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string | null; link: string; test: boolean }
-  | { key: string; kind: "wf_failed"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; workflowId: number; text: string; link: string };
+  | { key: string; kind: "wf_failed"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; workflowId: number; text: string; link: string }
+  | { key: string; kind: "quiet"; at: number; title: string; who: string; color: string; icon: string; runId?: number; wfRunId?: number; text: string; next: string; said: string | null; link: string; canRetry: boolean };

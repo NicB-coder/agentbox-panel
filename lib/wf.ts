@@ -31,6 +31,9 @@ export const CHECK_WORDS: Record<CheckKind, string> = {
   console: "No errors in the browser console",
 };
 
+// The longest goal a workflow can save. It used to be 8,000 and longer goals were cut off without a word (Lookout, Oct 23).
+export const GOAL_MAX = 40_000;
+
 export const DEFAULT_LIMITS: WfLimits = { maxLoops: 2, maxMinutes: 120, maxUsagePct: 25 };
 
 export function newId(): string {
@@ -101,6 +104,23 @@ function failWords(s: WfStep, steps: WfStep[], agents: AgentRef[]) {
   if (!s.onFail || s.onFail === "stop") return "If it needs work: stop";
   const t = steps.find((x) => x.id === s.onFail);
   return t ? `If it needs work: back to ${stepTitle(t, agents)}` : "If it needs work: stop";
+}
+
+// What a workflow run's agents are told it's about: the saved goal, plus anything typed for this one run.
+// Both, never one instead of the other: Lookout's run "did nothing" because the typed line replaced the goal.
+export function runTaskText(goal: string, extra: string): string {
+  const g = goal.trim();
+  const x = extra.trim();
+  if (g && x && x !== g) return `What this workflow should make (Nic's saved goal):\n${g}\n\nFor this run, Nic adds:\n${x}`;
+  if (g || x) return `The task for this run:\n${g || x}`;
+  return "There's no extra task for this run: do the job described below.";
+}
+
+// A save that would cut the goal off is refused instead (plain words for the editor).
+export function goalTooLong(rawSteps: unknown): string | null {
+  const first = Array.isArray(rawSteps) ? (rawSteps[0] as { task?: unknown } | undefined) : undefined;
+  const len = typeof first?.task === "string" ? first.task.length : 0;
+  return len > GOAL_MAX ? `The goal is too long (${len.toLocaleString("en-US")} characters). Keep it under ${GOAL_MAX.toLocaleString("en-US")}.` : null;
 }
 
 export const hasFailPath = (s: WfStep) => s.type === "review" || s.type === "check";
@@ -273,7 +293,7 @@ export function cleanSteps(raw: unknown, agentIds: number[]): WfStep[] {
         s.scheduleTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(r.scheduleTime)) ? String(r.scheduleTime) : "02:00";
       }
       if (s.trigger === "issue_label") s.label = text("label", 50).trim() || "agent";
-      s.task = text("task", 8000);
+      s.task = text("task", GOAL_MAX);
     }
     if (type === "agent" || type === "research" || type === "review") {
       s.prompt = text("prompt");
@@ -330,6 +350,7 @@ export function workflowProblems(w: WorkflowInput, agents: AgentRef[], projects:
   if (!w.name.trim()) p.push("Give the workflow a name.");
   if (!projects.includes(w.project)) p.push("Pick a project.");
   if (w.steps.length < 2) p.push("Add at least one step after Start.");
+  if ((w.steps[0]?.task ?? "").length > GOAL_MAX) p.push(`The goal is too long. Keep it under ${GOAL_MAX.toLocaleString("en-US")} characters.`);
   for (const s of w.steps) {
     if (s.type === "agent" && s.agentId != null && !agents.some((a) => a.id === s.agentId)) p.push("One step uses an agent that no longer exists. Pick another.");
     if (s.type === "agent" && s.agentId == null && !(s.prompt ?? "").trim()) p.push("A Build or Look step needs its instructions.");

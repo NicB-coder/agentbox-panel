@@ -389,6 +389,13 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
         {live && viewing!.status === "stopped" && viewing!.stopReason && (
           <p className="mx-4 mb-4 rounded-[14px] bg-[#FDE8E6] px-4 py-3 text-[15px] font-medium text-[#A11B12] sm:mx-6">{viewing!.stopReason}</p>
         )}
+        {live && viewing!.status === "done" && viewing!.quiet && (
+          <div className="mx-4 mb-4 rounded-[14px] bg-[#FDF0DC] px-4 py-3 text-[15px] text-[#8A4600] sm:mx-6">
+            <p className="font-semibold">{viewing!.quiet.why}</p>
+            <p className="mt-1">{viewing!.quiet.next}</p>
+          </div>
+        )}
+        {live && <WhatItWasTold run={viewing!} />}
         {live && viewing!.status === "needs" && viewing!.waiting && (
           <WaitingBox run={viewing!} onDone={refresh} />
         )}
@@ -461,6 +468,34 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
 
 const RUN_PILL = { queued: "queued", running: "running", needs: "needs", done: "done", stopped: "stopped" } as const;
 const RUN_WORD = { queued: "Waiting", running: "Running", needs: "Needs you", done: "Done", stopped: "Stopped" };
+
+// The first thing the run's agents were told: the saved goal, plus anything typed for this run.
+function WhatItWasTold({ run }: { run: WorkflowRun }) {
+  const [open, setOpen] = useState(false);
+  const goal = (run.steps[0]?.task ?? "").trim();
+  const extra = run.input.trim() !== goal ? run.input.trim() : "";
+  return (
+    <div className="mx-4 mb-4 sm:mx-6">
+      <button type="button" className={btn.link} aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? "Hide what it was told" : "What it was told"}
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-3 rounded-[14px] bg-soft p-4 text-[15px] leading-relaxed">
+          <div>
+            <p className="font-semibold">The goal</p>
+            <p className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap text-muted">{goal || "No goal was saved, so it only had each step's own instructions."}</p>
+          </div>
+          {extra && (
+            <div>
+              <p className="font-semibold">You added for this run</p>
+              <p className="mt-1 whitespace-pre-wrap text-muted">{extra}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function LiveTitle({ run }: { run: WorkflowRun }) {
   const active = ["running", "needs", "queued"].includes(run.status);

@@ -7,6 +7,7 @@ import { ago, plainText } from "@/lib/words";
 import { Confirm, EmptyState, ErrorBox, InfoTip, PageTitle, post } from "./bits";
 import { refreshHeader } from "./Header";
 import { openNewTask } from "./TaskPanel";
+import { askHelper } from "./helper/helperStore";
 import type { Notice } from "@/lib/notices";
 import { AgentIcon, Icon, btn, field } from "./ui";
 import { usePoll } from "./usePoll";
@@ -173,6 +174,7 @@ const KIND_WORD: Record<InboxItem["kind"], string> = {
   wf_ask: "Waiting for you",
   wf_ship: "Ready to ship",
   wf_failed: "Workflow stopped",
+  quiet: "Didn't do anything",
 };
 
 function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
@@ -216,6 +218,20 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
           {it.kind === "pr" && !it.careful && it.review && <ReviewFindings review={it.review} />}
           {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed") && (
             <p className="mt-2 text-[15px] leading-relaxed text-muted">{plainText(it.text)}</p>
+          )}
+          {it.kind === "pr" && it.quick && <p className="mt-2 text-[15px] font-semibold text-[#8A4600]">It finished in under 2 minutes. Check it did the whole job before you merge.</p>}
+          {it.kind === "quiet" && (
+            <>
+              <p className="mt-2 text-[16px] leading-relaxed">{it.text}</p>
+              {it.said && (
+                <p className="mt-2 text-[15px] leading-relaxed text-muted">
+                  It said: “{it.said}”
+                </p>
+              )}
+              <p className="mt-2 text-[15px] leading-relaxed text-muted">
+                <strong className="font-semibold text-ink">What to do next:</strong> {it.next}
+              </p>
+            </>
           )}
           {it.kind === "approval" && more && it.detail && <pre className="mt-3 max-h-72 overflow-auto rounded-[14px] bg-soft p-4 text-[12px] whitespace-pre-wrap">{it.detail}</pre>}
 
@@ -368,6 +384,21 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                   </button>
                   <FixButton error={`The workflow "${it.who}" stopped: ${it.text}`} />
                   <button className={btn.link} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/dismiss`)}>
+                    Dismiss
+                  </button>
+                </>
+              )}
+              {it.kind === "quiet" && (
+                <>
+                  {it.canRetry && (
+                    <button className={btn.primary} disabled={b} onClick={() => act(it.key, it.runId ? `/api/runs/${it.runId}/retry` : `/api/workflow-runs/${it.wfRunId}/retry`)}>
+                      Try again
+                    </button>
+                  )}
+                  <button className={btn.secondary} onClick={() => askHelper(`Why did “${it.title.split("\n")[0].slice(0, 120)}” (${it.runId ? `run ${it.runId}` : `workflow run ${it.wfRunId}`}) finish without doing anything? What should I change?`)}>
+                    Ask the Helper why
+                  </button>
+                  <button className={btn.link} disabled={b} onClick={() => act(it.key, it.runId ? `/api/runs/${it.runId}/dismiss` : `/api/workflow-runs/${it.wfRunId}/dismiss`)}>
                     Dismiss
                   </button>
                 </>

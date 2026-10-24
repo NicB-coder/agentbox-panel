@@ -1,6 +1,6 @@
 import { createWorkflow, listAgents, listWorkflows } from "@/lib/db";
 import { listProjects } from "@/lib/projects";
-import { cleanLimits, cleanSteps, templateWorkflow, TEMPLATES, type TemplateKey } from "@/lib/wf";
+import { cleanLimits, cleanSteps, goalTooLong, templateWorkflow, TEMPLATES, type TemplateKey } from "@/lib/wf";
 import { agentRefs } from "@/lib/workflowViews";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,8 @@ export async function POST(req: Request) {
     const w = createWorkflow({ ...t, name }, "Made from a template");
     return Response.json(w, { status: 201 });
   }
+  const long = goalTooLong(b.steps);
+  if (long) return Response.json({ error: long }, { status: 400 });
   const ids = listAgents().map((a) => a.id);
   const name = String(b.name ?? "").trim().slice(0, 60) || "New workflow";
   const w = createWorkflow({ name, project, steps: cleanSteps(b.steps, ids), limits: cleanLimits(b.limits) }, "First version");

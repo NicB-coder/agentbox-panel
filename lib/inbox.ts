@@ -1,9 +1,11 @@
 import {
-  getAgent, getRun, getWfRun, getWorkflow, listIdeas, pendingApprovals, recentStoppedRuns, recentStoppedWfRuns, runsWithStatus, wfRunsWithStatus,
+  getAgent, getRun, getWfRun, getWorkflow, listIdeas, pendingApprovals, recentQuietRuns, recentQuietWfRuns, recentStoppedRuns, recentStoppedWfRuns, runsWithStatus,
+  wfRunsWithStatus,
 } from "./db";
 import type { Agent, Idea, InboxItem, Run } from "./types";
 import { listNotices, unopenedNotices, type Notice } from "./notices";
-import { OUT_OF_TIME, OVER_BUDGET, PAUSED_ALL, canContinue, carefulLine } from "./runner";
+import { OUT_OF_TIME, OVER_BUDGET, PAUSED_ALL, canContinue, carefulLine, firstLine } from "./runner";
+import { plainText } from "./words";
 
 // Everything that needs Nic, newest first.
 
@@ -46,7 +48,7 @@ export function inboxItems(): InboxItem[] {
     items.push({
       key: `pr${run.id}`, kind: "pr", at: run.endedAt ?? run.startedAt, title: run.task, ...who(run), runId: run.id, prUrl: run.prUrl,
       text: run.result ?? "It finished and opened a pull request.", careful: carefulLine(run.extra.flow), reviewedHere: !!run.extra.flow?.reviews.length,
-      review: run.extra.review ?? null,
+      review: run.extra.review ?? null, quick: !!run.extra.quick,
     });
   }
 
@@ -79,6 +81,24 @@ export function inboxItems(): InboxItem[] {
     items.push({
       key: `wff${wr.id}`, kind: "wf_failed", at: wr.endedAt ?? wr.startedAt, title: wr.input || wf.name, who: wf.name, color: "#7048C8", icon: "flow",
       wfRunId: wr.id, workflowId: wf.id, text: wr.stopReason ?? "It stopped before finishing.", link: `/workflows/${wf.id}?run=${wr.id}`,
+    });
+  }
+
+  // Finished, but didn't really do anything: never just end without saying so.
+  for (const run of recentQuietRuns(since)) {
+    const a = getAgent(run.agentId) as Agent | null;
+    items.push({
+      key: `quiet${run.id}`, kind: "quiet", at: run.endedAt ?? run.startedAt, title: run.task, ...who(run), runId: run.id,
+      text: run.extra.quiet!.why, next: run.extra.quiet!.next, said: run.result ? firstLine(plainText(run.result)) : null, canRetry: !!a && a.kind === "claude" && a.enabled,
+    });
+  }
+  for (const wr of recentQuietWfRuns(since)) {
+    const wf = getWorkflow(wr.workflowId);
+    if (!wf) continue;
+    const said = [...wr.steps].reverse().map((s) => (["agent", "research", "review"].includes(s.type) ? wr.stepRuns[s.id]?.note : null)).find(Boolean) ?? null;
+    items.push({
+      key: `wfq${wr.id}`, kind: "quiet", at: wr.endedAt ?? wr.startedAt, title: wr.input || wf.name, who: wf.name, color: "#7048C8", icon: "flow",
+      wfRunId: wr.id, text: wr.quiet!.why, next: wr.quiet!.next, said, link: `/workflows/${wf.id}?run=${wr.id}`, canRetry: true,
     });
   }
 

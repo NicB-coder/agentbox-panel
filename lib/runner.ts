@@ -13,6 +13,7 @@ import type { Agent, Allowed, Flow, Milestone, Model, Phase, ProcState, ReviewNo
 import { ingestRateLimitEvent, markLimited, usageBlocked, usageState } from "./usage";
 import { researchFixPrompt, researchPrompt, researchReviewPrompt } from "./research";
 import { clockOf } from "./words";
+import { QUICK_MS, quietLookRun, quietTaskRun } from "./quiet";
 
 // One run = a copy of the project (git worktree) on its own branch + one or more Claude Code sessions in it.
 // Each session is its own supervised launchd job (lib/proc.ts), so runs keep going while the panel restarts.
@@ -1093,6 +1094,8 @@ async function finishLook(runId: number, report: string) {
   const run = getRun(runId)!;
   const agent = getAgent(run.agentId)!;
   if (run.workflowRunId) return finishStep(agent, run, firstLine(report), report);
+  const quiet = run.extra.prReview ? null : quietLookRun({ report: report || run.result || "" });
+  if (quiet) patchExtra(runId, { quiet });
   updateRun(runId, { status: "done", result: report || run.result || "Finished.", endedAt: Date.now(), activity: null, pid: null });
   if (agent.job.kind === "research" && !run.extra.prReview) {
     const { saveReport } = await import("./reports");
@@ -1151,7 +1154,8 @@ async function shipIt(agent: Agent, run: Run, summary: string) {
   const ahead = await sh("git", ["rev-list", "--count", `${base}..HEAD`], dir);
   if (ahead.ok && Number(ahead.out) === 0) {
     allStepsDone(run.id);
-    updateRun(run.id, { status: "done", result: `${summary} (No changes were needed, so there's no pull request.)`, endedAt: Date.now(), activity: null, pid: null });
+    patchExtra(run.id, { quiet: quietTaskRun({ changed: false }) ?? undefined });
+    updateRun(run.id, { status: "done", result: `${summary} (Nothing was changed, so there's no pull request.)`, endedAt: Date.now(), activity: null, pid: null });
     await removeWorktree(run);
     notify(agent, "finished", `finished “${run.task}” with no changes needed. ${summary}`);
     return;
@@ -1198,6 +1202,7 @@ async function shipIt(agent: Agent, run: Run, summary: string) {
   }
   log(run.id, `Pull request: ${url}`);
   allStepsDone(run.id);
+  if (Date.now() - run.startedAt < QUICK_MS) patchExtra(run.id, { quick: true });
   updateRun(run.id, { status: "review", prUrl: url, result: summary, endedAt: Date.now(), activity: null, pid: null });
   await removeWorktree(getRun(run.id)!);
   notify(agent, "finished", `finished “${run.task}”.${careful ? ` ${careful}.` : ""} Pull request ready: ${url}`);
