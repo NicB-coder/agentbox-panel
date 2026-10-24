@@ -47,18 +47,34 @@ export function ModelPicker({ value, onChange }: { value: Model; onChange: (v: M
   );
 }
 
-export function MinutesSlider({ value, onChange, min = 5, max = 180, label = "Time limit", tip = "The longest one run may take. It's a safety cap: if it runs out, you can press Keep going. Waiting for you or for usage doesn't count." }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string; tip?: string }) {
-  const id = useId();
+export function MinutesSlider({ value, onChange, min = 5, max = 180, label = "Time limit", tip = "The longest one run may take. It's a safety cap: if it runs out, you can press Keep going. Waiting for you or for usage doesn't count.", off }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string; tip?: string; off?: string }) {
   const words = value >= 60 ? `${Math.floor(value / 60)} h${value % 60 ? ` ${value % 60} min` : ""}` : `${value} min`;
+  return <Slider value={value} onChange={onChange} min={min} max={max} label={label} tip={tip} words={off ? "Doesn't apply" : words} off={off} />;
+}
+
+// A share of a usage meter, "about 75%".
+export function PercentSlider({ value, onChange, label, tip }: { value: number; onChange: (v: number) => void; label: string; tip: string }) {
+  return <Slider value={value} onChange={onChange} min={5} max={100} label={label} tip={tip} words={`about ${value}%`} />;
+}
+
+// `off`: greyed out, with one line saying why it doesn't apply.
+function Slider({ value, onChange, min, max, label, tip, words, off }: { value: number; onChange: (v: number) => void; min: number; max: number; label: string; tip: string; words: string; off?: string }) {
+  const id = useId();
+  const noteId = useId();
   return (
     <div className="flex flex-col gap-2">
       <span className="flex items-center justify-between gap-3">
         <Label as="label" htmlFor={id} tip={tip}>
           {label}
         </Label>
-        <span className="text-[15px] font-semibold">{words}</span>
+        <span className={`text-[15px] font-semibold ${off ? "text-muted" : ""}`}>{words}</span>
       </span>
-      <input id={id} type="range" min={min} max={max} step={5} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-11 w-full accent-[#15171B]" />
+      <input id={id} type="range" min={min} max={max} step={5} value={value} disabled={!!off} aria-describedby={off ? noteId : undefined} onChange={(e) => onChange(Number(e.target.value))} className="h-11 w-full accent-[#15171B] disabled:cursor-not-allowed disabled:opacity-40" />
+      {off && (
+        <p id={noteId} className="text-[14px] text-muted">
+          {off}
+        </p>
+      )}
     </div>
   );
 }

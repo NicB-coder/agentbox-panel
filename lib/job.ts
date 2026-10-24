@@ -7,12 +7,21 @@ export const DEFAULT_JOB: JobSettings = {
   askEachStep: false,
   connectors: [],
   big: false,
-  budgetPct: 40,
+  budgetPct: 75, // Big jobs: about 75% of the weekly meter
   holdSmall: true,
   autoInstall: false,
   saveReport: false,
   brief: null,
 };
+
+// What the Big job limits really do (runner.ts: bigUsage and OVER_BUDGET), in plain words.
+export const BIG_USAGE_TIP =
+  "Its usage budget: how much of your weekly Claude usage (the “This week” meter under Claude usage at the top) this job may use from start to finish, even across a weekly reset. Other Claude use at the same time counts too. If it goes over, it pauses with its work saved and tells you in the Inbox, where Raise the budget lets it carry on.";
+// Workflows (workflowRunner.ts: overLimits and usageUsed).
+export const WF_USAGE_TIP =
+  "How much Claude usage one run may use, on the “This session” meter (under Claude usage at the top). It adds up everything the run uses from start to finish, even across resets, so 100% is one full session. Other Claude use at the same time counts too. If a run goes over, it stops, keeps its work and tells you in the Inbox, where Pick up where it stopped carries on. If the meter can't be read, it isn't checked.";
+export const WF_TIME_TIP = "The longest one run can take, start to finish. Time spent waiting for you or for usage doesn't count. If a run goes over, it stops and keeps its work so far.";
+export const BIG_TIME_NOTE = "A Big job has no time limit. It stops when it's done or when it reaches its Most usage per run.";
 
 export function jobOf(raw: unknown): JobSettings {
   const j = (raw && typeof raw === "object" ? raw : {}) as Partial<JobSettings>;

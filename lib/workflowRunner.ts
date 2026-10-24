@@ -17,7 +17,7 @@ import { freedomOf, modeFor } from "./job";
 import { REPORT_FORMAT, RESEARCH_METHOD } from "./research";
 import { flowSentence, runTaskText, stepTitle, stepsWithGoal, type AgentRef } from "./wf";
 import { quietWfRun, workflowMakesChanges } from "./quiet";
-import { clockOf, nextRunAfter, plainText } from "./words";
+import { clockOf, duration, nextRunAfter, plainText } from "./words";
 
 // Runs a workflow: one shared git worktree and branch, one pull request, steps one after another.
 // Agent-like steps reuse the v1 task runner (same hooks, approvals and the main/force-push block).
@@ -260,15 +260,33 @@ function overLimits(wr: WorkflowRun): boolean {
   if (!wf) return false;
   const ranMs = Date.now() - wr.startedAt - wr.waitedMs;
   if (ranMs > wf.limits.maxMinutes * 60_000) {
-    stopWorkflow(wr.id, `It ran longer than its ${wf.limits.maxMinutes}-minute limit.`);
+    stopWorkflow(wr.id, `It ran longer than its Longest run of ${duration(wf.limits.maxMinutes * 60_000)}.`);
     return true;
   }
   const used = usageUsed(wr);
   if (used !== null && used > wf.limits.maxUsagePct) {
-    stopWorkflow(wr.id, `It used more than about ${wf.limits.maxUsagePct}% of your Claude usage, its limit for one run.`);
+    stopWorkflow(wr.id, `It used about ${used}% of your session usage (added up from the start of the run), more than its Most usage per run of ${wf.limits.maxUsagePct}%.`);
     return true;
   }
   return false;
+}
+
+// Time spent waiting for Claude usage to come back doesn't count toward Longest run.
+const usageWaitSince = new Map<number, number>();
+export function countUsageWait(wr: WorkflowRun, now = Date.now()): WorkflowRun {
+  const step = wr.steps[wr.current];
+  const last = step ? wr.stepRuns[step.id]?.runIds.at(-1) : undefined;
+  const run = last ? getRun(last) : null;
+  const waiting = wr.waiting?.kind === "usage" || (run?.status === "queued" && run.extra.resume?.why === "usage");
+  const since = usageWaitSince.get(wr.id);
+  if (!waiting) {
+    usageWaitSince.delete(wr.id);
+    return wr;
+  }
+  usageWaitSince.set(wr.id, now);
+  if (since === undefined || now <= since) return wr;
+  updateWfRun(wr.id, { waitedMs: wr.waitedMs + (now - since) });
+  return { ...wr, waitedMs: wr.waitedMs + (now - since) };
 }
 
 // How many points of the session's usage this run has used (about: other Claude use on this account counts too).
@@ -707,7 +725,7 @@ export async function tickWorkflows(now = Date.now()) {
 
   // Steps waiting for usage, for a busy agent, or for checks that were cut off by a restart.
   for (const wr of wfRunsWithStatus("running")) {
-    if (overLimits(wr)) continue;
+    if (overLimits(countUsageWait(wr, now))) continue;
     const step = wr.steps[wr.current];
     if (!step) continue;
     const sr = wr.stepRuns[step.id];

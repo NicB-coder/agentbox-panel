@@ -441,7 +441,7 @@ function BigJob({ run, used, held, act, busy }: { run: Run; used: number | null;
       <div>
         <p className="flex flex-wrap items-center justify-between gap-2 text-[15px]">
           <span className="font-semibold">Usage</span>
-          <span className="text-muted">{used === null ? "checking…" : `about ${used}% of your week, budget ${budget}%`}</span>
+          <span className="text-muted">{used === null ? "checking…" : `about ${used}% of this week's usage · budget ${budget}%`}</span>
         </p>
         <span className="mt-2 block h-2 overflow-hidden rounded-full bg-[#E6E8EC]" aria-hidden="true">
           <span className="block h-full rounded-full bg-[#7048C8]" style={{ width: `${Math.min(100, ((used ?? 0) / Math.max(1, budget)) * 100)}%` }} />

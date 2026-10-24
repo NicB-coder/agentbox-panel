@@ -2,9 +2,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import type { BriefRef, Freedom, JobKind, Model, NotifyOn } from "@/lib/types";
-import { defaultMinutes } from "@/lib/job";
+import { BIG_TIME_NOTE, BIG_USAGE_TIP, DEFAULT_JOB, defaultMinutes } from "@/lib/job";
 import { ErrorBox, Label, Switch, post } from "./bits";
-import { CarefulPicker, Chip, FreedomPicker, MinutesSlider, ModelPicker, NotifyPicker, WhenPicker, type When } from "./controls";
+import { CarefulPicker, Chip, FreedomPicker, MinutesSlider, ModelPicker, PercentSlider, NotifyPicker, WhenPicker, type When } from "./controls";
 import BriefPicker, { MissingFileBox, missingOf, type MissingInfo } from "./BriefPicker";
 import { CoachBox, IdeaHelp } from "./Coach";
 import type { SuggestionKey } from "@/lib/coach";
@@ -78,7 +78,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
   const [notify, setNotify] = useState<NotifyOn[]>(["finished", "needs_ok", "problems"]);
   const [askEach, setAskEach] = useState(false);
   const [big, setBig] = useState(false);
-  const [budget, setBudget] = useState(40);
+  const [budget, setBudget] = useState(DEFAULT_JOB.budgetPct);
   const [holdSmall, setHoldSmall] = useState(true);
   const [autoInstall, setAutoInstall] = useState(false);
   const [saveReport, setSaveReport] = useState(false);
@@ -125,6 +125,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       setMore(false);
       setAskEach(false);
       setBig(false);
+      setBudget(DEFAULT_JOB.budgetPct);
       setBrief(null);
       setMissing(null);
       setSaveReport(false);
@@ -331,7 +332,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
             </button>
             {more && (
               <div className="mt-4 flex flex-col gap-6 rounded-[18px] bg-soft p-4 sm:p-5">
-                {!big && <MinutesSlider value={minutes} onChange={(v) => (setMinutes(v), setMinutesTouched(true))} />}
+                <MinutesSlider value={minutes} onChange={(v) => (setMinutes(v), setMinutesTouched(true))} off={big ? BIG_TIME_NOTE : undefined} />
                 <ModelPicker value={model} onChange={setModel} />
                 {TASK_FEATURES.connectors && (
                   <fieldset>
@@ -361,21 +362,14 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
                 {TASK_FEATURES.big && !follow && !research && (
                   <Switch
                     label="Big job"
-                    tip="For long jobs that take hours. No time limit: it works milestone by milestone, saves its work after each one, waits out usage limits, and keeps going after restarts. It stops if it uses more than its usage budget."
+                    tip="For long jobs that take hours. No time limit: it works milestone by milestone, saves its work after each one, waits out usage limits, and keeps going after restarts. Instead of a time limit it has Most usage per run (about 75% of your weekly usage to start with)."
                     checked={big}
                     onChange={setBig}
                   />
                 )}
                 {big && (
                   <div className="flex flex-col gap-5 border-l-2 border-line pl-4">
-                    <MinutesSlider
-                      label="Usage budget"
-                      tip="The most of your weekly Claude usage it may use, in points of the weekly meter. You can raise it while it runs."
-                      value={budget}
-                      onChange={setBudget}
-                      min={5}
-                      max={100}
-                    />
+                    <PercentSlider label="Most usage per run" tip={BIG_USAGE_TIP} value={budget} onChange={setBudget} />
                     <Switch label="Hold small runs" tip="While it works, small scheduled runs wait, so they don't eat its usage. They start again when it's done." checked={holdSmall} onChange={setHoldSmall} />
                     {project === "agentbox-panel" && (
                       <Switch label="Install when finished" tip="When it's done and reviewed, merge it and update this panel to the new version. If the new version doesn't start, it goes back to the old one by itself." checked={autoInstall} onChange={setAutoInstall} />

@@ -7,6 +7,7 @@ import { ADDABLE, STEP_INFO, type AgentRef, briefLabel, flowSentence, hasFailPat
 import type { WorkflowPageState } from "@/lib/workflowViews";
 import type { ChangeDraft } from "@/lib/changeView";
 import { ago, clockOf, duration } from "@/lib/words";
+import { WF_TIME_TIP, WF_USAGE_TIP } from "@/lib/job";
 import { BackLink, Confirm, ErrorBox, InfoTip, Label, Switch, post } from "../bits";
 import { refreshHeader } from "../Header";
 import BriefPicker, { MissingFileBox, TextViewer, missingOf, type MissingInfo } from "../BriefPicker";
@@ -699,14 +700,14 @@ function Limits({ limits, onChange }: { limits: WfLimits; onChange: (l: WfLimits
         </label>
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
-            <Label tip="The longest one run can take, start to finish. Time spent waiting for you doesn't count.">Longest run</Label>
+            <Label tip={WF_TIME_TIP}>Longest run</Label>
             <span className="font-semibold">{duration(limits.maxMinutes * 60000)}</span>
           </span>
           <input type="range" min={10} max={480} step={10} value={limits.maxMinutes} onChange={(e) => onChange({ ...limits, maxMinutes: Number(e.target.value) }, "mins")} className="h-11 accent-[#15171B]" />
         </label>
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
-            <Label tip="Stops a run that uses more than about this much of your Claude usage (the session meter at the top).">Most usage per run</Label>
+            <Label tip={WF_USAGE_TIP}>Most usage per run</Label>
             <span className="font-semibold">about {limits.maxUsagePct}%</span>
           </span>
           <input type="range" min={5} max={100} step={5} value={limits.maxUsagePct} onChange={(e) => onChange({ ...limits, maxUsagePct: Number(e.target.value) }, "usage")} className="h-11 accent-[#15171B]" />

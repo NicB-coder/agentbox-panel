@@ -157,6 +157,28 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
 - **Dev copy:** the dev script copies the database from the folder it runs in, and an agent's working copy has none.
   I didn't touch the live panel's database; I made a fresh starter database for the dev copy instead.
 
+### Milestone 6: clear limits and Big job defaults
+
+- **What "Most usage per run" really measures (I read the code and described that):**
+  - *Workflows:* points of the "This session" meter (the 5-hour one under Claude usage at the top) that one run
+    uses, added up from start to finish even if the meter resets in between (so 100% = one full session). Other
+    Claude use on the account at the same time counts too, because the meter is for the whole account. Going over
+    stops the run, keeps its work, and the Inbox offers Pick up where it stopped. If the meter can't be read exactly,
+    the check is skipped, and the ⓘ says so.
+  - *Big jobs (Start a task → More options):* points of the "This week" meter, also added up across a weekly reset.
+    Going over pauses it with its work saved; the Inbox and the job page offer Raise the budget.
+- **Same name in both places:** the Big job's "Usage budget" slider is now called **Most usage per run**, like in
+  the workflow Limits, and shows "about 75%" (it used to say "40 min" by mistake, because it reused the minutes
+  slider). Its ⓘ calls it the usage budget, so "Used its budget" / "Raise the budget" still make sense.
+- **Big job and the time limit:** instead of hiding the Time limit, it's greyed out with "Doesn't apply" and the
+  line "A Big job has no time limit. It stops when it's done or when it reaches its Most usage per run."
+  Workflow steps can't be Big jobs (Big job only exists on tasks), so the workflow editor needs no such note.
+- **Default 75% for new Big jobs.** Big jobs that were already saved keep their own number.
+- **Bug fixed on the way:** a workflow waiting hours for usage to come back was counting that wait toward its
+  Longest run, so it could be stopped for "running too long" right after usage returned. Waiting for usage no
+  longer counts (as the ⓘ already promised). The stop messages now name the setting: "…more than its Most usage per
+  run of 25%" and "…longer than its Longest run of 2 h".
+
 
 # v3: simpler, fully in the panel, deep research
 
