@@ -1,9 +1,10 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import type { WfLimits, WfStep } from "@/lib/types";
+import type { BriefRef, WfLimits, WfStep } from "@/lib/types";
 import { STEP_INFO, TEMPLATES, defaultWorkflow, nameFromGoal, stepIconOf, stepTitle, templateWorkflow, type AgentRef, type TemplateKey } from "@/lib/wf";
 import { BackLink, ErrorBox, InfoTip, Label, post } from "./bits";
+import BriefPicker from "./BriefPicker";
 import ProjectSelect from "./ProjectSelect";
 import { Icon, btn } from "./ui";
 
@@ -15,6 +16,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
   const router = useRouter();
   const [goal, setGoal] = useState("");
   const [project, setProject] = useState(projects[0] ?? "");
+  const [brief, setBrief] = useState<BriefRef | null>(null);
   const [choice, setChoice] = useState<Steps>({ from: "default" });
   const [changing, setChanging] = useState(false);
   const [words, setWords] = useState("");
@@ -32,7 +34,8 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
 
   async function make(e?: React.FormEvent) {
     e?.preventDefault();
-    const g = goal.trim() || (plan.steps[0]?.task ?? "").trim();
+    // A brief on its own is enough: the goal then points at it.
+    const g = goal.trim() || (plan.steps[0]?.task ?? "").trim() || (brief ? `Make what the attached brief (${brief.name}) describes.` : "");
     if (!g) {
       document.getElementById("nw-goal")?.focus();
       return setError({ msg: "Write what you want to make first. One sentence is enough." });
@@ -40,8 +43,10 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
     setBusy("make");
     setError(null);
     try {
-      const steps = plan.steps.map((s, i) => (i === 0 ? { ...s, task: g } : s));
-      const name = !goal.trim() || (autoGoal && goal === autoGoal) ? plan.name : nameFromGoal(g);
+      const steps = plan.steps.map((s, i) => (i === 0 ? { ...s, task: g, ...(brief ? { brief } : {}) } : s));
+      const briefWords = brief ? brief.name.replace(/\.(md|markdown|txt)$/i, "").replace(/[-_]+/g, " ") : "";
+      const fromBrief = briefWords && !/^(claude|brief|readme|agents|spec|plan)$/i.test(briefWords) && !goal.trim() && !(plan.steps[0]?.task ?? "").trim() ? nameFromGoal(briefWords) : "";
+      const name = fromBrief || (!goal.trim() || (autoGoal && goal === autoGoal) ? plan.name : nameFromGoal(g));
       const w = await post<{ id: number }>("/api/workflows", { name, project, steps, limits: plan.limits });
       router.push(`/workflows/${w.id}?new=1`);
     } catch (err) {
@@ -106,6 +111,8 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
         <div className="max-w-[420px]">
           <ProjectSelect value={project} onChange={setProject} projects={projects} tip="The code this workflow works on. All its steps share one copy of it." />
         </div>
+
+        <BriefPicker project={project} value={brief} onChange={setBrief} disabled={busy === "make"} />
 
         <div className="flex flex-col gap-3" aria-labelledby="nw-steps-h">
           <p id="nw-steps-h" className="flex items-center text-[15px] font-semibold">

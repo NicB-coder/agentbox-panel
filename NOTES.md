@@ -41,7 +41,7 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
   finished in under 2 minutes. Check it did the whole job before you merge." instead of a second card.
 - **Try again** on a quiet card starts the same task or workflow fresh and clears the card. Older runs that stored
   the goal as their typed line don't send it twice.
-- The brief name in "What it was told" comes with milestone 3 (briefs), since briefs don't exist yet.
+- The brief name in "What it was told" came with milestone 3 (briefs): it shows "The brief: NAME · N lines" with View.
 - The worktree has no database of its own, so `scripts/dev-copy.sh fresh` can't copy one. I made the dev copy with
   a read-only SQLite backup of the live database (`sqlite3 "file:…?mode=ro" ".backup …"`), then ran the script
   without `fresh` and the same clean-up it does.
@@ -54,8 +54,7 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
   have the same name. A ready-made set with its own job (Nightly site check) fills an empty goal box, and takes it
   back out if Nic picks other steps without editing it.
 - **Next** makes the workflow (still Off, as before) with the goal saved and a name made from the goal, and opens
-  the editor with a "Your workflow is ready" note. The **Attach a brief** box isn't on the start screen yet; it
-  comes with milestone 3 (briefs), so nothing half-built shows.
+  the editor with a "Your workflow is ready" note. The **Attach a brief** box was added in milestone 3.
 - **Run now / Test run** start straight away with the saved goal. Under them, small links **Run with a different
   goal…** / **Test with a different goal…** open a box filled in with the saved goal. A changed goal is used for
   that one run only (the run's own copy of the steps carries it, `stepsWithGoal` in lib/wf.ts); the saved goal
@@ -71,6 +70,39 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
   as an addition to the saved goal (both reach the agent), it doesn't ask again. Helper: its guide, page notes and
   snapshot now describe the new start screen and Run now; its workflow cards already carry the goal. Run history
   rows now show the run's goal instead of just "Run".
+- **Briefs (milestone 3): one picker everywhere.** "Attach a brief (optional)" is on the start screen (under
+  Project, so "Pick a file from the project" knows which project), under the goal box in the workflow editor, and
+  in the Start a task panel (it replaces the old paperclip links there). Upload, drag a file onto it, or pick a
+  .md/.txt file from the project. It shows "Brief: CLAUDE.md · 142 lines" with View and Remove. A brief on its own
+  (empty goal box) is enough on the start screen: the goal becomes "Make what the attached brief (NAME) describes."
+- **Where the brief text lives:** the panel keeps it in `data/briefs/store/<hash>.md` and the workflow only saves
+  its name, line count and hash on the Start step. So undo, version history and old runs always point at the exact
+  text they had, and the page doesn't send 400 KB around on every refresh. Tasks still keep theirs as
+  `data/briefs/agent-<id>.md` (unchanged), but the panel now sends it by hash.
+- **In the run:** it's copied to the top of the run's copy of the project as `CLAUDE.md` if the project has none
+  (so Claude Code loads it by itself), else `BRIEF.md` (else `AGENTBOX-BRIEF.md`), and every step is told "Follow
+  CLAUDE.md in the repo root". It's **never committed**: the panel's own commits leave it out, and the agent is told
+  not to commit it. Otherwise a run that did nothing would still "change" something and the no-silent-failure
+  check from milestone 1 would miss it. To put a brief in the project for good, use Projects → Add a file.
+- **"This project has a brief ✓"** looks for a CLAUDE.md at the top of the project, on this Mac or on GitHub
+  (so a file added with Add a file shows as soon as it's merged).
+- **Missing-file check:** only files the goal says to *follow or read* count ("follow CLAUDE.md", "described in
+  docs/spec.md", "read notes.txt"), and only document-like files (.md, .txt, .pdf, .docx, .rtf). Files it asks to
+  *make* ("write a README.md", "put the games in index.html") never block a run. A file counts as there if it's
+  anywhere in the project by name, on GitHub's copy (it fetches first), or is the attached brief (an attached brief
+  also covers "CLAUDE.md"/"BRIEF.md", since that's where it's copied). Run now / Test run / Start a task / an
+  agent's Run now refuse with "I can't find X in Y. Attach it here or add it to the project, then start it again."
+  plus **Attach it** (opens the file chooser) and **Add to project** (opens Projects with that project highlighted).
+  A run that starts by itself (schedule) is made and stopped straight away with that sentence, so it lands in the
+  Inbox instead of failing silently. Text from GitHub issues and pull requests isn't checked.
+- **Projects → Add a file:** any file up to 5 MB, put at the top of the project, one commit on a new branch
+  `files/<name>` (then `-2`, `-3` if taken), and a pull request. The Inbox shows "A file to add · Add CLAUDE.md to
+  lookout" with **Merge it** (squash merge, deletes the branch, then fetches so runs see it), **Don't add it**
+  (closes it) and **See it on GitHub**. I didn't test a real merge on GitHub from the dev copy (that would open a
+  real pull request on Nic's repo); the unit test runs everything up to the pull request against a local stand-in
+  for GitHub, and the browser test fakes the last step.
+- The "file missing" answer is a 409 reply, like every other refusal in the panel, so the browser logs it. It
+  isn't a failure; milestone 8's "zero failed requests" check should treat these as expected.
 
 
 # v3: simpler, fully in the panel, deep research

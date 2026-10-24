@@ -250,6 +250,7 @@ export type WfStep = {
   scheduleTime?: string;
   label?: string; // GitHub issue label
   task?: string; // start step: what this workflow should make (the default task for Run now, Test run and automatic runs)
+  brief?: BriefRef; // start step: an attached brief, copied into every run's folder
   // agent / research / review
   agentId?: number | null; // null = quick step
   prompt?: string;
@@ -272,6 +273,9 @@ export type WfStep = {
   tellWhen?: "always" | "problems";
   openIssue?: boolean;
 };
+
+// An attached brief file. The text is kept by the panel (lib/briefs.ts), found by its hash.
+export type BriefRef = { name: string; lines: number; hash: string };
 
 export type WfLimits = { maxLoops: number; maxMinutes: number; maxUsagePct: number };
 
@@ -346,4 +350,5 @@ export type InboxItem =
   | { key: string; kind: "failed"; at: number; title: string; who: string; color: string; icon: string; runId: number; agentId: number; text: string; link: string; canRetry: boolean; canContinue: boolean; stopKind: "time" | "budget" | "signin" | "error"; signIn?: "claude" | "github" }
   | { key: string; kind: "wf_ask" | "wf_ship"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string | null; link: string; test: boolean }
   | { key: string; kind: "wf_failed"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; workflowId: number; text: string; link: string }
+  | { key: string; kind: "file_pr"; at: number; title: string; who: string; color: string; icon: string; fileId: number; project: string; file: string; prUrl: string; text: string; link: string }
   | { key: string; kind: "quiet"; at: number; title: string; who: string; color: string; icon: string; runId?: number; wfRunId?: number; text: string; next: string; said: string | null; link: string; canRetry: boolean };

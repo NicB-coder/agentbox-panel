@@ -1,10 +1,11 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import type { Freedom, JobKind, Model, NotifyOn } from "@/lib/types";
+import type { BriefRef, Freedom, JobKind, Model, NotifyOn } from "@/lib/types";
 import { defaultMinutes } from "@/lib/job";
 import { ErrorBox, Label, Switch, post } from "./bits";
 import { CarefulPicker, Chip, FreedomPicker, MinutesSlider, ModelPicker, NotifyPicker, WhenPicker, type When } from "./controls";
+import BriefPicker, { MissingFileBox, missingOf, type MissingInfo } from "./BriefPicker";
 import ProjectSelect from "./ProjectSelect";
 import Segmented from "./Segmented";
 import { Icon, btn } from "./ui";
@@ -50,14 +51,12 @@ async function followUpOf(id: number): Promise<TaskPanelOpen["followUp"] | null>
 // Features that switch on as they're finished (never show a half-built one).
 export const TASK_FEATURES = { research: true, big: true, connectors: true };
 
-type Brief = { name: string; text: string };
 
 export default function TaskPanel({ projects, connectors = [], defaultProject }: { projects: string[]; connectors?: Connector[]; defaultProject?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const router = useRouter();
   const titleId = useId();
   const taskId = useId();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [follow, setFollow] = useState<TaskPanelOpen["followUp"] | null>(null);
   const [ideaId, setIdeaId] = useState<number | null>(null);
@@ -79,8 +78,9 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
   const [holdSmall, setHoldSmall] = useState(true);
   const [autoInstall, setAutoInstall] = useState(false);
   const [saveReport, setSaveReport] = useState(false);
-  const [brief, setBrief] = useState<Brief | null>(null);
-  const [briefPick, setBriefPick] = useState<null | { file: string }[]>(null);
+  const [brief, setBrief] = useState<BriefRef | null>(null);
+  const [missing, setMissing] = useState<MissingInfo | null>(null);
+  const openBrief = useRef<(() => void) | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [live, setLive] = useState<Connector[] | null>(null);
@@ -118,7 +118,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       setAskEach(false);
       setBig(false);
       setBrief(null);
-      setBriefPick(null);
+      setMissing(null);
       setSaveReport(false);
       setError("");
       ref.current?.showModal();
@@ -135,40 +135,13 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
     if (k === "research") setBig(false);
   }
 
-  async function readFile(f: File | undefined) {
-    if (!f) return;
-    if (f.size > 400_000) return setError("That file is too big. Keep a brief under about 400 KB.");
-    if (!/\.(md|markdown|txt)$/i.test(f.name)) return setError("Pick a Markdown (.md) or text (.txt) file.");
-    setBrief({ name: f.name, text: await f.text() });
-    setError("");
-  }
-
-  async function listBriefs() {
-    setError("");
-    try {
-      const j = await post<{ files: { file: string }[] }>(`/api/projects/${encodeURIComponent(project)}/briefs`, {}, "GET");
-      setBriefPick(j.files);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  async function pickBrief(file: string) {
-    try {
-      const j = await post<Brief>(`/api/projects/${encodeURIComponent(project)}/briefs?file=${encodeURIComponent(file)}`, {}, "GET");
-      setBrief(j);
-      setBriefPick(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
   async function start(e?: React.FormEvent) {
     e?.preventDefault();
     if (task.trim().length < 3 && !brief) return setError(kind === "research" ? "Write your question first." : "Write what it should do first.");
     if (!project && kind !== "research") return setError("Pick a project first.");
     setBusy(true);
     setError("");
+    setMissing(null);
     try {
       const j = await post<{ agentId: number }>("/api/tasks", {
         kind, task, project, ...when, freedom, careful, maxMinutes: minutes, model, connectors: picked, notify, askEachStep: askEach,
@@ -179,7 +152,9 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       router.push(`/agents/${j.agentId}`);
       router.refresh();
     } catch (err) {
-      setError((err as Error).message);
+      const m = missingOf(err);
+      if (m) setMissing(m);
+      else setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -241,48 +216,6 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               }
               className="rounded-[14px] border border-[#C9CDD4] p-4 text-[16px] leading-relaxed"
             />
-            {TASK_FEATURES.big && !follow && (
-              <div className="flex flex-wrap items-center gap-2">
-                {brief ? (
-                  <span className="inline-flex min-h-11 items-center gap-2 rounded-full bg-soft px-4 text-[14px] font-semibold">
-                    <Icon name="book" color="#15171B" size={18} />
-                    {brief.name} · {Math.max(1, Math.round(brief.text.length / 1000))} KB
-                    <button type="button" className="ml-1 min-h-11 px-1 underline" onClick={() => setBrief(null)}>
-                      Remove
-                    </button>
-                  </span>
-                ) : (
-                  <>
-                    <button type="button" className={btn.link} onClick={() => fileRef.current?.click()}>
-                      Attach a brief file
-                    </button>
-                    {project && (
-                      <button type="button" className={btn.link} onClick={listBriefs}>
-                        Pick one from the project
-                      </button>
-                    )}
-                    <input ref={fileRef} type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => readFile(e.target.files?.[0])} />
-                  </>
-                )}
-              </div>
-            )}
-            {briefPick && (
-              <div className="rounded-[14px] border border-line p-3">
-                {briefPick.length === 0 ? (
-                  <p className="text-[14px] text-muted">There are no .md or .txt files in {project}.</p>
-                ) : (
-                  <ul className="flex max-h-56 flex-col overflow-auto">
-                    {briefPick.map((f) => (
-                      <li key={f.file}>
-                        <button type="button" className="flex min-h-11 w-full items-center rounded-[10px] px-3 text-left text-[14px] hover:bg-soft" onClick={() => pickBrief(f.file)}>
-                          {f.file}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
           </div>
 
           {follow ? (
@@ -296,6 +229,19 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               projects={projects}
               optional={research}
               tip={research ? "Optional. Pick one if the question is about a project, or to save the report there." : "The code it works on. It always works in its own copy, never straight in main."}
+            />
+          )}
+
+          {!follow && (
+            <BriefPicker
+              project={project}
+              value={brief}
+              onChange={(b) => {
+                setBrief(b);
+                setMissing(null);
+              }}
+              openRef={openBrief}
+              tip="A longer file that says exactly what to do, like a CLAUDE.md. It's copied into the agent's own copy of the project when it starts, so it always sees it."
             />
           )}
 
@@ -374,6 +320,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               </div>
             )}
           </div>
+          {missing && <MissingFileBox missing={missing} onAttach={() => openBrief.current?.()} />}
           {error && <ErrorBox compact message={error} onRetry={() => start()} where="the Start a task panel" />}
         </div>
 

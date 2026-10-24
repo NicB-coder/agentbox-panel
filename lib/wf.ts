@@ -1,6 +1,6 @@
 // Workflow building blocks shared by the browser and the server: step types, templates,
 // the plain-English sentence for a whole flow, and turning anything into a clean workflow.
-import type { CheckKind, Freedom, Model, StartTrigger, StepType, WfLimits, WfStep, WorkflowInput, WorkMode } from "./types";
+import type { BriefRef, CheckKind, Freedom, Model, StartTrigger, StepType, WfLimits, WfStep, WorkflowInput, WorkMode } from "./types";
 import { clock, scheduleWords, times } from "./words";
 
 export type AgentRef = { id: number; name: string; color: string; icon: string; slug?: string; allowed?: string; archived?: boolean };
@@ -128,6 +128,17 @@ export function goalTooLong(rawSteps: unknown): string | null {
   const len = typeof first?.task === "string" ? first.task.length : 0;
   return len > GOAL_MAX ? `The goal is too long (${len.toLocaleString("en-US")} characters). Keep it under ${GOAL_MAX.toLocaleString("en-US")}.` : null;
 }
+
+// An attached brief as saved with a workflow: its name, length and the hash the panel keeps its text under.
+export function cleanBriefRef(raw: unknown): BriefRef | undefined {
+  const r = raw as Partial<BriefRef> | null;
+  if (!r || typeof r !== "object" || typeof r.hash !== "string" || !/^[a-f0-9]{24}$/.test(r.hash)) return undefined;
+  const name = String(r.name ?? "").replace(/[^\w.\- ]+/g, "").trim().slice(0, 80);
+  return { name: name && !name.startsWith(".") ? name : "brief.md", lines: Math.max(0, Math.round(Number(r.lines) || 0)), hash: r.hash };
+}
+
+// "Brief: CLAUDE.md · 142 lines"
+export const briefLabel = (b: { name: string; lines: number }) => `${b.name} · ${b.lines.toLocaleString("en-US")} ${b.lines === 1 ? "line" : "lines"}`;
 
 export const hasFailPath = (s: WfStep) => s.type === "review" || s.type === "check";
 
@@ -337,6 +348,8 @@ export function cleanSteps(raw: unknown, agentIds: number[]): WfStep[] {
       }
       if (s.trigger === "issue_label") s.label = text("label", 50).trim() || "agent";
       s.task = text("task", GOAL_MAX);
+      const brief = cleanBriefRef(r.brief);
+      if (brief) s.brief = brief;
     }
     if (type === "agent" || type === "research" || type === "review") {
       s.prompt = text("prompt");

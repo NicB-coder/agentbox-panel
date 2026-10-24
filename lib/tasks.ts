@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, activeRun, createAgent, getAgent, listAgents, renameAgent, setArchived } from "./db";
+import { readStoredBrief } from "./briefs";
 import { COLOR_CHOICES } from "./choices";
 import { DEFAULT_JOB, defaultMinutes, iconFor, jobName, modeFor, pickColor } from "./job";
 import { listProjects } from "./projects";
@@ -43,8 +44,11 @@ export function parseTaskInput(body: unknown, projects = listProjects()): { ok: 
   const b = (body ?? {}) as Record<string, unknown>;
   const kind: JobKind = b.kind === "research" ? "research" : "build";
   const task = String(b.task ?? "").trim();
-  const brief = b.brief && typeof b.brief === "object" ? (b.brief as { name?: unknown; text?: unknown }) : null;
-  const briefText = brief ? String(brief.text ?? "") : "";
+  // The panel attaches a brief by its hash (lib/briefs.ts); older callers send the text itself.
+  const brief = b.brief && typeof b.brief === "object" ? (b.brief as { name?: unknown; text?: unknown; hash?: unknown }) : null;
+  const stored = brief && typeof brief.hash === "string" ? readStoredBrief(brief.hash) : null;
+  if (brief && typeof brief.hash === "string" && stored === null) return { ok: false, error: "That brief isn't here any more. Remove it and attach it again." };
+  const briefText = stored ?? (brief ? String(brief.text ?? "") : "");
   if (task.length < 3 && !briefText) return { ok: false, error: kind === "research" ? "Write your question first." : "Write what it should do first." };
   if (task.length > 8000) return { ok: false, error: "That's a lot of text. Attach it as a brief file instead (the paperclip under the box)." };
   if (briefText.length > MAX_BRIEF) return { ok: false, error: "That brief file is too big. Keep it under about 400 KB." };

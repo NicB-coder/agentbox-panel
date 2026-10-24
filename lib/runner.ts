@@ -6,6 +6,7 @@ import {
   LOG_DIR, activeRun, addRunUsage, createRun, db, denyPendingForRun, getAgent, getRun, getSetting, listRuns, pendingApprovalForRun, runsWithStatus,
   updateRun,
 } from "./db";
+import { addAllArgs, briefPromptLine, placeBrief, placedBrief } from "./briefs";
 import { notify } from "./notify";
 import { cleanup, exitInfo, isAlive, launch, readNew, stopProc, tail, type ProcExit, type ProcHandle } from "./proc";
 import { projectPath } from "./projects";
@@ -365,15 +366,22 @@ async function continuation(agent: Agent, run: Run, repo: string): Promise<{ bra
   return null;
 }
 
-// A long brief is stored with the job and put in the copy as .agentbox/brief.md (never committed).
+// A long brief is stored with the job and copied to the top of the run's folder (CLAUDE.md, or BRIEF.md if the
+// project has its own). The panel's commits leave it out.
 function putBrief(agent: Agent, dir: string) {
   try {
     fs.mkdirSync(path.join(dir, ".agentbox"), { recursive: true });
     fs.writeFileSync(path.join(dir, ".agentbox", ".gitignore"), "*\n");
-    if (agent.job.brief) fs.copyFileSync(path.join(BRIEFS, `agent-${agent.id}.md`), path.join(dir, ".agentbox", "brief.md"));
+    if (agent.job.brief) placeBrief(dir, fs.readFileSync(path.join(BRIEFS, `agent-${agent.id}.md`), "utf8"));
   } catch {
     /* no brief file */
   }
+}
+
+// The line the agent gets about its brief (none if it has none, or it couldn't be copied in).
+function briefLine(agent: Agent, run: Run): string {
+  const placed = agent.job.brief && run.worktree ? placedBrief(run.worktree) : null;
+  return placed ? briefPromptLine(agent.job.brief!, placed) : "";
 }
 
 // ---------- what each session is told ----------
@@ -416,23 +424,23 @@ function rules(agent: Agent, run: Run, phase: Phase): string {
   return lines.join("\n");
 }
 
-function jobText(agent: Agent): string {
-  const brief = agent.job.brief ? `\n\nNic attached a brief for this job (${agent.job.brief}). Read it first, all of it: .agentbox/brief.md in your folder. Don't commit that folder.` : "";
-  return `Your job, in Nic's words:\n${agent.prompt}${brief}`;
+function jobText(agent: Agent, run: Run): string {
+  const brief = briefLine(agent, run);
+  return `Your job, in Nic's words:\n${agent.prompt}${brief ? `\n\n${brief}` : ""}`;
 }
 
 function buildPrompt(agent: Agent, run: Run): string {
   if (run.workflowRunId) return `${eff(agent, run).prompt}`;
   if (agent.job.kind === "research") {
     const project = run.extra.project ?? agent.project;
-    if (!run.extra.followUp) return researchPrompt(agent.prompt, { project: project || undefined, brief: !!agent.job.brief });
+    if (!run.extra.followUp) return researchPrompt(agent.prompt, { project: project || undefined, brief: briefLine(agent, run) });
     const before = listRuns(agent.id, 5).find((r) => r.id !== run.id && r.status === "done" && r.result);
     return researchPrompt(
       `${run.task}\n\n(This follows up on Nic's earlier question: "${agent.prompt.slice(0, 1500)}". Your earlier report is below; build on it, don't repeat it.)\n\n<earlier-report>\n${(before?.result ?? "").slice(0, 20000)}\n</earlier-report>`,
-      { project: project || undefined, brief: !!agent.job.brief },
+      { project: project || undefined, brief: briefLine(agent, run) },
     );
   }
-  const job = jobText(agent);
+  const job = jobText(agent, run);
   if (run.extra.followUp) {
     const earlier = listRuns(agent.id, 8).filter((r) => r.id !== run.id && !r.workflowRunId).reverse();
     const lines = earlier.map((r, i) => `${i + 1}. ${r.extra.jobStart ? "The job itself" : `"${r.task.slice(0, 300)}"`} → ${r.status === "stopped" ? `stopped (${r.stopReason ?? "no reason"})` : r.status === "review" ? "pull request open" : r.status}${r.result ? `: ${firstLine(r.result).slice(0, 300)}` : ""}${r.prUrl ? ` (${r.prUrl})` : ""}`);
@@ -456,7 +464,8 @@ function buildPrompt(agent: Agent, run: Run): string {
 function whatWasAsked(agent: Agent, run: Run): string {
   if (run.workflowRunId) return eff(agent, run).prompt.slice(0, 6000);
   const extra = run.extra.followUp || !(run.extra.jobStart || run.task === "Its usual job" || run.task === "Scheduled run") ? `\n\nThis time Nic asked for:\n${run.task}` : "";
-  return `${jobText(agent)}${extra}`;
+  const brief = agent.job.brief && !briefLine(agent, run) ? `\n\nNic attached a brief: ${agent.job.brief}` : "";
+  return `${jobText(agent, run)}${brief}${extra}`;
 }
 
 function reviewPrompt(agent: Agent, run: Run, base: string, final: boolean): string {
@@ -1068,7 +1077,7 @@ async function commitAll(run: Run, message: string) {
   if (!run.worktree || !run.branch) return;
   const status = await sh("git", ["status", "--porcelain"], run.worktree);
   if (!status.out) return;
-  await sh("git", ["add", "-A"], run.worktree);
+  await sh("git", addAllArgs(run.worktree), run.worktree);
   await sh("git", ["commit", "-m", `${message.slice(0, 72)}\n\nMade by an agent from agentbox.`], run.worktree);
 }
 
@@ -1124,7 +1133,7 @@ async function finishStep(agent: Agent, run: Run, summary: string, report: strin
   if (!lookOnly(e.allowed, run.mode) && run.worktree) {
     const status = await sh("git", ["status", "--porcelain"], run.worktree);
     if (status.out) {
-      await sh("git", ["add", "-A"], run.worktree);
+      await sh("git", addAllArgs(run.worktree), run.worktree);
       await sh("git", ["commit", "-m", `${(run.extra.label ?? e.name).slice(0, 60)}: ${summary.slice(0, 200)}\n\nMade by a workflow step from agentbox.`], run.worktree);
     }
   }
@@ -1147,7 +1156,7 @@ async function shipIt(agent: Agent, run: Run, summary: string) {
   // Commit anything it left uncommitted.
   const status = await sh("git", ["status", "--porcelain"], dir);
   if (status.out) {
-    await sh("git", ["add", "-A"], dir);
+    await sh("git", addAllArgs(dir), dir);
     await sh("git", ["commit", "-m", `${run.task.slice(0, 72)}\n\n${summary}\n\nMade by the ${agent.name} agent from agentbox.`], dir);
   }
   const base = await baseRef(dir);

@@ -175,6 +175,7 @@ const KIND_WORD: Record<InboxItem["kind"], string> = {
   wf_ship: "Ready to ship",
   wf_failed: "Workflow stopped",
   quiet: "Didn't do anything",
+  file_pr: "A file to add",
 };
 
 function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
@@ -216,7 +217,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
           )}
           {it.kind === "pr" && it.careful && <p className="mt-2 text-[15px] font-semibold text-[#1E6B34]">{it.careful}</p>}
           {it.kind === "pr" && !it.careful && it.review && <ReviewFindings review={it.review} />}
-          {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed") && (
+          {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed" || it.kind === "file_pr") && (
             <p className="mt-2 text-[15px] leading-relaxed text-muted">{plainText(it.text)}</p>
           )}
           {it.kind === "pr" && it.quick && <p className="mt-2 text-[15px] font-semibold text-[#8A4600]">It finished in under 2 minutes. Check it did the whole job before you merge.</p>}
@@ -386,6 +387,19 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                   <button className={btn.link} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/dismiss`)}>
                     Dismiss
                   </button>
+                </>
+              )}
+              {it.kind === "file_pr" && (
+                <>
+                  <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/file-prs/${it.fileId}/merge`)}>
+                    {busy === it.key ? "Merging…" : "Merge it"}
+                  </button>
+                  <button className={btn.secondary} disabled={b} onClick={() => act(it.key, `/api/file-prs/${it.fileId}/close`)}>
+                    Don't add it
+                  </button>
+                  <a href={it.prUrl} target="_blank" rel="noreferrer" className={btn.link}>
+                    See it on GitHub
+                  </a>
                 </>
               )}
               {it.kind === "quiet" && (

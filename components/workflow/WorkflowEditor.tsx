@@ -3,11 +3,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StepType, WfLimits, WfStep, WorkflowInput, WorkflowRun, WorkflowVersion } from "@/lib/types";
-import { ADDABLE, STEP_INFO, flowSentence, hasFailPath, newStep, stepTitle, workflowProblems } from "@/lib/wf";
+import { ADDABLE, STEP_INFO, briefLabel, flowSentence, hasFailPath, newStep, stepTitle, workflowProblems } from "@/lib/wf";
 import type { WorkflowPageState } from "@/lib/workflowViews";
 import { ago, clockOf, duration } from "@/lib/words";
 import { BackLink, Confirm, ErrorBox, InfoTip, Label, Switch, post } from "../bits";
 import { refreshHeader } from "../Header";
+import BriefPicker, { MissingFileBox, TextViewer, missingOf, type MissingInfo } from "../BriefPicker";
 import ProjectSelect from "../ProjectSelect";
 import { Icon, StatusPill, btn, field } from "../ui";
 import { usePoll } from "../usePoll";
@@ -110,6 +111,8 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState<{ msg: string; retry?: () => void } | null>(null);
+  const [missing, setMissing] = useState<MissingInfo | null>(null);
+  const openBrief = useRef<(() => void) | null>(null);
   const [flash, setFlash] = useState("");
 
   const steps = live ? viewing!.steps : def.steps;
@@ -218,6 +221,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
     if (dirty && !(await save())) return;
     setBusy(test ? "test" : "run");
     setError(null);
+    setMissing(null);
     try {
       const g = goal.trim() && goal.trim() !== savedGoal ? goal.trim() : undefined;
       const r = await post<WorkflowRun>(`/api/workflows/${id}/run`, { test, goal: g });
@@ -226,7 +230,9 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       router.replace(`/workflows/${id}?run=${r.id}`, { scroll: false });
       refreshHeader();
     } catch (e) {
-      setError({ msg: (e as Error).message, retry: () => startRun(test, goal) });
+      const m = missingOf(e);
+      if (m) setMissing(m);
+      else setError({ msg: (e as Error).message, retry: () => startRun(test, goal) });
       setRunDialog(null);
     } finally {
       setBusy("");
@@ -337,6 +343,18 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
             placeholder="For example: An arcade website with 4 small games that work on phones too."
             className="max-w-[860px] rounded-[14px] border border-[#C9CDD4] p-4 text-[16px] leading-relaxed"
           />
+          <div className="mt-2 max-w-[860px]">
+            <BriefPicker
+              project={def.project}
+              value={def.steps[0]?.brief ?? null}
+              onChange={(b) => {
+                setMissing(null);
+                update({ ...def, steps: def.steps.map((x, i) => (i === 0 ? { ...x, brief: b ?? undefined } : x)) });
+              }}
+              openRef={openBrief}
+              tip="A longer file that says exactly what to make, like a CLAUDE.md. It's copied into the workflow's copy of the project at the start of every run, so every step sees it. Remember to Save."
+            />
+          </div>
         </div>
       )}
       <p className="mt-5 max-w-[860px] text-[17px] font-medium leading-relaxed" aria-live="polite">
@@ -351,6 +369,11 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
         <p className="mt-4 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
           Claude drafted these steps from what you wrote. Click each one to check it, then try a Test run before you turn it on.
         </p>
+      )}
+      {missing && !live && (
+        <div className="mt-4 max-w-[860px]">
+          <MissingFileBox missing={missing} onAttach={() => openBrief.current?.()} onClose={() => setMissing(null)} />
+        </div>
       )}
       {error && (
         <div className="mt-4">
@@ -499,11 +522,19 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
 const RUN_PILL = { queued: "queued", running: "running", needs: "needs", done: "done", stopped: "stopped" } as const;
 const RUN_WORD = { queued: "Waiting", running: "Running", needs: "Needs you", done: "Done", stopped: "Stopped" };
 
-// The first thing the run's agents were told: the saved goal, plus anything typed for this run.
+// The first thing the run's agents were told: the saved goal, the brief's name, and anything typed for this run.
 function WhatItWasTold({ run, savedGoal }: { run: WorkflowRun; savedGoal: string }) {
   const [open, setOpen] = useState(false);
   const goal = (run.steps[0]?.task ?? "").trim();
   const extra = run.input.trim() !== goal ? run.input.trim() : "";
+  const brief = run.steps[0]?.brief;
+  const [view, setView] = useState<null | { title: string; text: string | null }>(null);
+  async function viewBrief() {
+    if (!brief) return;
+    setView({ title: brief.name, text: null });
+    const j = await post<{ text: string }>(`/api/briefs/${brief.hash}`, {}, "GET").catch((e: Error) => ({ text: e.message }));
+    setView({ title: brief.name, text: j.text });
+  }
   return (
     <div className="mx-4 mb-4 sm:mx-6">
       <button type="button" className={btn.link} aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -515,6 +546,18 @@ function WhatItWasTold({ run, savedGoal }: { run: WorkflowRun; savedGoal: string
             <p className="font-semibold">{goal && savedGoal.trim() && goal !== savedGoal.trim() ? "The goal (different from the one saved now)" : "The goal"}</p>
             <p className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap text-muted">{goal || "No goal was saved, so it only had each step's own instructions."}</p>
           </div>
+          {brief && (
+            <div>
+              <p className="font-semibold">The brief</p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 text-muted">
+                {briefLabel(brief)}
+                <button type="button" className={btn.link} onClick={viewBrief}>
+                  View
+                </button>
+              </p>
+              <TextViewer view={view} onClose={() => setView(null)} />
+            </div>
+          )}
           {extra && (
             <div>
               <p className="font-semibold">You added for this run</p>

@@ -6,6 +6,7 @@ import {
   activeRun, createWfRun, getAgent, getRun, getWfRun, getWorkflow, hasSeenAny, helperAgentId, listAgents, listWorkflows, markSeen,
   setWorkflowNextRunAt, updateWfRun, wfRunsWithStatus,
 } from "./db";
+import { briefPromptLine, missingFile, placeBrief, placedBrief, readStoredBrief, type Missing } from "./briefs";
 import { runChecks } from "./checks";
 import { sendDiscord } from "./notify";
 import { projectPath } from "./projects";
@@ -95,6 +96,15 @@ export type StartWfOpts = {
   prBranch?: string; // "When a pull request opens": work on that pull request's branch
 };
 
+// "I can't find CLAUDE.md in lookout": said before a run starts, with Attach it / Add to project buttons.
+export class MissingFileError extends Error {
+  missing: Missing;
+  constructor(missing: Missing) {
+    super(missing.message);
+    this.missing = missing;
+  }
+}
+
 export async function startWorkflow(workflowId: number, opts: StartWfOpts): Promise<WorkflowRun> {
   const wf = getWorkflow(workflowId);
   if (!wf) throw new Error("There's no workflow with that number.");
@@ -105,9 +115,21 @@ export async function startWorkflow(workflowId: number, opts: StartWfOpts): Prom
   const manual = opts.trigger === "manual" || opts.trigger === "test" || opts.trigger === "idea";
   if (busyRun && manual) throw new Error("It's already running. Wait for it to finish or stop it first.");
 
+  const brief = wf.steps[0]?.brief;
+  if (brief && readStoredBrief(brief.hash) === null) throw new Error(`The brief ${brief.name} isn't here any more. Remove it and attach it again.`);
+  // Files the goal says to follow must be there (issue and pull request text is GitHub's, not checked).
+  const missing = await missingFile(wf.project, [opts.goal ?? wf.steps[0]?.task ?? "", opts.trigger === "issue" || opts.trigger === "pr" ? "" : opts.input ?? ""], brief?.name);
+  if (missing && manual) throw new MissingFileError(missing);
+
   const stepRuns: Record<string, WfStepRun> = {};
   for (const s of wf.steps) stepRuns[s.id] = freshStepRun();
   const steps = stepsWithGoal(wf.steps, opts.goal);
+  if (missing) {
+    // A run that started by itself: stop it straight away, so the Inbox says why.
+    const wr = createWfRun({ workflowId, status: "running", test: !!opts.test, input: (opts.input ?? "").trim().slice(0, 8000), trigger: opts.trigger, triggerRef: opts.triggerRef ?? null, steps, stepRuns });
+    stopWorkflow(wr.id, missing.message);
+    return getWfRun(wr.id)!;
+  }
   const wr = createWfRun({
     workflowId, status: busyRun ? "queued" : "running", test: !!opts.test, input: (opts.input ?? "").trim().slice(0, 8000), // only what was typed for this run: the goal travels in steps[0]
     trigger: opts.trigger, triggerRef: opts.triggerRef ?? (opts.prBranch ? `branch:${opts.prBranch}` : null), steps, stepRuns,
@@ -131,6 +153,13 @@ async function begin(wrId: number) {
     ? await sh("git", ["worktree", "add", "--detach", dir, `origin/${prBranch}`], repo)
     : await sh("git", ["worktree", "add", "-b", branch, dir, base], repo);
   if (!add.ok) return stopWorkflow(wrId, "It couldn't make its own copy of the project.", { detail: add.err });
+  // The attached brief goes at the top of the copy (as CLAUDE.md, or BRIEF.md if the project has its own).
+  const brief = wr.steps[0]?.brief;
+  if (brief) {
+    const text = readStoredBrief(brief.hash);
+    if (text === null) return stopWorkflow(wrId, `The brief ${brief.name} isn't here any more. Remove it and attach it again.`);
+    placeBrief(dir, text);
+  }
   let prUrl: string | null = null;
   if (prBranch) {
     const pr = await sh("gh", ["pr", "view", prBranch, "--json", "url", "--jq", ".url"], dir);
@@ -269,11 +298,18 @@ export function context(wr: WorkflowRun, wf: Workflow, step: WfStep): string {
     "If the task above is missing, or too unclear to do anything useful, don't guess and don't write placeholder notes. Change nothing, and end with one line: STUCK: <one plain sentence saying what's missing>.",
     "",
     "Everyone in this workflow works in this same folder and branch. Earlier steps' work is already here.",
+    ...briefLines(wr),
     "If research.md exists at the top of this folder, read it first: it's the research for this task.",
   ];
   if (wr.prUrl) lines.push(`Everything so far is in the pull request ${wr.prUrl}. Read it and its comments first: gh pr view ${wr.prUrl} --comments`);
   if (wr.feedback) lines.push("", `Last time this was sent back. Fix these things first:\n${wr.feedback}`);
   return lines.join("\n");
+}
+
+function briefLines(wr: WorkflowRun): string[] {
+  const brief = wr.steps[0]?.brief;
+  const placed = brief && wr.worktree ? placedBrief(wr.worktree) : null;
+  return brief && placed ? [briefPromptLine(brief.name, placed)] : [];
 }
 
 function stepRunConfig(wr: WorkflowRun, wf: Workflow, step: WfStep): { agentId: number; mode: WorkMode; extra: RunExtra } {

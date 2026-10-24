@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { projectBrief } from "@/lib/briefs";
 import { projectPath } from "@/lib/projects";
 
 export const dynamic = "force-dynamic";
@@ -26,9 +27,13 @@ function list(root: string): { file: string; mtime: number; size: number }[] {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ name: string }> }) {
-  const root = projectPath((await params).name);
+  const name = (await params).name;
+  const root = projectPath(name);
   if (!root) return Response.json({ error: "Can't find that project on this Mac." }, { status: 404 });
-  const file = new URL(req.url).searchParams.get("file");
+  const q = new URL(req.url).searchParams;
+  // "This project has a brief ✓": its own CLAUDE.md.
+  if (q.get("root") === "1") return Response.json({ brief: await projectBrief(name) });
+  const file = q.get("file");
   if (!file) return Response.json({ files: list(root) });
   const full = path.resolve(root, file);
   if (!full.startsWith(root + path.sep) || !/\.(md|markdown|txt)$/i.test(full) || !fs.existsSync(full)) return Response.json({ error: "Can't open that file." }, { status: 404 });

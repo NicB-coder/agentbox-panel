@@ -12,7 +12,7 @@ export async function post<T = Record<string, unknown>>(url: string, body: unkno
     throw new Error("Couldn't reach agentbox. Check that you're online and try again.");
   }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((j as { error?: string }).error ?? "Something went wrong. Try again in a moment.");
+  if (!r.ok) throw Object.assign(new Error((j as { error?: string }).error ?? "Something went wrong. Try again in a moment."), { data: j });
   return j as T;
 }
 

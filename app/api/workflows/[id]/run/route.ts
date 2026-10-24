@@ -1,7 +1,7 @@
 import { deleteIdea, getWorkflow } from "@/lib/db";
 import { listProjects } from "@/lib/projects";
 import { GOAL_MAX, workflowProblems } from "@/lib/wf";
-import { startWorkflow } from "@/lib/workflowRunner";
+import { MissingFileError, startWorkflow } from "@/lib/workflowRunner";
 import { agentRefs } from "@/lib/workflowViews";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (b.ideaId) deleteIdea(b.ideaId);
     return Response.json(run, { status: 201 });
   } catch (e) {
+    if (e instanceof MissingFileError) return Response.json({ error: e.message, missing: e.missing }, { status: 409 });
     return Response.json({ error: (e as Error).message }, { status: 409 });
   }
 }

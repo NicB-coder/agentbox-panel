@@ -201,6 +201,20 @@ function migrate(d: Database.Database) {
   `);
   // v3.1: why a run that finished didn't really do anything (no changes, no pull request, or too quick), for the Inbox.
   if (!cols("workflow_runs").has("quiet")) d.exec("ALTER TABLE workflow_runs ADD COLUMN quiet TEXT");
+  // v3.1: files Nic added to a project from the Projects page, each as a pull request he merges from the Inbox.
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS file_prs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project TEXT NOT NULL,
+      file TEXT NOT NULL,
+      branch TEXT NOT NULL,
+      pr_url TEXT NOT NULL,
+      replaces INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER
+    );
+  `);
 }
 
 // v3: one agent per job. The premade agents are archived once (their history stays); Heartbeat stays.

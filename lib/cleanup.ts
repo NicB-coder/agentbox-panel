@@ -1,3 +1,4 @@
+import { addAllArgs } from "./briefs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -30,7 +31,7 @@ export async function cleanOldCopies(now = Date.now()): Promise<number> {
     if (run.status === "stopped" && run.branch) {
       const st = await sh("git", ["status", "--porcelain"], run.worktree);
       if (st.out) {
-        await sh("git", ["add", "-A"], run.worktree);
+        await sh("git", addAllArgs(run.worktree), run.worktree);
         await sh("git", ["commit", "-m", "Work in progress, saved by agentbox before tidying up"], run.worktree);
       }
       const push = await sh("git", ["push", "-u", "origin", `HEAD:refs/heads/${run.branch}`], run.worktree);

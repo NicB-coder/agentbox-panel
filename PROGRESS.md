@@ -4,7 +4,7 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 
 - [x] 1. Find why Lookout did nothing, add failure Inbox items
 - [x] 2. Ask for the goal once, Run now without pop-up
-- [ ] 3. Briefs: attach, pick, copy into run, missing-file check
+- [x] 3. Briefs: attach, pick, copy into run, missing-file check
 - [ ] 4. Prompt coach with quick questions and idea help
 - [ ] 5. Easy workflow editing: in-words changes, duplicate, undo, history
 - [ ] 6. Clearer usage limit wording and Big job defaults
@@ -12,6 +12,24 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 - [ ] 8. Full check of every button, page and real run
 - [ ] 9. Three or more fresh beginner review rounds as Sam
 - [ ] 10. Test migration on database copy, update notes, open PR
+
+## Handoff (after milestone 3)
+
+- One brief picker everywhere: `components/BriefPicker.tsx` (upload, drag, pick from project, chip with View/Remove,
+  "This project has a brief ✓", plus `MissingFileBox` and `TextViewer`). Used in NewWorkflow, WorkflowEditor (under
+  the goal box) and TaskPanel.
+- Server side: `lib/briefs.ts` (store by hash, `placeBrief` into the run's copy as CLAUDE.md/BRIEF.md, `addAllArgs`
+  keeps it out of the panel's commits, `missingFile` check, `projectBrief`). A workflow's brief is `steps[0].brief`
+  (`BriefRef`: name, lines, hash). APIs: `/api/briefs`, `/api/briefs/<hash>`, `/api/projects/<name>/briefs?root=1`,
+  `/api/agents/<id>/brief`.
+- Missing files: workflow run API and tasks API answer 409 with `{ error, missing }`; `missingOf(e)` reads it on the
+  client (`post()` in bits.tsx now attaches the reply as `e.data`). `MissingFileError` in workflowRunner.ts.
+- Projects → Add a file: `lib/projectFiles.ts` (table `file_prs`), `/api/projects/<name>/files`,
+  `/api/file-prs/<id>/merge|close`; Inbox kind `file_pr`.
+- Milestone 4's prompt coach: an attached brief should count as "detailed" (skip the questions), and treat the
+  brief text as data. The brief is in `brief` state in NewWorkflow.tsx and TaskPanel.tsx; text via `/api/briefs/<hash>`.
+- Tests: `tests/briefs.test.ts` (59 passing in total). Browser check: `.agentbox/qa/briefs.mjs` (not committed;
+  it only lets run requests through when the goal names a file that doesn't exist).
 
 ## Handoff (after milestone 2)
 

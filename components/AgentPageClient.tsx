@@ -7,7 +7,8 @@ import { ago, clockOf, duration, agentSentence, plainText } from "@/lib/words";
 import { FREEDOM_WORDS, freedomOf } from "@/lib/job";
 import { AgentIcon, StatusPill, btn } from "./ui";
 import { usePoll } from "./usePoll";
-import { Confirm, ErrorBox } from "./bits";
+import { Confirm, ErrorBox, post as call } from "./bits";
+import { TextViewer } from "./BriefPicker";
 import { openTaskPanel } from "./TaskPanel";
 
 async function post(url: string, body: unknown = {}) {
@@ -126,6 +127,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
               The job
             </h2>
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-muted">{a.prompt}</p>
+            {a.job.brief && <JobBrief id={a.id} name={a.job.brief} />}
             {!isHeartbeat && <p className="mt-4 text-[15px] leading-relaxed">{agentSentence(a)}</p>}
             {isHeartbeat && <p className="mt-4 text-[14px] text-muted">This is the existing hourly job on this Mac. It's shown here to watch, not to change.</p>}
           </section>
@@ -133,6 +135,25 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
       </div>
 
       <FullLog id={id} runs={runs} heartbeatLog={heartbeat ? [heartbeat.outLogTail, heartbeat.errLogTail] : null} />
+    </div>
+  );
+}
+
+// "Brief: CLAUDE.md · View": what the job was given to follow.
+function JobBrief({ id, name }: { id: number; name: string }) {
+  const [view, setView] = useState<null | { title: string; text: string | null }>(null);
+  async function open() {
+    setView({ title: name, text: null });
+    const j = await call<{ text: string }>(`/api/agents/${id}/brief`, {}, "GET").catch((e: Error) => ({ text: e.message }));
+    setView({ title: name, text: j.text });
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-2 text-[15px]">
+      <span className="font-semibold">Brief: {name}</span>
+      <button type="button" className={btn.link} onClick={open}>
+        View
+      </button>
+      <TextViewer view={view} onClose={() => setView(null)} />
     </div>
   );
 }
