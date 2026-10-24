@@ -583,6 +583,13 @@ export function finalize(raw: string, meta: HelperMeta): { text: string; meta: H
       if (label) actions.push({ kind: "coach_goal", ref: "new", label: "Improve it with the coach", task: label.slice(0, 2000) });
       return "";
     }
+    if (kind === "change") {
+      // [[change:WORKFLOW_ID|…]] opens that workflow's editor with the change drafted as a before → after preview.
+      const w = /^\d+$/.test(rest) ? getWorkflow(Number(rest)) : null;
+      if (w && label && !actions.some((x) => x.kind === "change_workflow" && x.ref === rest))
+        actions.push({ kind: "change_workflow", ref: rest, label: `Draft this change to ${w.name}`.slice(0, 80), task: label.slice(0, 2000) });
+      return "";
+    }
     if (kind === "task") {
       // [[task:new|…]] opens Start a task filled in; [[task:AGENT_ID|…]] opens a follow-up on that job.
       const ag = rest === "new" ? null : getAgent(Number(rest));

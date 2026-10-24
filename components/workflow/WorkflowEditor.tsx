@@ -3,8 +3,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StepType, WfLimits, WfStep, WorkflowInput, WorkflowRun, WorkflowVersion } from "@/lib/types";
-import { ADDABLE, STEP_INFO, briefLabel, flowSentence, hasFailPath, newStep, stepTitle, workflowProblems } from "@/lib/wf";
+import { ADDABLE, STEP_INFO, type AgentRef, briefLabel, flowSentence, hasFailPath, newStep, stepTitle, workflowProblems } from "@/lib/wf";
 import type { WorkflowPageState } from "@/lib/workflowViews";
+import type { ChangeDraft } from "@/lib/changeView";
 import { ago, clockOf, duration } from "@/lib/words";
 import { BackLink, Confirm, ErrorBox, InfoTip, Label, Switch, post } from "../bits";
 import { refreshHeader } from "../Header";
@@ -14,6 +15,7 @@ import { Icon, StatusPill, btn, field } from "../ui";
 import { usePoll } from "../usePoll";
 import { useHelperContext } from "../helper/helperStore";
 import Canvas, { type LiveInfo } from "./Canvas";
+import ChangeBox from "./ChangeBox";
 import RunStepPanel from "./RunStepPanel";
 import StepPanel from "./StepPanel";
 
@@ -34,6 +36,9 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
   const runParam = params.get("run");
   const drafted = params.get("drafted") === "1";
   const fresh = params.get("new") === "1";
+  const copied = params.get("copied") === "1";
+  // The Helper's "Draft this change" opens the editor with ?change=…: it's drafted straight away (never applied).
+  const helperChange = params.get("change") ?? "";
   const { data, refresh } = usePoll<WorkflowPageState>(`/api/workflows/${id}/state${runParam !== null ? `?run=${runParam}` : ""}`, initial);
   const agents = data.agents;
 
@@ -177,17 +182,17 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
     setFlash(`Removed ${stepTitle(gone, agents)}. Press Undo to bring it back.`);
   }
 
-  async function save(note = "Saved"): Promise<boolean> {
+  async function save(note = "Saved", what: WorkflowInput = def, done = "Saved."): Promise<boolean> {
     setBusy("save");
     setError(null);
     try {
-      await post(`/api/workflows/${id}`, { ...def, note }, "PUT");
-      setSaved(JSON.stringify(def));
-      setFlash("Saved.");
+      await post(`/api/workflows/${id}`, { ...what, note }, "PUT");
+      setSaved(JSON.stringify(what));
+      setFlash(done);
       await refresh();
       return true;
     } catch (e) {
-      setError({ msg: (e as Error).message, retry: () => save(note) });
+      setError({ msg: (e as Error).message, retry: () => save(note, what, done) });
       return false;
     } finally {
       setBusy("");
@@ -258,10 +263,24 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       setBusy("");
     }
   }
+  // Apply and Restore save straight away (each becomes a version), and Undo still brings the old steps back.
+  function applyChange(d: ChangeDraft, text: string) {
+    const next = { ...def, steps: normalize(d.steps), limits: d.limits };
+    update(next);
+    setSelected(null);
+    save(`Changed in your own words: ${text}`.slice(0, 80), next, "Changed and saved. Press Undo to go back.");
+  }
+  function restore(v: WorkflowVersion) {
+    const next = { ...v.def, steps: normalize(v.def.steps) };
+    update(next);
+    setVersions(false);
+    setSelected(null);
+    save(`Restored the version from ${whenOf(v.savedAt)}`, next, "Restored that version and saved it. Press Undo to go back.");
+  }
   async function duplicate() {
     try {
-      const w = await post<{ id: number }>(`/api/workflows/${id}/duplicate`);
-      router.push(`/workflows/${w.id}`);
+      const w = await post<{ id: number }>(`/api/workflows/${id}/duplicate`, { def });
+      router.push(`/workflows/${w.id}?copied=1`);
     } catch (e) {
       setError({ msg: (e as Error).message, retry: duplicate });
     }
@@ -331,6 +350,33 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       </div>
 
       {!live && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-0 border-y border-line py-1" role="toolbar" aria-label="Edit tools">
+          <button type="button" className={btn.link} onClick={undo} disabled={!past.current.length} aria-keyshortcuts="Meta+Z Control+Z">
+            Undo
+          </button>
+          <button type="button" className={btn.link} onClick={redo} disabled={!future.current.length} aria-keyshortcuts="Meta+Shift+Z Control+Y">
+            Redo
+          </button>
+          <span className="text-line" aria-hidden="true">|</span>
+          <button type="button" className={btn.link} onClick={() => setVersions(true)}>
+            Version history
+          </button>
+          <span className="text-line" aria-hidden="true">|</span>
+          <button type="button" className={btn.link} onClick={duplicate}>
+            Make a copy
+          </button>
+          <InfoTip text="Undo and Redo step back and forward through your changes. Version history keeps every saved version, so you can bring an old one back. Make a copy makes a new workflow just like this one (switched off) to try ideas on." label="Edit tools" />
+        </div>
+      )}
+      {!live && data.active && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-[#EEF1FD] px-4 py-2 text-[15px] font-medium text-[#2A3F9E]">
+          <span>It's running right now. You can still change it: changes apply to the next run, not the one that's going.</span>
+          <button type="button" className={btn.link + " !text-[#2A3F9E]"} onClick={() => viewRun(data.active!.id)}>
+            Watch the run
+          </button>
+        </div>
+      )}
+      {!live && (
         <div className="mt-6 flex flex-col gap-2">
           <Label as="label" htmlFor="wf-task" tip="The goal. Every run works on this: Run now, Test run and automatic runs. To try something else just once, use “Run with a different goal…” under Run now.">
             What do you want to make?
@@ -360,6 +406,22 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       <p className="mt-5 max-w-[860px] text-[17px] font-medium leading-relaxed" aria-live="polite">
         {sentence}
       </p>
+      {copied && !live && (
+        <p className="mt-4 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
+          This is your copy. It's switched off, so change anything you like. The original stays as it was.
+        </p>
+      )}
+      {!live && (
+        <ChangeBox
+          id={id}
+          def={def}
+          agents={agents}
+          onApply={applyChange}
+          start={helperChange || undefined}
+          onStarted={() => router.replace(`/workflows/${id}${runParam !== null ? `?run=${runParam}` : ""}`, { scroll: false })}
+          running={!!data.active}
+        />
+      )}
       {fresh && !live && (
         <p className="mt-4 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
           Your workflow is ready. Check the goal and the steps, then press Test run to try it safely. Turn it on when you're happy, and Run now appears.
@@ -410,22 +472,12 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
                   Pull request
                 </a>
               )}
-              <button type="button" className={btn.link} onClick={() => viewRun(null)}>
-                Back to editing
+              <button type="button" className={btn.secondary} onClick={() => viewRun(null)}>
+                Edit
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-1">
-              <button type="button" className={btn.link} onClick={undo} disabled={!past.current.length} aria-keyshortcuts="Meta+Z Control+Z">
-                Undo
-              </button>
-              <button type="button" className={btn.link} onClick={redo} disabled={!future.current.length} aria-keyshortcuts="Meta+Shift+Z Control+Y">
-                Redo
-              </button>
-              <button type="button" className={btn.link} onClick={() => setVersions(true)}>
-                Version history
-              </button>
-            </div>
+            null
           )}
         </div>
         <div className="px-2 py-6 sm:px-4">
@@ -463,9 +515,6 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
 
       {!live && (
         <div className="mt-10 flex flex-wrap gap-4 border-t border-line pt-6">
-          <button type="button" className={btn.link} onClick={duplicate}>
-            Make a copy
-          </button>
           <button type="button" className={btn.link + " !text-[#A11B12]"} onClick={() => setConfirmDelete(true)}>
             Delete this workflow
           </button>
@@ -493,11 +542,8 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
         open={versions}
         id={id}
         onClose={() => setVersions(false)}
-        onRestore={(v) => {
-          update(v.def);
-          setVersions(false);
-          setFlash("Restored that version. Press Save to keep it.");
-        }}
+        agents={agents}
+        onRestore={restore}
       />
       <GoalDialog
         kind={runDialog}
@@ -760,7 +806,9 @@ function StepPicker({ open, onPick, onClose }: { open: boolean; onPick: (t: Step
   );
 }
 
-function Versions({ open, id, onClose, onRestore }: { open: boolean; id: number; onClose: () => void; onRestore: (v: WorkflowVersion) => void }) {
+const whenOf = (t: number) => `${new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${clockOf(t)}`;
+
+function Versions({ open, id, agents, onClose, onRestore }: { open: boolean; id: number; agents: AgentRef[]; onClose: () => void; onRestore: (v: WorkflowVersion) => void }) {
   const ref = useDialog(open);
   const titleId = useId();
   const [list, setList] = useState<WorkflowVersion[] | null>(null);
@@ -778,7 +826,7 @@ function Versions({ open, id, onClose, onRestore }: { open: boolean; id: number;
         <h2 id={titleId} className="text-[22px] font-bold">
           Version history
         </h2>
-        <p className="text-[15px] text-muted">Every time you save, a version is kept. Restoring one puts it in the editor; press Save to keep it.</p>
+        <p className="text-[15px] text-muted">Every time you save, a version is kept, newest first. Restore brings an old one back (and keeps the one you have now in this list, so nothing is lost).</p>
         <ul className="-mx-2 flex flex-col overflow-y-auto">
           {list === null ? (
             <li className="px-2 py-4 text-muted">Loading…</li>
@@ -789,12 +837,11 @@ function Versions({ open, id, onClose, onRestore }: { open: boolean; id: number;
               <li key={v.id} className="flex items-center gap-3 rounded-[14px] px-2 py-3 hover:bg-soft">
                 <div className="min-w-0 flex-1">
                   <p className="text-[15px] font-semibold">
-                    {new Date(v.savedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, {clockOf(v.savedAt)}
-                    {i === 0 ? " · current" : ""}
+                    {whenOf(v.savedAt)}
+                    {i === 0 ? " · the saved one now" : ""}
                   </p>
-                  <p className="truncate text-[14px] text-muted">
-                    {v.note} · {v.def.steps.length} steps · {v.def.name}
-                  </p>
+                  <p className="text-[14px] text-muted">{v.note}</p>
+                  <p className="truncate text-[14px] text-muted">{v.def.steps.slice(1).map((s) => stepTitle(s, agents)).join(" → ") || "No steps yet"}</p>
                 </div>
                 {i > 0 && (
                   <button type="button" className={btn.secondary} onClick={() => onRestore(v)}>

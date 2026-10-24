@@ -132,6 +132,30 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
   that goal and the coach already checking), and `[[button:idea_help:x|…]]` opens Start a task with idea help
   showing. On the new workflow screen these still open Start a task; filling the open form itself is milestone 7.
 - The step-drafting call (`lib/draft.ts`) and the coach now share one small helper, `lib/claudeJson.ts`.
+- **Change it in your own words (milestone 5):** a box near the top of the workflow editor, just above the steps
+  (under the goal, because the goal is the first thing a beginner fills in and the box changes steps, not the
+  goal). Three tap examples fill it. **Draft the change** asks Claude (Sonnet, no tools, `lib/change.ts`) for the
+  whole new list of steps plus one plain sentence saying what changed. The preview shows **Before** and **After** as
+  rows of step chips: new / changed / moved steps are blue and labelled, removed ones are red and crossed out.
+  Nothing changes until **Apply**; **Cancel** drops it. If nothing would change it says so and only offers Cancel.
+- **Apply saves straight away** (version note "Changed in your own words: …"), and **Undo** brings the old steps
+  back. I chose this over "Apply, then press Save" because a beginner who presses Apply expects it to be done.
+  **Restore** in Version history works the same way now (it used to only fill the editor and wait for Save).
+- **Claude never changes the goal or the brief** through this box: they're not even sent, and the app puts them
+  back on the Start step. Steps Claude keeps start from the step as it is now, so settings it doesn't know about
+  (apps it may use, Careful mode) aren't lost.
+- **Edit tools are a toolbar under the name:** Undo · Redo · Version history · Make a copy (with an ⓘ). Before, Undo
+  and Version history were small links in the Steps header and Make a copy was at the very bottom.
+- **Make a copy** copies what's on screen (including changes that aren't saved yet), names it "X (copy)", "X (copy
+  2)"…, switches it off, and opens it with "This is your copy" on top.
+- **While it runs:** the page opens on the live run as before, but "Back to editing" is now a clear **Edit** button.
+  Editing shows "It's running right now. You can still change it: changes apply to the next run" with **Watch the
+  run**. (Runs already keep their own copy of the steps, so the current run can't break.)
+- **Helper:** new markup `[[change:WORKFLOW_ID|the change]]` makes a "Draft this change to <name>" button. It opens
+  that workflow's editor (on the editing view, not the live run) with the change drafted as a before → after
+  preview. It's never applied without Nic pressing Apply.
+- **Dev copy:** the dev script copies the database from the folder it runs in, and an agent's working copy has none.
+  I didn't touch the live panel's database; I made a fresh starter database for the dev copy instead.
 
 
 # v3: simpler, fully in the panel, deep research

@@ -28,6 +28,7 @@ export type ActionKind =
   | "new_task" // agent id: opens New task with the task text filled in (label holds the text)
   | "coach_goal" // opens Start a task with the text filled in and the prompt coach checking it
   | "idea_help" // opens Start a task with "Help me think of ideas" showing
+  | "change_workflow" // workflow id: opens its editor with this change (task) drafted as before → after; nothing changes until Apply
   | "test_run" // workflow id: opens the workflow with the Test run window
   | "resume_wfrun" // workflow run id: Pick up where it stopped
   | "approve_wfrun" // workflow run id waiting at Ask me

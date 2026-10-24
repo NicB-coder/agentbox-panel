@@ -6,12 +6,28 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 - [x] 2. Ask for the goal once, Run now without pop-up
 - [x] 3. Briefs: attach, pick, copy into run, missing-file check
 - [x] 4. Prompt coach with quick questions and idea help
-- [ ] 5. Easy workflow editing: in-words changes, duplicate, undo, history
+- [x] 5. Easy workflow editing: in-words changes, duplicate, undo, history
 - [ ] 6. Clearer usage limit wording and Big job defaults
 - [ ] 7. Helper everywhere, replay bug fixed, personal and precise
 - [ ] 8. Full check of every button, page and real run
 - [ ] 9. Three or more fresh beginner review rounds as Sam
 - [ ] 10. Test migration on database copy, update notes, open PR
+
+## Handoff (after milestone 5)
+
+- Server: `lib/change.ts` (`changeWorkflow`, `changePrompt`; reuses `SCHEMA` and `stepRules` now exported from
+  `lib/draft.ts`) and client-safe `lib/changeView.ts` (`mergeChange`, `diffSteps`, `copyName`). Route
+  `POST /api/workflows/[id]/change { text, def }` → `{ steps, limits, summary, before }`; never saves.
+  `POST /api/workflows/[id]/duplicate` now takes `{ def }` (what's on screen).
+- Client: `components/workflow/ChangeBox.tsx`, wired into WorkflowEditor.tsx above the Steps canvas. Apply and
+  Restore save at once (`save(note, what, flash)`), Undo still works. Edit tools toolbar under the name. Live run
+  view has an **Edit** button; editing while a run is active shows "changes apply to the next run".
+- Helper: `[[change:WORKFLOW_ID|…]]` → action `change_workflow` → `/workflows/ID?run=0&change=…` (drafted, never
+  applied). Milestone 7 may want this to work from the Helper on any page (it does: it navigates).
+- Tests: `tests/change.test.ts` (72 passing in total). Browser check: `.agentbox/qa/change.mjs` (not committed;
+  add `real` for real Claude at laptop width). It sets tourDone first via /api/settings if the DB is fresh.
+- The dev-copy script copies `data/agentbox.db` from the folder it runs in; an agent worktree has none, so I made a
+  fresh seeded DB in `.agentbox/dev/data` instead of reading the live one.
 
 ## Handoff (after milestone 4)
 

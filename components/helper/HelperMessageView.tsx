@@ -159,7 +159,7 @@ function ActionButton({ a, onNavigate }: { a: HelperAction; onNavigate: () => vo
   const [state, setState] = useState<"idle" | "busy" | "done">("idle");
   const [err, setErr] = useState("");
   const [confirm, setConfirm] = useState(false);
-  const nav = a.kind === "open" || a.kind === "test_run" || a.kind === "new_task" || a.kind === "coach_goal" || a.kind === "idea_help";
+  const nav = a.kind === "open" || a.kind === "test_run" || a.kind === "new_task" || a.kind === "coach_goal" || a.kind === "idea_help" || a.kind === "change_workflow";
 
   async function go() {
     setConfirm(false);
@@ -171,6 +171,11 @@ function ActionButton({ a, onNavigate }: { a: HelperAction; onNavigate: () => vo
     }
     if (a.kind === "test_run") {
       router.push(`/workflows/${a.ref}?test=1`);
+      onNavigate();
+      return;
+    }
+    if (a.kind === "change_workflow") {
+      router.push(`/workflows/${a.ref}?run=0&change=${encodeURIComponent(a.task ?? "")}`, { scroll: false });
       onNavigate();
       return;
     }

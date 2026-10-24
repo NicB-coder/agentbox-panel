@@ -5,7 +5,7 @@ import { cleanLimits, cleanSteps, type AgentRef } from "./wf";
 // "Change the steps in your own words": Claude (headless, no tools at all, so it can only read and answer)
 // turns Nic's sentence about the steps into workflow steps. The goal is asked for separately, once.
 
-const SCHEMA = {
+export const SCHEMA = {
   type: "object",
   required: ["name", "steps"],
   properties: {
@@ -26,6 +26,8 @@ const SCHEMA = {
           agentId: { type: ["integer", "null"] },
           prompt: { type: "string" },
           mode: { enum: ["auto", "plan", "ask", "look"] },
+          freedom: { enum: ["look", "check", "auto"] },
+          careful: { type: "boolean" },
           model: { enum: ["sonnet", "opus"] },
           maxMinutes: { type: "integer" },
           checks: { type: "array", items: { enum: ["tests", "page", "console"] } },
@@ -46,9 +48,16 @@ function instructions(agents: AgentRef[]): string {
   return [
     "You turn a beginner's plain-English description into a workflow for the agentbox app. Reply only with the JSON the schema asks for.",
     "",
+    ...stepRules(agents),
+  ].join("\n");
+}
+
+// What a workflow is made of. Shared with "Change it in your own words" (lib/change.ts).
+export function stepRules(agents: AgentRef[]): string[] {
+  return [
     "A workflow is a straight row of steps. The first step is always type \"start\". Step types:",
     "- start: what starts it. trigger: manual (\"when I give it an idea/task\"), schedule (scheduleKind hourly|daily|days, scheduleTime \"HH:MM\" 24h, scheduleDays 0=Sun..6=Sat for \"days\"), issue_label (label, e.g. \"agent\"), pr_opened.",
-    "- agent: one of Nic's agents does work. agentId = one of the ids below, or null for a quick step with its own short prompt. mode: auto (default), plan, ask, look (only reports, changes nothing).",
+    "- agent: one of Nic's agents does work. agentId = one of the ids below, or null for a quick step with its own short prompt. mode: auto (default), plan, ask, look (only reports, changes nothing). freedom: auto (works on its own), check (shows a plan and waits for Nic's OK), look (only reports). careful true = it builds, reviews its own work and fixes it inside the step.",
     "- research: looks things up and writes research.md for later steps. Optional prompt with focus notes.",
     "- review: a reviewer checks the work against the task and research.md; result is passed or needs work. Use model \"opus\". onFail = the id of an EARLIER step to send work back to (usually the build step), or \"stop\".",
     "- check: hard gates run by the app: checks = tests | page | console. onFail like review.",
@@ -60,7 +69,7 @@ function instructions(agents: AgentRef[]): string {
     "",
     "Nic's agents:",
     ...agents.map((a) => `- id ${a.id}: ${a.name}${a.allowed === "look" ? " (look only, reports)" : ""}`),
-  ].join("\n");
+  ];
 }
 
 // What Nic wants made is only context (data, not instructions): the steps come from how he said it should go.
