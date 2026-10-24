@@ -5,6 +5,8 @@ import type { BriefRef, WfLimits, WfStep } from "@/lib/types";
 import { STEP_INFO, TEMPLATES, defaultWorkflow, nameFromGoal, stepIconOf, stepTitle, templateWorkflow, type AgentRef, type TemplateKey } from "@/lib/wf";
 import { BackLink, ErrorBox, InfoTip, Label, post } from "./bits";
 import BriefPicker from "./BriefPicker";
+import { CoachBox, IdeaHelp } from "./Coach";
+import type { SuggestionKey } from "@/lib/coach";
 import ProjectSelect from "./ProjectSelect";
 import { Icon, btn } from "./ui";
 
@@ -23,6 +25,10 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
   const [autoGoal, setAutoGoal] = useState(""); // a goal a template filled in, not typed by Nic
   const [busy, setBusy] = useState<"" | "make" | "words">("");
   const [error, setError] = useState<{ msg: string; retry?: () => void } | null>(null);
+  const [coach, setCoach] = useState(false); // the prompt coach is open
+  const [coached, setCoached] = useState(false); // it already had its say, so Next goes straight on
+  const [ideas, setIdeas] = useState(false);
+  const [tweaks, setTweaks] = useState<{ moreTime?: boolean; smartest?: boolean }>({});
 
   // Made once per choice (step ids are random), not on every key press.
   const plan = useMemo(() => {
@@ -30,12 +36,27 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
     if (choice.from === "words") return { name: choice.name, project: "", steps: choice.steps, limits: choice.limits };
     return defaultWorkflow("", "");
   }, [choice, agents]);
+  // Settings the coach suggested and Nic accepted, applied to the build steps.
+  const planned = useMemo(() => {
+    if (!tweaks.moreTime && !tweaks.smartest) return plan;
+    const steps = plan.steps.map((s) => (s.type === "agent" ? { ...s, ...(tweaks.moreTime ? { maxMinutes: 120 } : {}), ...(tweaks.smartest ? { model: "opus" as const } : {}) } : s));
+    return { ...plan, steps, limits: tweaks.moreTime ? { ...plan.limits, maxMinutes: Math.max(plan.limits.maxMinutes, 180) } : plan.limits };
+  }, [plan, tweaks]);
   const planName = choice.from === "template" ? setName(choice.key) : choice.from === "words" ? "Your own steps" : DEFAULT_NAME;
 
-  async function make(e?: React.FormEvent) {
+  // Next: the coach checks the goal first (once), then the workflow is made.
+  function next(e?: React.FormEvent) {
     e?.preventDefault();
+    if (coached || (!goal.trim() && !brief) || (autoGoal && goal === autoGoal)) return make();
+    setError(null);
+    setIdeas(false);
+    setCoach(true);
+  }
+
+  async function make(withGoal?: string) {
+    const typed = withGoal ?? goal;
     // A brief on its own is enough: the goal then points at it.
-    const g = goal.trim() || (plan.steps[0]?.task ?? "").trim() || (brief ? `Make what the attached brief (${brief.name}) describes.` : "");
+    const g = typed.trim() || (plan.steps[0]?.task ?? "").trim() || (brief ? `Make what the attached brief (${brief.name}) describes.` : "");
     if (!g) {
       document.getElementById("nw-goal")?.focus();
       return setError({ msg: "Write what you want to make first. One sentence is enough." });
@@ -43,17 +64,36 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
     setBusy("make");
     setError(null);
     try {
-      const steps = plan.steps.map((s, i) => (i === 0 ? { ...s, task: g, ...(brief ? { brief } : {}) } : s));
+      const steps = planned.steps.map((s, i) => (i === 0 ? { ...s, task: g, ...(brief ? { brief } : {}) } : s));
       const briefWords = brief ? brief.name.replace(/\.(md|markdown|txt)$/i, "").replace(/[-_]+/g, " ") : "";
-      const fromBrief = briefWords && !/^(claude|brief|readme|agents|spec|plan)$/i.test(briefWords) && !goal.trim() && !(plan.steps[0]?.task ?? "").trim() ? nameFromGoal(briefWords) : "";
-      const name = fromBrief || (!goal.trim() || (autoGoal && goal === autoGoal) ? plan.name : nameFromGoal(g));
-      const w = await post<{ id: number }>("/api/workflows", { name, project, steps, limits: plan.limits });
+      const fromBrief = briefWords && !/^(claude|brief|readme|agents|spec|plan)$/i.test(briefWords) && !typed.trim() && !(plan.steps[0]?.task ?? "").trim() ? nameFromGoal(briefWords) : "";
+      // Named from Nic's own words when he typed some (shorter than the coach's version).
+      const name = fromBrief || (!typed.trim() || (autoGoal && typed === autoGoal) ? plan.name : nameFromGoal(goal.trim() || g));
+      const w = await post<{ id: number }>("/api/workflows", { name, project, steps, limits: planned.limits });
       router.push(`/workflows/${w.id}?new=1`);
     } catch (err) {
-      setError({ msg: (err as Error).message, retry: () => make() });
+      setError({ msg: (err as Error).message, retry: () => make(g) });
       setBusy("");
     }
   }
+
+  function coachDone(g: string) {
+    setCoach(false);
+    setCoached(true);
+    if (g !== goal) setGoal(g);
+    make(g);
+  }
+
+  function applyTweak(k: SuggestionKey) {
+    if (k === "research_first") pickSteps({ from: "template", key: "build-review-ship" });
+    if (k === "more_time") setTweaks((t) => ({ ...t, moreTime: true }));
+    if (k === "smartest") setTweaks((t) => ({ ...t, smartest: true }));
+  }
+  const on: SuggestionKey[] = [
+    ...(planned.steps.some((s) => s.type === "research") ? (["research_first"] as const) : []),
+    ...(tweaks.moreTime ? (["more_time"] as const) : []),
+    ...(tweaks.smartest || !planned.steps.some((s) => s.type === "agent" && s.model !== "opus") ? (["smartest"] as const) : []),
+  ];
 
   async function draftSteps() {
     if (words.trim().length < 10) return setError({ msg: "Say how it should go in a sentence or two, for example: research first, then build, then ask me before shipping." });
@@ -88,17 +128,37 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
       <h1 className="mt-4 text-[30px] font-bold leading-tight tracking-tight sm:text-[36px]">New workflow</h1>
       <p className="mt-2 text-[17px] text-muted">Say what you want. You'll see every step before anything runs.</p>
 
-      <form onSubmit={make} className="panel mt-8 flex max-w-[860px] flex-col gap-6 p-6 sm:p-8">
+      <form onSubmit={next} className="panel mt-8 flex max-w-[860px] flex-col gap-6 p-6 sm:p-8">
         <div className="flex flex-col gap-2">
-          <Label as="label" htmlFor="nw-goal" tip="This is the goal. You only type it once: every run works on it, and you can change it later on the workflow's page.">
-            What do you want to make?
-          </Label>
+          <div className="flex flex-wrap items-center justify-between gap-x-4">
+            <Label as="label" htmlFor="nw-goal" tip="This is the goal. You only type it once: every run works on it, and you can change it later on the workflow's page.">
+              What do you want to make?
+            </Label>
+            {!ideas && (
+              <button type="button" className={btn.link + " !text-[14px]"} onClick={() => (setIdeas(true), setCoach(false))} disabled={!!busy}>
+                Help me think of ideas
+              </button>
+            )}
+          </div>
+          {ideas && (
+            <IdeaHelp
+              where="workflow"
+              onClose={() => setIdeas(false)}
+              onPick={(g) => {
+                setGoal(g);
+                setAutoGoal("");
+                setIdeas(false);
+                setTimeout(() => document.getElementById("nw-goal")?.focus(), 30);
+              }}
+            />
+          )}
           <textarea
             id="nw-goal"
             value={goal}
             onChange={(e) => {
               setGoal(e.target.value);
               if (error && !error.retry) setError(null);
+              if (coach) setCoach(false);
             }}
             rows={4}
             placeholder="For example: An arcade website with 4 small games that work on phones too."
@@ -119,7 +179,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
             The steps: {planName}
             <InfoTip text="What happens, in order, each time it runs. Build in Careful mode builds it, checks its own work and polishes it. Ship always asks you first." label="The steps" />
           </p>
-          <StepRow steps={plan.steps} agents={agents} />
+          <StepRow steps={planned.steps} agents={agents} />
           {!changing && (
             <button type="button" className={btn.link + " self-start"} onClick={() => setChanging(true)} aria-expanded={false} disabled={!!busy}>
               Change the steps
@@ -144,12 +204,36 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
 
         {error && <ErrorBox message={error.msg} onRetry={error.retry} where="New workflow" />}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" className={btn.primary} disabled={!!busy}>
-            {busy === "make" ? "Setting it up…" : "Next"}
-          </button>
-          <span className="text-[14px] text-muted">Nothing runs yet. Next shows you the workflow so you can check it.</span>
-        </div>
+        {coach && (
+          <CoachBox
+            where="workflow"
+            goal={goal}
+            brief={brief}
+            current={on}
+            onApply={applyTweak}
+            onDone={coachDone}
+            onEdit={(g) => {
+              setGoal(g);
+              setCoach(false);
+              setCoached(true);
+              setTimeout(() => document.getElementById("nw-goal")?.focus(), 30);
+            }}
+            onClose={() => {
+              setCoach(false);
+              setTimeout(() => document.getElementById("nw-goal")?.focus(), 30);
+            }}
+            doneLabel="Next"
+          />
+        )}
+
+        {!coach && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" className={btn.primary} disabled={!!busy}>
+              {busy === "make" ? "Setting it up…" : "Next"}
+            </button>
+            <span className="text-[14px] text-muted">{coached ? "Nothing runs yet. Next shows you the workflow so you can check it." : "Next checks your goal, then shows you the workflow. Nothing runs yet."}</span>
+          </div>
+        )}
       </form>
     </div>
   );

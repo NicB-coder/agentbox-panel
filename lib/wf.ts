@@ -302,6 +302,7 @@ export function nameFromGoal(goal: string): string {
   const line = goal.trim().split("\n").find((l) => l.replace(/[#*>\-\s]/g, "")) ?? "";
   const words = line
     .replace(/[#*_`>]/g, " ")
+    .replace(/^\s*(what to make|the goal|goal)\s*:\s*(an?\s+|the\s+)?/i, "") // the prompt coach's "What to make: …"
     .replace(/^\s*(please\s+)?(i want( you)? to\s+|can you\s+)?(make|build|create|write|add|design|code)\s+(me\s+)?(an?|the|some|my)?\s*/i, "")
     .split(/[.!?]\s|\s+(?:that|which|who|so|where)\s/i)[0]
     .split(/\s+/)

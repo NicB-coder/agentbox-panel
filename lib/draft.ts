@@ -1,15 +1,9 @@
-import { execFile } from "node:child_process";
-import os from "node:os";
-import path from "node:path";
 import type { WfStep } from "./types";
-import { addRunUsageless } from "./draftUsage";
+import { claudeJson } from "./claudeJson";
 import { cleanLimits, cleanSteps, type AgentRef } from "./wf";
-import { ingestRateLimitEvent } from "./usage";
 
 // "Change the steps in your own words": Claude (headless, no tools at all, so it can only read and answer)
 // turns Nic's sentence about the steps into workflow steps. The goal is asked for separately, once.
-
-const PATH = [path.join(os.homedir(), ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":");
 
 const SCHEMA = {
   type: "object",
@@ -81,45 +75,9 @@ export function draftPrompt(text: string, goal: string): string {
 }
 
 export async function draftWorkflow(text: string, agents: AgentRef[], goal = ""): Promise<{ name: string; steps: WfStep[]; limits: ReturnType<typeof cleanLimits> }> {
-  const env: NodeJS.ProcessEnv = { ...process.env, PATH };
-  for (const k of Object.keys(env)) if (k === "CLAUDECODE" || k.startsWith("CLAUDE_CODE_") || k === "ANTHROPIC_API_KEY") delete env[k];
-  const args = [
-    "-p", draftPrompt(text, goal),
-    "--output-format", "stream-json", "--verbose",
-    "--model", "sonnet",
-    "--tools", "",
-    "--permission-mode", "dontAsk",
-    "--no-session-persistence",
-    "--append-system-prompt", instructions(agents),
-    "--json-schema", JSON.stringify(SCHEMA),
-  ];
-  const stdout = await new Promise<string>((resolve, reject) => {
-    execFile("claude", args, { cwd: os.tmpdir(), env, timeout: 180_000, maxBuffer: 20 * 1024 * 1024 }, (e, out, err) => {
-      if (e && !out) reject(new Error(/usage limit|hit your limit/i.test(String(err) + String(out)) ? "You're out of Claude usage right now. Try again after it resets." : "Claude couldn't draft it this time. Try again, or start from a template."));
-      else resolve(String(out));
-    });
-  });
-  let result: Record<string, unknown> | null = null;
-  for (const line of stdout.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const ev = JSON.parse(line);
-      if (ev.type === "rate_limit_event") ingestRateLimitEvent(ev.rate_limit_info ?? {});
-      if (ev.type === "result") {
-        addRunUsageless(Number(ev.total_cost_usd ?? 0));
-        if (ev.is_error) throw new Error(/limit/i.test(String(ev.result)) ? "You're out of Claude usage right now. Try again after it resets." : "Claude couldn't draft it this time. Try again, or start from a template.");
-        result = (ev.structured_output as Record<string, unknown>) ?? null;
-        if (!result && typeof ev.result === "string") {
-          const m = ev.result.match(/\{[\s\S]*\}/);
-          if (m) result = JSON.parse(m[0]);
-        }
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message.startsWith("Claude")) throw e;
-      if (e instanceof Error && e.message.startsWith("You're out")) throw e;
-    }
-  }
-  if (!result || !Array.isArray(result.steps)) throw new Error("Claude couldn't draft it this time. Try again, or start from a template.");
+  const fail = "Claude couldn't draft it this time. Try again, or start from a template.";
+  const result = await claudeJson({ prompt: draftPrompt(text, goal), system: instructions(agents), schema: SCHEMA, failMessage: fail });
+  if (!Array.isArray(result.steps)) throw new Error(fail);
   const steps = cleanSteps(result.steps, agents.map((a) => a.id));
   if (steps.length < 2) throw new Error("Claude couldn't find any steps in that. Try saying what should happen, one thing after another.");
   return { name: String(result.name ?? "").slice(0, 60) || "New workflow", steps, limits: cleanLimits({ maxLoops: result.maxLoops }) };

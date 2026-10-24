@@ -6,6 +6,8 @@ import { defaultMinutes } from "@/lib/job";
 import { ErrorBox, Label, Switch, post } from "./bits";
 import { CarefulPicker, Chip, FreedomPicker, MinutesSlider, ModelPicker, NotifyPicker, WhenPicker, type When } from "./controls";
 import BriefPicker, { MissingFileBox, missingOf, type MissingInfo } from "./BriefPicker";
+import { CoachBox, IdeaHelp } from "./Coach";
+import type { SuggestionKey } from "@/lib/coach";
 import ProjectSelect from "./ProjectSelect";
 import Segmented from "./Segmented";
 import { Icon, btn } from "./ui";
@@ -20,6 +22,8 @@ export type TaskPanelOpen = {
   project?: string;
   ideaId?: number;
   followUpId?: number; // fetches the job, then opens as a follow-up
+  coach?: boolean; // open with the prompt coach already checking the task (the Helper's "Improve it")
+  ideas?: boolean; // open with "Help me think of ideas" showing
   followUp?: { id: number; name: string; project: string; kind: JobKind; freedom: Freedom; careful: boolean; model: Model; connectors: string[] };
 };
 
@@ -83,6 +87,10 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
   const openBrief = useRef<(() => void) | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [coach, setCoach] = useState(false);
+  const [coachKey, setCoachKey] = useState(0); // a fresh coach each time it opens
+  const [coached, setCoached] = useState(false);
+  const [ideas, setIdeas] = useState(false);
   const [live, setLive] = useState<Connector[] | null>(null);
   useEffect(() => {
     // The newest list of connected apps, when More options opens.
@@ -121,6 +129,11 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       setMissing(null);
       setSaveReport(false);
       setError("");
+      // Follow-ups and ideas Nic already picked don't need coaching.
+      setCoached(!!f || !!d.ideaId);
+      setCoach(!!d.coach && !f && !!(d.task ?? "").trim());
+      setCoachKey((k) => k + 1);
+      setIdeas(!!d.ideas && !f);
       ref.current?.showModal();
       setTimeout(() => document.getElementById(taskId)?.focus(), 30);
     };
@@ -135,16 +148,48 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
     if (k === "research") setBig(false);
   }
 
-  async function start(e?: React.FormEvent) {
+  // Start: the prompt coach checks the task first (once), then it starts.
+  function next(e?: React.FormEvent) {
     e?.preventDefault();
     if (task.trim().length < 3 && !brief) return setError(kind === "research" ? "Write your question first." : "Write what it should do first.");
     if (!project && kind !== "research") return setError("Pick a project first.");
+    if (coached) return start();
+    setError("");
+    setIdeas(false);
+    setCoachKey((k) => k + 1);
+    setCoach(true);
+  }
+
+  function coachDone(t: string) {
+    setCoach(false);
+    setCoached(true);
+    if (t !== task) setTask(t);
+    start(t);
+  }
+
+  function applyTweak(k: SuggestionKey) {
+    if (k === "big_job") (setBig(true), setMore(true));
+    if (k === "research_kind") switchKind("research");
+    if (k === "smartest") setModel("opus");
+    if (k === "look_only") setFreedom("look");
+    if (k === "careful") setCareful(true);
+  }
+  const on: SuggestionKey[] = [
+    ...(big ? (["big_job"] as const) : []),
+    ...(kind === "research" ? (["research_kind"] as const) : []),
+    ...(model === "opus" ? (["smartest"] as const) : []),
+    ...(freedom === "look" ? (["look_only"] as const) : []),
+    ...(careful ? (["careful"] as const) : []),
+  ];
+
+  async function start(withTask?: string) {
+    const task_ = withTask ?? task;
     setBusy(true);
     setError("");
     setMissing(null);
     try {
       const j = await post<{ agentId: number }>("/api/tasks", {
-        kind, task, project, ...when, freedom, careful, maxMinutes: minutes, model, connectors: picked, notify, askEachStep: askEach,
+        kind, task: task_, project, ...when, freedom, careful, maxMinutes: minutes, model, connectors: picked, notify, askEachStep: askEach,
         big, budgetPct: budget, holdSmall, autoInstall, saveReport, brief, followUpOf: follow?.id, ideaId,
       });
       ref.current?.close();
@@ -170,7 +215,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       aria-labelledby={titleId}
       className="m-0 h-[100dvh] max-h-none w-full max-w-none p-0 backdrop:bg-black/30 sm:m-auto sm:h-auto sm:max-h-[calc(100dvh-48px)] sm:w-[min(640px,calc(100vw-32px))] sm:rounded-[24px]"
     >
-      <form onSubmit={start} className="flex min-h-full flex-col">
+      <form onSubmit={next} className="flex min-h-full flex-col">
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-white px-5 py-3 sm:px-8 sm:py-4">
           <h2 id={titleId} className="min-w-0 truncate text-[20px] font-bold sm:text-[22px]">
             {follow ? `Follow-up: ${follow.name}` : "Start a task"}
@@ -197,13 +242,34 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
           )}
 
           <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-4">
             <Label as="label" htmlFor={taskId} tip={follow ? "What it should do next on this same job. It already knows what it did before." : research ? "Your question in plain words. Say what you'll use the answer for, so it knows what matters." : "Say what you want, what a good result looks like, and anything it should never do."}>
               {follow ? (research ? "What else do you want to know?" : "What should it do next?") : research ? "What do you want to know?" : "What should it do?"}
             </Label>
+              {!follow && !ideas && (
+                <button type="button" className={btn.link + " !text-[14px]"} onClick={() => (setIdeas(true), setCoach(false))}>
+                  Help me think of ideas
+                </button>
+              )}
+            </div>
+            {ideas && (
+              <IdeaHelp
+                where={research ? "research" : "build"}
+                onClose={() => setIdeas(false)}
+                onPick={(t) => {
+                  setTask(t);
+                  setIdeas(false);
+                  setTimeout(() => document.getElementById(taskId)?.focus(), 30);
+                }}
+              />
+            )}
             <textarea
               id={taskId}
               value={task}
-              onChange={(e) => setTask(e.target.value)}
+              onChange={(e) => {
+                setTask(e.target.value);
+                if (coach) setCoach(false);
+              }}
               rows={6}
               placeholder={
                 follow
@@ -320,6 +386,28 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               </div>
             )}
           </div>
+          {coach && (
+            <CoachBox
+              key={coachKey}
+              where={research ? "research" : "build"}
+              goal={task}
+              brief={brief}
+              current={on}
+              onApply={applyTweak}
+              onDone={coachDone}
+              onEdit={(t) => {
+                setTask(t);
+                setCoach(false);
+                setCoached(true);
+                setTimeout(() => document.getElementById(taskId)?.focus(), 30);
+              }}
+              onClose={() => {
+                setCoach(false);
+                setTimeout(() => document.getElementById(taskId)?.focus(), 30);
+              }}
+              doneLabel={scheduled ? "Save" : "Start"}
+            />
+          )}
           {missing && <MissingFileBox missing={missing} onAttach={() => openBrief.current?.()} />}
           {error && <ErrorBox compact message={error} onRetry={() => start()} where="the Start a task panel" />}
         </div>
@@ -328,9 +416,11 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
           <button type="button" className={btn.secondary} onClick={() => ref.current?.close()}>
             Cancel
           </button>
-          <button type="submit" className={btn.primary} disabled={busy}>
-            {busy ? "Starting…" : scheduled ? "Save" : "Start"}
-          </button>
+          {!coach && (
+            <button type="submit" className={btn.primary} disabled={busy}>
+              {busy ? "Starting…" : scheduled ? "Save" : "Start"}
+            </button>
+          )}
         </div>
       </form>
     </dialog>

@@ -5,13 +5,28 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 - [x] 1. Find why Lookout did nothing, add failure Inbox items
 - [x] 2. Ask for the goal once, Run now without pop-up
 - [x] 3. Briefs: attach, pick, copy into run, missing-file check
-- [ ] 4. Prompt coach with quick questions and idea help
+- [x] 4. Prompt coach with quick questions and idea help
 - [ ] 5. Easy workflow editing: in-words changes, duplicate, undo, history
 - [ ] 6. Clearer usage limit wording and Big job defaults
 - [ ] 7. Helper everywhere, replay bug fixed, personal and precise
 - [ ] 8. Full check of every button, page and real run
 - [ ] 9. Three or more fresh beginner review rounds as Sam
 - [ ] 10. Test migration on database copy, update notes, open PR
+
+## Handoff (after milestone 4)
+
+- Server: `lib/coach.ts` (check / improve / ideas prompts, `cleanCheck`, `cleanSuggestions`, `looksDetailed`),
+  `/api/coach` (`{ step, goal, where: workflow|build|research, brief: {name,hash}, answers, interests, current }`;
+  answers `{ skip }` when paused or out of usage). Shared Claude call: `lib/claudeJson.ts` (draft.ts uses it too).
+- Client: `components/Coach.tsx` (`CoachBox`, `IdeaHelp`, `SUGGESTION_LABEL`). Wired into `next()` in
+  NewWorkflow.tsx and TaskPanel.tsx (`coached` flag = coach already ran; Start/Next hidden while it's open).
+  `openTaskPanel({ task, coach: true })` / `{ ideas: true }` open the panel coaching / with idea help.
+- Helper: `[[coach:new|…]]` → action `coach_goal`; `[[button:idea_help:x|…]]` → `idea_help` (helper.ts, guide text,
+  HelperMessageView). Milestone 7 should make these fill the form that's open (e.g. the new workflow screen)
+  instead of always opening Start a task.
+- Milestone 5 (edit in words) can reuse `claudeJson` for its before → after draft.
+- Tests: `tests/coach.test.ts` (65 passing in total). Browser check: `.agentbox/qa/coach.mjs` (not committed;
+  `node coach.mjs <shots dir> real` uses real Claude at laptop width, canned replies otherwise; it fakes /api/tasks).
 
 ## Handoff (after milestone 3)
 

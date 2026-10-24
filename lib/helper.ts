@@ -461,6 +461,8 @@ export function actionFor(kind: string, ref: string): HelperAction | null {
     }
     case "test_run":
       return id && getWorkflow(n) ? a("Start a test run") : null;
+    case "idea_help":
+      return a("Help me think of ideas");
     case "resume_wfrun":
       return id && getWfRun(n)?.status === "stopped" ? a("Pick up where it stopped") : null;
     case "approve_wfrun": {
@@ -574,6 +576,11 @@ export function finalize(raw: string, meta: HelperMeta): { text: string; meta: H
       const c = rest.indexOf(":");
       const act = actionFor(c >= 0 ? rest.slice(0, c).trim() : rest, c >= 0 ? rest.slice(c + 1).trim() : "");
       if (act && !actions.some((x) => x.kind === act.kind && x.ref === act.ref)) actions.push(act);
+      return "";
+    }
+    if (kind === "coach") {
+      // [[coach:new|…]] opens Start a task with that goal and the prompt coach checking it.
+      if (label) actions.push({ kind: "coach_goal", ref: "new", label: "Improve it with the coach", task: label.slice(0, 2000) });
       return "";
     }
     if (kind === "task") {
