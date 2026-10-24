@@ -5,7 +5,7 @@ import { agentRefs } from "@/lib/workflowViews";
 
 export const dynamic = "force-dynamic";
 
-// New workflow: from a template, or from steps (e.g. the "Describe it" draft). Always starts Off.
+// New workflow: from a template, or from steps (e.g. the start screen: the goal plus its steps). Always starts Off.
 export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) as { template?: TemplateKey; name?: string; project?: string; steps?: unknown; limits?: unknown };
   const projects = listProjects();

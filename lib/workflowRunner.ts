@@ -14,7 +14,7 @@ import type { Model, Run, RunExtra, WfStep, WfStepRun, Workflow, WorkflowRun, Wo
 import { usageBlocked, usageState } from "./usage";
 import { freedomOf, modeFor } from "./job";
 import { REPORT_FORMAT, RESEARCH_METHOD } from "./research";
-import { flowSentence, runTaskText, stepTitle, type AgentRef } from "./wf";
+import { flowSentence, runTaskText, stepTitle, stepsWithGoal, type AgentRef } from "./wf";
 import { quietWfRun, workflowMakesChanges } from "./quiet";
 import { clockOf, nextRunAfter, plainText } from "./words";
 
@@ -88,6 +88,7 @@ async function baseRef(repo: string): Promise<string> {
 
 export type StartWfOpts = {
   input?: string;
+  goal?: string; // "Run with a different goal…": replaces the saved goal for this one run (the saved one doesn't change)
   test?: boolean;
   trigger: WorkflowRun["trigger"];
   triggerRef?: string | null;
@@ -106,9 +107,10 @@ export async function startWorkflow(workflowId: number, opts: StartWfOpts): Prom
 
   const stepRuns: Record<string, WfStepRun> = {};
   for (const s of wf.steps) stepRuns[s.id] = freshStepRun();
+  const steps = stepsWithGoal(wf.steps, opts.goal);
   const wr = createWfRun({
     workflowId, status: busyRun ? "queued" : "running", test: !!opts.test, input: (opts.input ?? "").trim().slice(0, 8000), // only what was typed for this run: the goal travels in steps[0]
-    trigger: opts.trigger, triggerRef: opts.triggerRef ?? (opts.prBranch ? `branch:${opts.prBranch}` : null), steps: wf.steps, stepRuns,
+    trigger: opts.trigger, triggerRef: opts.triggerRef ?? (opts.prBranch ? `branch:${opts.prBranch}` : null), steps, stepRuns,
   });
   if (!busyRun) begin(wr.id).catch((e) => stopWorkflow(wr.id, "It couldn't get started.", { detail: String(e) }));
   return getWfRun(wr.id)!;

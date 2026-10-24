@@ -6,8 +6,8 @@ import { addRunUsageless } from "./draftUsage";
 import { cleanLimits, cleanSteps, type AgentRef } from "./wf";
 import { ingestRateLimitEvent } from "./usage";
 
-// "Describe it": Claude (headless, no tools at all, so it can only read and answer) turns Nic's
-// sentence into workflow steps. The result always opens in the editor, switched off.
+// "Change the steps in your own words": Claude (headless, no tools at all, so it can only read and answer)
+// turns Nic's sentence about the steps into workflow steps. The goal is asked for separately, once.
 
 const PATH = [path.join(os.homedir(), ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":");
 
@@ -62,18 +62,29 @@ function instructions(agents: AgentRef[]): string {
     "- ship: merges the pull request. shipMode \"ask\" unless Nic clearly says to ship automatically.",
     "- tell: Discord message to Nic. tellWhen always|problems. openIssue true to also open a GitHub issue about problems.",
     "",
-    "Give every step a short unique id like \"s1\", \"s2\" so onFail can point at one. Use only the steps the description needs (usually 3 to 8). If they mention building or coding, use an agent step with the builder agent. Prefer \"ask\" before \"ship\". maxLoops is how many times needs-work may loop (default 2).",
+    "Leave the start step's task empty: the goal is stored separately. Give every step a short unique id like \"s1\", \"s2\" so onFail can point at one. Use only the steps the description needs (usually 3 to 8). If they mention building or coding, use an agent step with the builder agent. Prefer \"ask\" before \"ship\". maxLoops is how many times needs-work may loop (default 2).",
     "",
     "Nic's agents:",
     ...agents.map((a) => `- id ${a.id}: ${a.name}${a.allowed === "look" ? " (look only, reports)" : ""}`),
   ].join("\n");
 }
 
-export async function draftWorkflow(text: string, agents: AgentRef[]): Promise<{ name: string; steps: WfStep[]; limits: ReturnType<typeof cleanLimits> }> {
+// What Nic wants made is only context (data, not instructions): the steps come from how he said it should go.
+export function draftPrompt(text: string, goal: string): string {
+  const g = goal.trim().slice(0, 3000);
+  return [
+    "Turn this description of the steps into a workflow:",
+    "",
+    text,
+    ...(g ? ["", "For context only, this is what the workflow will make. Don't copy it into the steps; the app gives it to every step itself:", "<goal>", g, "</goal>"] : []),
+  ].join("\n");
+}
+
+export async function draftWorkflow(text: string, agents: AgentRef[], goal = ""): Promise<{ name: string; steps: WfStep[]; limits: ReturnType<typeof cleanLimits> }> {
   const env: NodeJS.ProcessEnv = { ...process.env, PATH };
   for (const k of Object.keys(env)) if (k === "CLAUDECODE" || k.startsWith("CLAUDE_CODE_") || k === "ANTHROPIC_API_KEY") delete env[k];
   const args = [
-    "-p", `Turn this into a workflow:\n\n${text}`,
+    "-p", draftPrompt(text, goal),
     "--output-format", "stream-json", "--verbose",
     "--model", "sonnet",
     "--tools", "",

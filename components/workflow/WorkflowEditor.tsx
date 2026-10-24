@@ -32,6 +32,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
   const params = useSearchParams();
   const runParam = params.get("run");
   const drafted = params.get("drafted") === "1";
+  const fresh = params.get("new") === "1";
   const { data, refresh } = usePoll<WorkflowPageState>(`/api/workflows/${id}/state${runParam !== null ? `?run=${runParam}` : ""}`, initial);
   const agents = data.agents;
 
@@ -117,9 +118,13 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
   const sentence = flowSentence(live ? { steps: viewing!.steps, limits: def.limits } : def, agents);
   // Tell the Helper which step is open, and which run is on the canvas.
   useHelperContext({ workflowId: id, wfRunId: viewing?.id, stepId: sel?.id, stepLabel: sel ? stepTitle(sel, agents) : undefined, editing: dirtyNote(def, saved) });
-  // The Helper's "Start a test run" button opens this page with ?test=1.
+  // The Helper's "Start a test run" button opens this page with ?test=1: start it once, then drop the ?test=1.
+  const helperTest = useRef(false);
   useEffect(() => {
-    if (params.get("test") === "1") setRunDialog("test");
+    if (params.get("test") !== "1" || helperTest.current) return;
+    helperTest.current = true;
+    router.replace(`/workflows/${id}`, { scroll: false });
+    if (!data.active) runNow(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const problems = workflowProblems(def, agents, data.projects);
@@ -199,18 +204,29 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       setBusy("");
     }
   }
-  async function startRun(test: boolean, input: string) {
+  const savedGoal = (def.steps[0]?.task ?? "").trim();
+  // Run now and Test run start straight away with the saved goal. No goal yet: point at the goal box instead.
+  function runNow(test: boolean) {
+    if (manualStart && !savedGoal) {
+      document.getElementById("wf-task")?.focus();
+      return setError({ msg: "Write what you want to make in the box above first. Then press " + (test ? "Test run" : "Run now") + " again." });
+    }
+    startRun(test, "");
+  }
+  // goal: only when Nic typed a different goal for this one run (the saved goal stays as it is).
+  async function startRun(test: boolean, goal: string) {
     if (dirty && !(await save())) return;
-    setBusy("run");
+    setBusy(test ? "test" : "run");
     setError(null);
     try {
-      const r = await post<WorkflowRun>(`/api/workflows/${id}/run`, { test, input });
+      const g = goal.trim() && goal.trim() !== savedGoal ? goal.trim() : undefined;
+      const r = await post<WorkflowRun>(`/api/workflows/${id}/run`, { test, goal: g });
       setRunDialog(null);
       setSelected(null);
       router.replace(`/workflows/${id}?run=${r.id}`, { scroll: false });
       refreshHeader();
     } catch (e) {
-      setError({ msg: (e as Error).message, retry: () => startRun(test, input) });
+      setError({ msg: (e as Error).message, retry: () => startRun(test, goal) });
       setRunDialog(null);
     } finally {
       setBusy("");
@@ -285,13 +301,23 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
             <Switch label={enabled ? "On" : "Off"} checked={enabled} onChange={toggle} disabled={!!busy} tip="When it's on, it starts by itself (on its schedule or from GitHub). When it's off, only Test run works." />
           </div>
           {enabled && manualStart && (
-            <button type="button" className={btn.primary} onClick={() => setRunDialog("run")} disabled={!!busy || !!data.active}>
-              Run now
-            </button>
+            <RunButton
+              label={busy === "run" ? "Starting…" : "Run now"}
+              primary
+              onRun={() => runNow(false)}
+              onOther={() => setRunDialog("run")}
+              other="Run with a different goal…"
+              disabled={!!busy || !!data.active}
+            />
           )}
-          <button type="button" className={btn.secondary} onClick={() => setRunDialog("test")} disabled={!!busy || !!data.active}>
-            Test run
-          </button>
+          <RunButton
+            label={busy === "test" ? "Starting…" : "Test run"}
+            onRun={() => runNow(true)}
+            onOther={() => setRunDialog("test")}
+            other={manualStart ? "Test with a different goal…" : ""}
+            disabled={!!busy || !!data.active}
+            tip={`A safe try: it does every step for real${def.steps.some((x) => x.type === "ship") ? ", but stops before Ship" : ""} and never sends Discord messages. It still uses some Claude usage and may open a draft pull request you can close.`}
+          />
           <button type="button" className={btn.primary} onClick={() => save()} disabled={!dirty || !!busy}>
             {busy === "save" ? "Saving…" : dirty ? "Save" : "Saved"}
           </button>
@@ -300,8 +326,8 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
 
       {!live && (
         <div className="mt-6 flex flex-col gap-2">
-          <Label as="label" htmlFor="wf-task" tip="The task every run works on, unless you type a different one when you press Run now or Test run. Automatic runs (on a schedule) always use this.">
-            What should this workflow make?
+          <Label as="label" htmlFor="wf-task" tip="The goal. Every run works on this: Run now, Test run and automatic runs. To try something else just once, use “Run with a different goal…” under Run now.">
+            What do you want to make?
           </Label>
           <textarea
             id="wf-task"
@@ -316,6 +342,11 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       <p className="mt-5 max-w-[860px] text-[17px] font-medium leading-relaxed" aria-live="polite">
         {sentence}
       </p>
+      {fresh && !live && (
+        <p className="mt-4 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
+          Your workflow is ready. Check the goal and the steps, then press Test run to try it safely. Turn it on when you're happy, and Run now appears.
+        </p>
+      )}
       {drafted && !live && (
         <p className="mt-4 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
           Claude drafted these steps from what you wrote. Click each one to check it, then try a Test run before you turn it on.
@@ -395,7 +426,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
             <p className="mt-1">{viewing!.quiet.next}</p>
           </div>
         )}
-        {live && <WhatItWasTold run={viewing!} />}
+        {live && <WhatItWasTold run={viewing!} savedGoal={data.workflow.steps[0]?.task ?? ""} />}
         {live && viewing!.status === "needs" && viewing!.waiting && (
           <WaitingBox run={viewing!} onDone={refresh} />
         )}
@@ -445,13 +476,12 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
           setFlash("Restored that version. Press Save to keep it.");
         }}
       />
-      <RunDialog
+      <GoalDialog
         kind={runDialog}
-        busy={busy === "run"}
+        busy={busy === "run" || busy === "test"}
         onClose={() => setRunDialog(null)}
-        onStart={(input) => startRun(runDialog === "test", input)}
-        hasShip={def.steps.some((s) => s.type === "ship")}
-        task={def.steps[0]?.task ?? ""}
+        onStart={(goal) => startRun(runDialog === "test", goal)}
+        goal={def.steps[0]?.task ?? ""}
       />
       <Confirm
         open={confirmDelete}
@@ -470,7 +500,7 @@ const RUN_PILL = { queued: "queued", running: "running", needs: "needs", done: "
 const RUN_WORD = { queued: "Waiting", running: "Running", needs: "Needs you", done: "Done", stopped: "Stopped" };
 
 // The first thing the run's agents were told: the saved goal, plus anything typed for this run.
-function WhatItWasTold({ run }: { run: WorkflowRun }) {
+function WhatItWasTold({ run, savedGoal }: { run: WorkflowRun; savedGoal: string }) {
   const [open, setOpen] = useState(false);
   const goal = (run.steps[0]?.task ?? "").trim();
   const extra = run.input.trim() !== goal ? run.input.trim() : "";
@@ -482,7 +512,7 @@ function WhatItWasTold({ run }: { run: WorkflowRun }) {
       {open && (
         <div className="mt-2 flex flex-col gap-3 rounded-[14px] bg-soft p-4 text-[15px] leading-relaxed">
           <div>
-            <p className="font-semibold">The goal</p>
+            <p className="font-semibold">{goal && savedGoal.trim() && goal !== savedGoal.trim() ? "The goal (different from the one saved now)" : "The goal"}</p>
             <p className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap text-muted">{goal || "No goal was saved, so it only had each step's own instructions."}</p>
           </div>
           {extra && (
@@ -611,8 +641,8 @@ function History({ runs, viewingId, onView }: { runs: WorkflowRun[]; viewingId: 
             <li key={r.id} className={`flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:gap-4 ${viewingId === r.id ? "bg-soft -mx-3 rounded-[14px] px-3" : ""}`}>
               <div className="min-w-0 flex-1">
                 <p className="text-[15px] font-semibold leading-snug">
-                  {r.input ? r.input.split("\n")[0] : r.test ? "Test run" : "Run"}
-                  {r.test && r.input ? " · test run" : ""}
+                  {runTitle(r)}
+                  {r.test && runTitle(r) !== "Test run" ? " · test run" : ""}
                 </p>
                 <p className="mt-0.5 text-[14px] text-muted">
                   {new Date(r.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, {clockOf(r.startedAt)}
@@ -742,45 +772,69 @@ function Versions({ open, id, onClose, onRestore }: { open: boolean; id: number;
   );
 }
 
-function RunDialog({ kind, busy, onClose, onStart, hasShip, task }: { kind: null | "test" | "run"; busy: boolean; onClose: () => void; onStart: (input: string) => void; hasShip: boolean; task: string }) {
+// One run, one goal: "Run with a different goal…" opens with the saved goal filled in. The saved goal doesn't change.
+function GoalDialog({ kind, busy, onClose, onStart, goal }: { kind: null | "test" | "run"; busy: boolean; onClose: () => void; onStart: (goal: string) => void; goal: string }) {
   const ref = useDialog(kind !== null);
   const titleId = useId();
-  const [input, setInput] = useState(task);
+  const boxId = useId();
+  const [text, setText] = useState(goal);
   useEffect(() => {
-    if (kind !== null) setInput(task); // prefilled with the workflow's task, editable for this run
-  }, [kind, task]);
+    if (kind !== null) setText(goal);
+  }, [kind, goal]);
   return (
     <dialog ref={ref} aria-labelledby={titleId} onClose={onClose} className="m-auto w-[min(560px,calc(100vw-32px))] rounded-[24px] p-0 backdrop:bg-black/30">
       <form
         className="flex flex-col gap-4 p-6 sm:p-8"
         onSubmit={(e) => {
           e.preventDefault();
-          onStart(input);
+          if (text.trim()) onStart(text);
         }}
       >
         <h2 id={titleId} className="text-[22px] font-bold">
-          {kind === "test" ? "Test run" : "Run now"}
+          {kind === "test" ? "Test with a different goal" : "Run with a different goal"}
         </h2>
-        {kind === "test" && (
-          <p className="text-[15px] leading-relaxed text-muted">
-            A test run does every step for real{hasShip ? ", but stops before Ship" : ""} and never sends Discord messages. It still uses some Claude usage and may open a draft pull request you can close.
-          </p>
-        )}
-        <label className="flex flex-col gap-2">
-          <span className="text-[15px] font-semibold">What should it make this time?</span>
-          <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={4} placeholder="For example: Add a dark mode switch to the settings page." className="rounded-[14px] border border-[#C9CDD4] p-3 text-[15px] leading-relaxed" />
-        </label>
+        <p className="text-[15px] leading-relaxed text-muted">Change it just for this {kind === "test" ? "test run" : "run"}. Your saved goal stays the same.</p>
+        <div className="flex flex-col gap-2">
+          <label htmlFor={boxId} className="text-[15px] font-semibold">
+            What do you want to make this time?
+          </label>
+          <textarea id={boxId} value={text} onChange={(e) => setText(e.target.value)} rows={6} className="rounded-[14px] border border-[#C9CDD4] p-3 text-[15px] leading-relaxed" />
+        </div>
         <div className="flex justify-end gap-3">
           <button type="button" className={btn.secondary} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={btn.primary} disabled={busy}>
+          <button type="submit" className={btn.primary} disabled={busy || !text.trim()}>
             {busy ? "Starting…" : kind === "test" ? "Start test run" : "Start"}
           </button>
         </div>
       </form>
     </dialog>
   );
+}
+
+function RunButton({ label, primary, onRun, onOther, other, disabled, tip }: { label: string; primary?: boolean; onRun: () => void; onOther: () => void; other: string; disabled: boolean; tip?: string }) {
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <span className="flex items-center">
+        <button type="button" className={primary ? btn.primary : btn.secondary} onClick={onRun} disabled={disabled}>
+          {label}
+        </button>
+        {tip && <InfoTip text={tip} label={label} />}
+      </span>
+      {other && (
+        <button type="button" className="min-h-11 px-1 text-[14px] text-muted underline underline-offset-2 hover:text-ink disabled:opacity-50" onClick={onOther} disabled={disabled}>
+          {other}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// A run's name in the history: what was added for it, else its goal, else just "Run".
+function runTitle(r: WorkflowRun): string {
+  const line = (t: string) => t.trim().split("\n").find((l) => l.trim())?.trim().replace(/^#+\s*/, "") ?? "";
+  return line(r.input) || line(r.steps[0]?.task ?? "") || (r.test ? "Test run" : "Run");
 }
 
 export { field };

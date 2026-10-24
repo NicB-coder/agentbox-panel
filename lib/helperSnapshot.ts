@@ -162,7 +162,7 @@ export function buildSnapshot(): string {
   const agents = agentRefs();
   const wfs = listWorkflows();
   out.push("", "## Workflows");
-  if (!wfs.length) out.push("- None yet. (New workflow → Describe it, or pick a template.)");
+  if (!wfs.length) out.push("- None yet. (New workflow → say what you want to make, then Next.)");
   for (const w of wfs) {
     const steps = w.steps.map((st) => `${st.id}: ${stepTitle(st, agents)} (${STEP_INFO[st.type].title})`).join(" → ");
     const last = listWfRuns(w.id, 1)[0];

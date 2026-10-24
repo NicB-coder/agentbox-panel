@@ -116,6 +116,12 @@ export function runTaskText(goal: string, extra: string): string {
   return "There's no extra task for this run: do the job described below.";
 }
 
+// "Run with a different goal…": the run's own copy of the steps carries that goal; the saved workflow keeps its own.
+export function stepsWithGoal(steps: WfStep[], goal?: string): WfStep[] {
+  const g = goal?.trim();
+  return g ? steps.map((s, i) => (i === 0 ? { ...s, task: g } : s)) : steps;
+}
+
 // A save that would cut the goal off is refused instead (plain words for the editor).
 export function goalTooLong(rawSteps: unknown): string | null {
   const first = Array.isArray(rawSteps) ? (rawSteps[0] as { task?: unknown } | undefined) : undefined;
@@ -258,6 +264,43 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
       };
     }
   }
+}
+
+// The steps a new workflow gets when Nic only says what he wants to make (the start screen):
+// Build (Careful mode) → Review → Ship, and Ship asks him first.
+export function defaultWorkflow(goal: string, project: string): WorkflowInput {
+  const b: WfStep = {
+    id: newId(), type: "agent", agentId: null, freedom: "auto", careful: true, model: "sonnet", maxMinutes: 60,
+    prompt: "Build what the task asks for. Keep the change focused, test that it really works (run the tests, or open the page in a browser), and commit.",
+  };
+  return {
+    name: nameFromGoal(goal),
+    project,
+    limits: { ...DEFAULT_LIMITS },
+    steps: [
+      { id: newId(), type: "start", trigger: "manual", task: goal.trim() },
+      b,
+      { id: newId(), type: "review", prompt: "", maxMinutes: 15, model: "opus", onFail: b.id },
+      { id: newId(), type: "ship", shipMode: "ask" },
+    ],
+  };
+}
+
+// A short workflow name from the goal: "Make an arcade website with 4 games" → "Arcade website with 4 games".
+export function nameFromGoal(goal: string): string {
+  const line = goal.trim().split("\n").find((l) => l.replace(/[#*>\-\s]/g, "")) ?? "";
+  const words = line
+    .replace(/[#*_`>]/g, " ")
+    .replace(/^\s*(please\s+)?(i want( you)? to\s+|can you\s+)?(make|build|create|write|add|design|code)\s+(me\s+)?(an?|the|some|my)?\s*/i, "")
+    .split(/[.!?]\s|\s+(?:that|which|who|so|where)\s/i)[0]
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 5);
+  // Don't end on a little joining word: "Snake game with" → "Snake game".
+  while (words.length > 1 && /^(a|an|the|and|or|with|for|to|of|in|on|that|which|so|it|my)$/i.test(words[words.length - 1].replace(/[.,:;!?]+$/, ""))) words.pop();
+  const name = words.join(" ").replace(/[.,:;!?]+$/, "");
+  if (!name) return "New workflow";
+  return (name.charAt(0).toUpperCase() + name.slice(1)).slice(0, 60);
 }
 
 // ---------- cleaning up anything into a valid workflow ----------

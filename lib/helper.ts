@@ -139,7 +139,7 @@ function describeContext(ctx: HelperContext): string {
   else if (/^\/agents\/\d+\/edit/.test(p)) page += ` (the agent editor, editing ${agent ? `[agent ${agent.id}] ${agent.name}` : "an agent"})`;
   else if (/^\/agents\/\d+/.test(p)) page += ` (the agent page of ${agent ? `[agent ${agent.id}] ${agent.name}` : "an agent"})`;
   else if (p === "/workflows") page += " (the Workflows list)";
-  else if (p === "/workflows/new") page += " (New workflow: Describe it, or start from a template)";
+  else if (p === "/workflows/new") page += " (New workflow: What do you want to make?, Project, the steps shown underneath with a Change the steps link)";
   else if (/^\/workflows\/\d+/.test(p)) page += ` (the workflow editor of ${wf ? `[workflow ${wf.id}] ${wf.name}` : "a workflow"})`;
   else if (p.startsWith("/inbox")) page += " (the Inbox)";
   else if (p.startsWith("/projects")) page += " (Projects)";

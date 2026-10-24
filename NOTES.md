@@ -45,6 +45,32 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
 - The worktree has no database of its own, so `scripts/dev-copy.sh fresh` can't copy one. I made the dev copy with
   a read-only SQLite backup of the live database (`sqlite3 "file:…?mode=ro" ".backup …"`), then ran the script
   without `fresh` and the same clean-up it does.
+- **Ask once (milestone 2): the start screen** asks only "What do you want to make?" and Project. The steps are
+  shown underneath as a small row. The default is a new "Build carefully → Review → Ship (recommended)" set: Start →
+  Build (Careful mode, 60 min) → Review (back to Build if it needs work) → Ship (asks you first). I left out a
+  separate "Ask me" step because Ship already asks. "Change the steps" opens "Change the steps in your own words"
+  (it now only drafts steps and shows them on the start screen; nothing is made until Next) plus the ready-made
+  sets. The old template "Build → Review → Ship" is shown there as "Research → Build → Review → Ship" so no two sets
+  have the same name. A ready-made set with its own job (Nightly site check) fills an empty goal box, and takes it
+  back out if Nic picks other steps without editing it.
+- **Next** makes the workflow (still Off, as before) with the goal saved and a name made from the goal, and opens
+  the editor with a "Your workflow is ready" note. The **Attach a brief** box isn't on the start screen yet; it
+  comes with milestone 3 (briefs), so nothing half-built shows.
+- **Run now / Test run** start straight away with the saved goal. Under them, small links **Run with a different
+  goal…** / **Test with a different goal…** open a box filled in with the saved goal. A changed goal is used for
+  that one run only (the run's own copy of the steps carries it, `stepsWithGoal` in lib/wf.ts); the saved goal
+  doesn't change. If there's no goal at all, the buttons point at the goal box instead of starting (the server
+  refuses too). The test-run explanation moved into an ⓘ next to Test run. The Helper's "Start a test run" button
+  now really starts one (once; the `?test=1` is removed from the address straight away).
+- **Try again** uses the goal that's saved now, so editing the goal and pressing Try again works as expected. (A
+  one-off "different goal" isn't repeated by Try again.)
+- **Audit of other boxes that ask for a task:** the editor's goal box is now called "What do you want to make?",
+  the same words as the start screen. Start a task panel: one box, already prefilled when opened from the Helper,
+  an Inbox idea, the home page link or a follow-up, so nothing to change. Agent follow-ups: typed once on the
+  agent page, then the panel opens with it filled in (unchanged). Inbox ideas → "Run with a workflow" sends the idea
+  as an addition to the saved goal (both reach the agent), it doesn't ask again. Helper: its guide, page notes and
+  snapshot now describe the new start screen and Run now; its workflow cards already carry the goal. Run history
+  rows now show the run's goal instead of just "Run".
 
 
 # v3: simpler, fully in the panel, deep research

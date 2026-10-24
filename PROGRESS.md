@@ -3,7 +3,7 @@
 Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on your own dev copy (see NOTES.md, not port 3100).
 
 - [x] 1. Find why Lookout did nothing, add failure Inbox items
-- [ ] 2. Ask for the goal once, Run now without pop-up
+- [x] 2. Ask for the goal once, Run now without pop-up
 - [ ] 3. Briefs: attach, pick, copy into run, missing-file check
 - [ ] 4. Prompt coach with quick questions and idea help
 - [ ] 5. Easy workflow editing: in-words changes, duplicate, undo, history
@@ -12,6 +12,18 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 - [ ] 8. Full check of every button, page and real run
 - [ ] 9. Three or more fresh beginner review rounds as Sam
 - [ ] 10. Test migration on database copy, update notes, open PR
+
+## Handoff (after milestone 2)
+
+- New start screen: `components/NewWorkflow.tsx` (goal, project, step row, "Change the steps"). Default steps come
+  from `defaultWorkflow()` in lib/wf.ts; names from `nameFromGoal()`. `/api/workflows/draft` takes `preview: true`
+  (returns steps, makes nothing) and `goal` (context only, see `draftPrompt` in lib/draft.ts).
+- Milestone 3 should add **Attach a brief (optional)** to the start screen under the goal box (left out on purpose).
+- Milestone 4 (prompt coach) hooks into the start screen's **Next** button (`make()` in NewWorkflow.tsx).
+- Run now/Test run: `runNow()` in WorkflowEditor.tsx; the "different goal" box is `GoalDialog`. The API takes
+  `goal` (one run only) via `StartWfOpts.goal` → `stepsWithGoal()`.
+- Tests: `tests/askonce.test.ts` added; `npm test` = 45 passing. Browser check script used: `.agentbox/qa/askonce.mjs`
+  (not committed; it mocks the run request so no real run starts).
 
 ## Handoff (after milestone 1)
 
