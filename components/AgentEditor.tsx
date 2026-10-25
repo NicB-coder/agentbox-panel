@@ -26,10 +26,14 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
   const freedom = freedomOf(a);
   const setFreedom = (f: Freedom, ask: boolean) => setA((x) => ({ ...x, ...modeFor(f, ask), job: { ...(x.job ?? DEFAULT_JOB), askEachStep: f !== "look" && ask } }));
   // The Helper can see what's typed so far (e.g. "Help me write what it should do").
-  useHelperContext({
-    agentId: id ?? undefined,
-    editing: `${id ? "this agent's settings" : "a new agent"}, not saved yet. Name: "${a.name}". What it should do so far: "${a.prompt.slice(0, 1200)}". ${agentSentence(a)}`,
-  });
+  useHelperContext(
+    {
+      agentId: id ?? undefined,
+      editing: `${id ? "this agent's settings" : "a new agent"}, not saved yet. Name: "${a.name}". What it should do so far: "${a.prompt.slice(0, 1200)}". ${agentSentence(a)}`,
+      fill: 'the "What should this agent do?" box',
+    },
+    (t) => setA((x) => ({ ...x, prompt: t })),
+  );
 
   async function save(e: React.FormEvent) {
     e.preventDefault();

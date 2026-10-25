@@ -23,7 +23,7 @@ export function Sheet({ title, icon, color, onClose, children, ask }: { title: s
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <aside
+    <aside data-helper-avoid=""
       ref={ref}
       tabIndex={-1}
       aria-label={`${title} settings`}

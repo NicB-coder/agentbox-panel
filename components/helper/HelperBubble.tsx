@@ -1,15 +1,19 @@
 "use client";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { HelperContext, HelperMessage, HelperState, HelperStreamEvent } from "@/lib/helperTypes";
 import { clockOf } from "@/lib/words";
 import { post } from "../bits";
 import { btn } from "../ui";
 import { helperExtra, screenErrors, useHelperStoreVersion } from "./helperStore";
+import { useHelperSpot } from "./helperSpot";
 import { MessageView } from "./HelperMessageView";
 
 // The Helper: a round chat bubble in the bottom-right corner of every page.
 // It explains the site, what's on screen and what's running, and helps make agents and workflows.
+// It follows Nic into every pop-up and panel: a pop-up (a modal <dialog>) makes the rest of the page
+// unclickable, so the bubble and chat are moved inside the pop-up that's open on top while it's open.
 
 function currentContext(path: string): HelperContext {
   const a = path.match(/^\/agents\/(\d+)/);
@@ -35,10 +39,31 @@ function until(ms: number) {
   return h ? `${h}h ${mins % 60}m` : `${mins}m`;
 }
 
+let sendCount = 0;
+const newClientId = () => `${Date.now().toString(36)}-${(++sendCount).toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
 export default function HelperBubble() {
   const path = usePathname() ?? "/";
   const storeVersion = useHelperStoreVersion();
-  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [open, setOpenState] = useState(false);
+  // An open chat stays open across pages and reloads of this tab.
+  const setOpen = useCallback((v: boolean) => {
+    setOpenState(v);
+    try {
+      sessionStorage.setItem("agentbox:helper-open", v ? "1" : "");
+    } catch {
+      /* private mode */
+    }
+  }, []);
+  useEffect(() => {
+    setMounted(true);
+    try {
+      if (sessionStorage.getItem("agentbox:helper-open") && !isPhone()) setOpenState(true);
+    } catch {
+      /* private mode */
+    }
+  }, []);
   const [data, setData] = useState<HelperState | null>(null);
   const [live, setLive] = useState<Record<number, { text: string; status: string }>>({});
   const [input, setInput] = useState("");
@@ -48,8 +73,6 @@ export default function HelperBubble() {
   const [showChats, setShowChats] = useState(false);
   const [announce, setAnnounce] = useState("");
   const [newText, setNewText] = useState(false);
-  // Replies that were written while the panel was open: these type out calmly. Older ones show at once.
-  const [typed, setTyped] = useState<Set<number>>(() => new Set());
   const shownChat = useRef<number | null>(null);
   const jumpToEnd = useRef(false);
   const attached = useRef(new Set<number>());
@@ -59,11 +82,12 @@ export default function HelperBubble() {
   const openRef = useRef(open);
   openRef.current = open;
   const chatId = data?.chat?.id ?? null;
+  const busy = sending || (data?.messages ?? []).some((m) => m.status === "streaming");
   const panelId = useId();
   const titleId = useId();
   const errorsOnScreen = screenErrors().length > 0;
-  // A workflow step's panel sits where the bubble is; it has its own "Ask" button instead.
-  const sheetOpen = !!helperExtra().stepId;
+  const sendingNow = useRef(false);
+  const { host, bubbleStyle, panelStyle } = useHelperSpot(open);
   void storeVersion; // re-render when the page's errors or selection change
 
   const load = useCallback(
@@ -86,7 +110,6 @@ export default function HelperBubble() {
   const attach = useCallback(async (msgId: number) => {
     if (attached.current.has(msgId)) return;
     attached.current.add(msgId);
-    setTyped((t) => new Set(t).add(msgId));
     try {
       const r = await fetch(`/api/helper/stream?msg=${msgId}`, { cache: "no-store" });
       if (!r.body) throw new Error("no stream");
@@ -133,6 +156,31 @@ export default function HelperBubble() {
     for (const m of data?.messages ?? []) if (m.status === "streaming" && m.id > 0) attach(m.id);
   }, [data, attach]);
 
+  // The suggested questions follow what's open (a panel, a step, an error), not just the page.
+  const ctxKey = mounted ? JSON.stringify({ ...helperExtra(), errors: screenErrors().length > 0 }) : "";
+  const firstCtx = useRef(true);
+  useEffect(() => {
+    if (!open) return;
+    if (firstCtx.current) {
+      firstCtx.current = false;
+      return;
+    }
+    const t = setTimeout(async () => {
+      const q = new URLSearchParams({ only: "suggestions", ctx: JSON.stringify({ ...currentContext(path), title: undefined }) });
+      try {
+        const r = await fetch(`/api/helper?${q}`, { cache: "no-store" });
+        if (r.ok) {
+          const j = (await r.json()) as { suggestions: string[] };
+          setData((d) => (d ? { ...d, suggestions: j.suggestions } : d));
+        }
+      } catch {
+        /* keep the old ones */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctxKey, open]);
+
   // The view stays still while a reply is typed. It only jumps to the end when the panel opens,
   // another chat is shown, or Nic sends something. New words below the fold show "↓ New text".
   const atEnd = () => {
@@ -176,7 +224,7 @@ export default function HelperBubble() {
     const t = setTimeout(() => box.current?.focus(), 30);
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (document.querySelector("dialog[open]")) return; // an "Are you sure?" is showing
+      if (document.querySelector("dialog[open]")) return; // a pop-up is showing: Escape is for it (or handled in the chat itself)
       setOpen(false);
       bubble.current?.focus();
     };
@@ -187,9 +235,13 @@ export default function HelperBubble() {
     };
   }, [open]);
 
+  // One question, one request: a double press or a repeated event can't send it twice
+  // (and the server answers a repeated send id with the first reply).
   async function send(text: string) {
     const t = text.trim();
-    if (!t || sending) return;
+    if (!t || sendingNow.current || busy) return;
+    sendingNow.current = true;
+    const clientId = newClientId();
     setSending(true);
     setError("");
     setShowChats(false);
@@ -202,7 +254,7 @@ export default function HelperBubble() {
     setData((d) => ({ chat: d?.chat ?? null, chats: d?.chats ?? [], outOfUsage: d?.outOfUsage ?? null, suggestions: d?.suggestions, messages: [...(d?.messages ?? []), ...temp] }));
     setInput("");
     try {
-      const j = await post<{ chatId: number; user: HelperMessage; reply: HelperMessage }>("/api/helper/send", { chatId, text: t, context: ctx });
+      const j = await post<{ chatId: number; user: HelperMessage; reply: HelperMessage }>("/api/helper/send", { chatId, text: t, context: ctx, clientId });
       setData((d) => {
         const msgs = (d?.messages ?? []).filter((m) => m.id > 0);
         return {
@@ -220,7 +272,24 @@ export default function HelperBubble() {
       setInput(t);
       setError((e as Error).message);
     } finally {
+      sendingNow.current = false;
       setSending(false);
+    }
+  }
+
+  // Continue a reply that stopped partway (or try a failed one again). Only on Nic's click.
+  async function continueReply(msgId: number) {
+    if (sendingNow.current || busy) return;
+    sendingNow.current = true;
+    setError("");
+    try {
+      const j = await post<{ reply: HelperMessage }>("/api/helper/continue", { msgId });
+      setData((d) => (d ? { ...d, messages: d.messages.map((m) => (m.id === msgId ? j.reply : m)) } : d));
+      attach(msgId);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      sendingNow.current = false;
     }
   }
 
@@ -261,7 +330,7 @@ export default function HelperBubble() {
     if (isPhone()) setOpen(false);
   };
 
-  const busy = sending || (data?.messages ?? []).some((m) => m.status === "streaming");
+
   const out = data?.outOfUsage;
   const messages = data?.messages ?? [];
   const suggestions = data?.suggestions ?? [];
@@ -274,8 +343,9 @@ export default function HelperBubble() {
     } else send(s);
   }
 
-  return (
-    <>
+  if (!mounted) return null;
+  return createPortal(
+    <div data-helper-root="" className="contents">
       <button
         ref={bubble}
         type="button"
@@ -284,7 +354,8 @@ export default function HelperBubble() {
         aria-controls={panelId}
         aria-label={open ? "Close the Helper" : dot ? (errorsOnScreen ? "Helper: I can explain the error on this page" : "Helper: I have an answer for you") : "Open the Helper. Ask anything about agentbox"}
         onClick={() => setOpen(!open)}
-        className={`fixed right-4 z-40 h-14 w-14 items-center justify-center rounded-full bg-ink text-white shadow-[0_8px_24px_rgba(21,23,27,0.28)] hover:bg-black bottom-[calc(72px+env(safe-area-inset-bottom))] lg:right-6 lg:bottom-6 ${open ? "hidden lg:inline-flex" : sheetOpen ? "hidden" : "inline-flex"}`}
+        style={bubbleStyle}
+        className={`fixed right-4 z-[60] h-14 w-14 items-center justify-center rounded-full bg-ink text-white shadow-[0_8px_24px_rgba(21,23,27,0.28)] hover:bg-black bottom-[calc(72px+env(safe-area-inset-bottom))] lg:right-6 lg:bottom-6 ${open ? "hidden lg:inline-flex" : "inline-flex"}`}
       >
         {open ? (
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
@@ -308,7 +379,18 @@ export default function HelperBubble() {
           id={panelId}
           role="dialog"
           aria-labelledby={titleId}
-          className="fixed inset-x-0 top-2 bottom-[calc(57px+env(safe-area-inset-bottom))] z-40 flex flex-col overflow-hidden rounded-t-[24px] border border-line bg-white shadow-[0_-8px_40px_rgba(21,23,27,0.18)] lg:inset-x-auto lg:top-auto lg:right-6 lg:bottom-[96px] lg:h-[min(640px,calc(100vh-128px))] lg:w-[380px] lg:rounded-[24px] lg:shadow-[0_20px_60px_rgba(21,23,27,0.22)]"
+          style={panelStyle}
+          onKeyDown={(e) => {
+            // Escape closes the chat, not the pop-up it's sitting in.
+            if (e.key !== "Escape" || e.defaultPrevented) return;
+            const inner = (e.target as HTMLElement).closest("dialog");
+            if (inner && e.currentTarget.contains(inner)) return; // its own "Are you sure?" handles it
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen(false);
+            bubble.current?.focus();
+          }}
+          className={`fixed inset-x-0 top-2 ${host ? "bottom-2" : "bottom-[calc(57px+env(safe-area-inset-bottom))]"} z-[60] flex flex-col overflow-hidden rounded-t-[24px] border border-line bg-white shadow-[0_-8px_40px_rgba(21,23,27,0.18)] lg:inset-x-auto lg:top-auto lg:right-6 lg:bottom-[96px] lg:h-[min(640px,calc(100vh-128px))] lg:w-[380px] lg:rounded-[24px] lg:shadow-[0_20px_60px_rgba(21,23,27,0.22)]`}
         >
           {/* Header */}
           <div className="flex items-center gap-1 border-b border-line py-2 pl-5 pr-2">
@@ -379,9 +461,9 @@ export default function HelperBubble() {
                       key={m.id}
                       m={m}
                       live={live[m.id]?.text}
-                      animate={typed.has(m.id)}
                       status={live[m.id]?.status}
                       onNavigate={onNavigate}
+                      onContinue={busy ? undefined : continueReply}
                       onChange={() => {
                         setInput("Change it: ");
                         box.current?.focus();
@@ -464,6 +546,7 @@ export default function HelperBubble() {
           </div>
         </section>
       )}
-    </>
+    </div>,
+    host ?? document.body,
   );
 }

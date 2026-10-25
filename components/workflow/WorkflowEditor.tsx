@@ -126,7 +126,15 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
   const sel = selIndex >= 0 ? steps[selIndex] : null;
   const sentence = flowSentence(live ? { steps: viewing!.steps, limits: def.limits } : def, agents);
   // Tell the Helper which step is open, and which run is on the canvas.
-  useHelperContext({ workflowId: id, wfRunId: viewing?.id, stepId: sel?.id, stepLabel: sel ? stepTitle(sel, agents) : undefined, editing: dirtyNote(def, saved) });
+  const goalNow = def.steps[0]?.task ?? "";
+  useHelperContext(
+    {
+      workflowId: id, wfRunId: viewing?.id, stepId: sel?.id, stepLabel: sel ? stepTitle(sel, agents) : undefined,
+      editing: [`the workflow editor. "What do you want to make?" box says: "${goalNow.slice(0, 1200)}"${def.steps[0]?.brief ? ` · Brief attached: ${def.steps[0].brief.name}` : " · no brief attached"}`, dirtyNote(def, saved)].filter(Boolean).join(" · "),
+      fill: live ? undefined : 'the workflow\'s "What do you want to make?" box',
+    },
+    (t) => update({ ...def, steps: def.steps.map((x, i) => (i === 0 ? { ...x, task: t } : x)) }, "task"),
+  );
   // The Helper's "Start a test run" button opens this page with ?test=1: start it once, then drop the ?test=1.
   const helperTest = useRef(false);
   useEffect(() => {

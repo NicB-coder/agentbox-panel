@@ -12,6 +12,8 @@ export type HelperContext = {
   stepId?: string; // the selected workflow step
   stepLabel?: string;
   editing?: string; // "a new agent", "Builder's settings"…
+  panels?: string[]; // panels and pop-ups open on top of the page, with what's in their boxes, in words
+  fill?: string; // the open form's goal box the Helper can fill in (with Nic's click), e.g. "the goal box of the Start a task panel"
   errors: string[]; // plain-word errors showing on the page
 };
 
@@ -27,6 +29,7 @@ export type ActionKind =
   | "run_agent" // agent id: Run now (its usual job)
   | "new_task" // agent id: opens New task with the task text filled in (label holds the text)
   | "coach_goal" // opens Start a task with the text filled in and the prompt coach checking it
+  | "fill_goal" // puts the text (task) in the goal box of the form that's open, when Nic presses Use this
   | "idea_help" // opens Start a task with "Help me think of ideas" showing
   | "change_workflow" // workflow id: opens its editor with this change (task) drafted as before → after; nothing changes until Apply
   | "test_run" // workflow id: opens the workflow with the Test run window
@@ -51,6 +54,9 @@ export type HelperMeta = {
   cards?: HelperCard[];
   created?: { index: number; kind: "agent" | "workflow"; id: number; href: string }[]; // cards Nic pressed Create it on
   tools?: string[]; // what it looked up, in plain words
+  cutOff?: "restart" | "time" | "usage" | "error"; // a reply that stopped partway: what was written is kept, Continue finishes it
+  resume?: { question: string; ctx: HelperContext; userMsgId: number }; // what was asked, so a cut-off reply can be continued
+  clientId?: string; // on Nic's messages: the browser's id for this send, so a double send is answered once
   waiting?: { question: string; ctx: HelperContext; userMsgId: number; until: number }; // out of usage: answered by itself after the reset
 };
 

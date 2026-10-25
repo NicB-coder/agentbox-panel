@@ -81,3 +81,9 @@ export function updateMessage(id: number, patch: Partial<Pick<HelperMessage, "te
 export function streamingMessages(): HelperMessage[] {
   return (db().prepare("SELECT * FROM helper_messages WHERE status = 'streaming'").all() as MsgRow[]).map(toMsg);
 }
+
+// Nic's message with this browser send id, if it already arrived.
+export function findByClientId(clientId: string): HelperMessage | null {
+  const r = db().prepare("SELECT * FROM helper_messages WHERE role = 'user' AND json_extract(meta, '$.clientId') = ? ORDER BY id DESC LIMIT 1").get(clientId) as MsgRow | undefined;
+  return r ? toMsg(r) : null;
+}

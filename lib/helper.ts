@@ -6,7 +6,7 @@ import path from "node:path";
 import { createAgent, createWorkflow, db, getAgent, getApproval, getRun, getSetting, getWfRun, getWorkflow, listAgents, listWorkflows, runsWithStatus, wfRunsWithStatus } from "./db";
 import { addHelperUsage } from "./draftUsage";
 import { helperSystemPrompt } from "./helperGuide";
-import { addMessage, getChat, getMessage, listMessages, streamingMessages, touchChat, updateMessage } from "./helperDb";
+import { addMessage, findByClientId, getChat, getMessage, listMessages, streamingMessages, touchChat, updateMessage } from "./helperDb";
 import { buildSnapshot } from "./helperSnapshot";
 import { TOOLS } from "./helperTools";
 import type { HelperAction, HelperCard, HelperContext, HelperMessage, HelperMeta, HelperStreamEvent } from "./helperTypes";
@@ -50,7 +50,7 @@ export function dataBlock(tag: string, text: string) {
   return `<${tag}>\n${text.replace(new RegExp(`</?${tag}\\b`, "gi"), "(tag)")}\n</${tag}>`;
 }
 
-type Gen = { chatId: number; msgId: number; text: string; status: string | null; listeners: Set<(e: HelperStreamEvent) => void>; child: ChildProcess | null };
+type Gen = { chatId: number; msgId: number; text: string; status: string | null; listeners: Set<(e: HelperStreamEvent) => void>; child: ChildProcess | null; fill?: boolean };
 type G = typeof globalThis & { __agentboxHelper?: Map<number, Gen> };
 const gens: Map<number, Gen> = ((globalThis as G).__agentboxHelper ??= new Map());
 
@@ -86,7 +86,7 @@ export function answerWaitingHelper() {
     const w = m?.meta.waiting;
     if (!m || !w || w.until > Date.now() || busyChat(m.chatId)) continue;
     const { waiting: _w, ...rest } = m.meta;
-    updateMessage(id, { text: "", status: "streaming", meta: rest });
+    updateMessage(id, { text: "", status: "streaming", meta: { ...rest, resume: { question: w.question, ctx: w.ctx, userMsgId: w.userMsgId } } });
     const gen: Gen = { chatId: m.chatId, msgId: id, text: "", status: null, listeners: new Set(), child: null };
     gens.set(id, gen);
     try {
@@ -97,9 +97,16 @@ export function answerWaitingHelper() {
   }
 }
 
-// A reply cut off by a panel restart.
+// A reply cut off by a panel restart: keep what was written (it's saved as it streams) and mark it
+// "Stopped partway" with a Continue button. It's never started again by itself.
 export function recoverHelper() {
-  for (const m of streamingMessages()) if (!gens.has(m.id)) updateMessage(m.id, { status: "error", text: m.text || "I got cut off before I could answer. Ask again?" });
+  for (const m of streamingMessages()) {
+    if (gens.has(m.id)) continue;
+    if (m.text.trim()) {
+      const done = finalize(m.text, { ...m.meta, tools: undefined });
+      updateMessage(m.id, { status: "done", text: done.text, meta: { ...done.meta, resume: m.meta.resume, cutOff: "restart" } });
+    } else updateMessage(m.id, { status: "error", text: "I got cut off before I could answer.", meta: { resume: m.meta.resume, cutOff: "restart" } });
+  }
 }
 
 export function busyChat(chatId: number): Gen | null {
@@ -123,6 +130,8 @@ export function cleanContext(raw: unknown): HelperContext {
     stepId: str(r.stepId, 20),
     stepLabel: str(r.stepLabel, 200),
     editing: str(r.editing, 1800),
+    panels: Array.isArray(r.panels) ? (r.panels as unknown[]).filter((e) => typeof e === "string" && e.trim()).slice(-4).map((e) => (e as string).slice(0, 1500)) : undefined,
+    fill: str(r.fill, 120),
     errors: Array.isArray(r.errors) ? (r.errors as unknown[]).filter((e) => typeof e === "string").slice(0, 3).map((e) => (e as string).slice(0, 500)) : [],
   };
 }
@@ -154,12 +163,18 @@ function describeContext(ctx: HelperContext): string {
   } else if (ctx.stepLabel) lines.push(`Selected: ${ctx.stepLabel.slice(0, 120)}`);
   if (ctx.runId) lines.push(`Looking at run [run ${ctx.runId}].`);
   if (ctx.editing) lines.push(`Editing: ${ctx.editing.slice(0, 1800)}`);
+  for (const [i, p] of (ctx.panels ?? []).entries())
+    lines.push(`${i === (ctx.panels?.length ?? 0) - 1 ? "OPEN ON TOP (what Nic is looking at)" : "Also open underneath"}: ${p}`);
+  if (ctx.fill) lines.push(`You can offer to fill in ${ctx.fill} with [[fill:goal|the full new text]] (Nic presses Use this; nothing changes until then).`);
+  else lines.push("No goal box is open, so don't use [[fill:…]].");
   if (ctx.errors.length) lines.push(`Error showing on screen: ${ctx.errors.map((e) => `"${e.slice(0, 400)}"`).join("; ")}`);
   else lines.push("No error showing on screen.");
   return lines.join("\n");
 }
 
 export function shortPlace(ctx: HelperContext): string {
+  const top = ctx.panels?.at(-1);
+  if (top) return top.split(/ · |: /)[0].slice(0, 40);
   const p = ctx.path || "/";
   if (p === "/") return "Agents";
   if (/^\/agents\/new/.test(p)) return "New agent";
@@ -190,11 +205,22 @@ function historyText(chatId: number, beforeId: number): string {
 
 // ---------- sending a message ----------
 
-export function sendMessage(chatId: number, text: string, ctx: HelperContext): { user: HelperMessage; reply: HelperMessage } {
+// The same send arriving twice (a double press, a retry after a dropped connection): hand back the first one.
+export function sentBefore(clientId: string | undefined): { chatId: number; user: HelperMessage; reply: HelperMessage } | null {
+  if (!clientId) return null;
+  const user = findByClientId(clientId);
+  if (!user) return null;
+  const reply = listMessages(user.chatId, 400).find((m) => m.id > user.id && m.role === "helper");
+  return reply ? { chatId: user.chatId, user, reply } : null;
+}
+
+export function sendMessage(chatId: number, text: string, ctx: HelperContext, clientId?: string): { user: HelperMessage; reply: HelperMessage } {
   const chat = getChat(chatId);
   if (!chat) throw new Error("That conversation isn't here any more. Start a new chat.");
+  const again = sentBefore(clientId);
+  if (again) return { user: again.user, reply: again.reply };
   if (busyChat(chatId)) throw new Error("Wait a moment, the Helper is still answering.");
-  const user = addMessage({ chatId, role: "user", text, meta: { context: shortPlace(ctx) } });
+  const user = addMessage({ chatId, role: "user", text, meta: { context: shortPlace(ctx), ...(clientId ? { clientId } : {}) } });
   touchChat(chatId, text.replace(/\s+/g, " ").slice(0, 60));
 
   const out = outOfUsage();
@@ -203,15 +229,37 @@ export function sendMessage(chatId: number, text: string, ctx: HelperContext): {
     return { user, reply };
   }
 
-  const reply = addMessage({ chatId, role: "helper", text: "", status: "streaming" });
+  const resume = { question: text, ctx, userMsgId: user.id };
+  const reply = addMessage({ chatId, role: "helper", text: "", status: "streaming", meta: { resume } });
   const gen: Gen = { chatId, msgId: reply.id, text: "", status: null, listeners: new Set(), child: null };
   gens.set(reply.id, gen);
   try {
     run(gen, text, ctx, user.id);
   } catch (e) {
-    finish(gen, `I couldn't start just now (${(e as Error).message}). Try again in a moment.`, {}, "error");
+    finish(gen, `I couldn't start just now (${(e as Error).message}). Try again in a moment.`, { resume, cutOff: "error" }, "error");
   }
   return { user, reply: getMessage(reply.id)! };
+}
+
+// Continue on a reply that stopped partway: the same message carries on from where it stopped.
+// Only ever started by Nic pressing Continue.
+export function continueReply(msgId: number): HelperMessage {
+  const m = getMessage(msgId);
+  if (!m || m.role !== "helper" || !m.meta.cutOff || !m.meta.resume) throw new Error("There's nothing to continue here.");
+  if (busyChat(m.chatId)) throw new Error("Wait a moment, the Helper is still answering.");
+  const out = outOfUsage();
+  if (out) throw new Error(`You're out of Claude usage${out.until ? ` until ${clockOf(out.until)}` : ""}. Press Continue after that.`);
+  const { resume } = m.meta;
+  const before = m.status === "done" ? m.text : "";
+  updateMessage(msgId, { status: "streaming", text: before, meta: { resume } });
+  const gen: Gen = { chatId: m.chatId, msgId, text: before, status: null, listeners: new Set(), child: null };
+  gens.set(msgId, gen);
+  try {
+    run(gen, resume.question, resume.ctx, resume.userMsgId, before);
+  } catch (e) {
+    finish(gen, before || `I couldn't start just now (${(e as Error).message}). Try again in a moment.`, { resume, cutOff: "error" }, before ? "done" : "error");
+  }
+  return getMessage(msgId)!;
 }
 
 function emit(gen: Gen, e: HelperStreamEvent) {
@@ -234,7 +282,10 @@ export function subscribe(msgId: number, cb: (e: HelperStreamEvent) => void): ((
   return () => gen.listeners.delete(cb);
 }
 
-function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
+// How often a reply that's being written is saved, so a restart keeps what was already there.
+const SAVE_EVERY_MS = 1000;
+
+function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number, before = "") {
   fs.mkdirSync(ROOM, { recursive: true });
   const history = historyText(gen.chatId, userMsgId);
   const prompt = [
@@ -242,7 +293,13 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
     dataBlock("where_nic_is", describeContext(ctx)),
     dataBlock("snapshot", buildSnapshot()),
     `Nic's new message:\n${text}`,
+    before
+      ? `You already started answering this, but got cut off. Here is what you wrote so far:\n${dataBlock("your_reply_so_far", before)}\nContinue from exactly where it stops. Don't repeat any of it and don't mention that you were cut off.`
+      : "",
   ].filter(Boolean).join("\n\n");
+  let savedAt = Date.now();
+  const resume = { question: text, ctx, userMsgId };
+  gen.fill = !!ctx.fill;
 
   const mcp = { mcpServers: { panel: { command: process.execPath, args: [MCP], env: { AGENTBOX_PANEL_URL: PANEL_URL, AGENTBOX_HELPER_SECRET: toolsSecret() } } } };
   const args = [
@@ -294,7 +351,13 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
             gen.text = gen.text.replace(/\s+$/, "") + "\n\n";
             gap = false;
           }
+          // Carrying on after Continue: keep a space between the old words and the new ones.
+          if (before && gen.text === before && /\S$/.test(before) && /^[A-Za-z0-9(*[]/.test(d.text)) gen.text += " ";
           gen.text += d.text;
+          if (Date.now() - savedAt > SAVE_EVERY_MS) {
+            savedAt = Date.now();
+            updateMessage(gen.msgId, { text: gen.text });
+          }
           if (gen.status) {
             gen.status = null;
             emit(gen, { t: "status", text: "" });
@@ -345,12 +408,17 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
     let textOut = gen.text.trim() || final?.trim() || "";
     if (failed) {
       const usage = failed.startsWith("You're out");
-      textOut = usage ? failed : textOut ? `${textOut}\n\n_${failed}_` : failed;
-      finish(gen, textOut, usage ? { ...meta, waiting: { question: text, ctx, userMsgId, until: retryAt(usageState().limitedUntil) } } : meta, usage ? "done" : "error");
+      // Partway through: keep what was written, say it stopped, and let Nic press Continue. Never restart it by itself.
+      if (textOut) {
+        finish(gen, textOut, { ...meta, resume, cutOff: usage ? "usage" : failed.startsWith("That took too long") ? "time" : "error" }, "done");
+        return;
+      }
+      textOut = failed;
+      finish(gen, textOut, usage ? { ...meta, waiting: { question: text, ctx, userMsgId, until: retryAt(usageState().limitedUntil) } } : { ...meta, resume, cutOff: "error" }, usage ? "done" : "error");
       return;
     }
     if (!textOut) {
-      finish(gen, "I didn't get an answer that time. Try asking again.", meta, "error");
+      finish(gen, "I didn't get an answer that time.", { ...meta, resume, cutOff: "error" }, "error");
       return;
     }
     finish(gen, textOut, meta, "done");
@@ -358,7 +426,7 @@ function run(gen: Gen, text: string, ctx: HelperContext, userMsgId: number) {
 }
 
 function finish(gen: Gen, raw: string, meta: HelperMeta, status: HelperMessage["status"]) {
-  const done = finalize(raw, meta);
+  const done = finalize(raw, meta, { fill: gen.fill });
   updateMessage(gen.msgId, { text: done.text, meta: done.meta, status });
   touchChat(gen.chatId);
   gens.delete(gen.msgId);
@@ -549,7 +617,8 @@ function workflowCard(raw: Record<string, unknown>): HelperCard {
   };
 }
 
-export function finalize(raw: string, meta: HelperMeta): { text: string; meta: HelperMeta } {
+// `fill`: a form with a goal box is open, so [[fill:goal|…]] can become a "Use this" preview.
+export function finalize(raw: string, meta: HelperMeta, opts: { fill?: boolean } = {}): { text: string; meta: HelperMeta } {
   const cards: HelperCard[] = [];
   let text = raw.replace(/```(agent-preview|workflow-preview)\s*\n?([\s\S]*?)```/g, (_m, kind: string, body: string) => {
     try {
@@ -576,6 +645,12 @@ export function finalize(raw: string, meta: HelperMeta): { text: string; meta: H
       const c = rest.indexOf(":");
       const act = actionFor(c >= 0 ? rest.slice(0, c).trim() : rest, c >= 0 ? rest.slice(c + 1).trim() : "");
       if (act && !actions.some((x) => x.kind === act.kind && x.ref === act.ref)) actions.push(act);
+      return "";
+    }
+    if (kind === "fill") {
+      // [[fill:goal|…]] shows the new goal as a preview with Use this; it only fills the open form's box when Nic clicks.
+      if (!opts.fill || !label) return label;
+      if (!actions.some((x) => x.kind === "fill_goal")) actions.push({ kind: "fill_goal", ref: "goal", label: "Use this", task: label.slice(0, 4000) });
       return "";
     }
     if (kind === "coach") {

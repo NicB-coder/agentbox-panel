@@ -314,3 +314,104 @@ describe("data, not instructions", () => {
     assert.equal(helper.toolsSecretOk(s.slice(0, -1) + "x"), false);
   });
 });
+
+describe("one reply per message, never replayed (v3.1)", () => {
+  function fakeClaude(body: string) {
+    const f = path.join(tmp, `fake-claude-${Math.random().toString(36).slice(2)}.mjs`);
+    fs.writeFileSync(f, `#!${process.execPath}\nprocess.stdin.resume();\nprocess.stdin.on("end", async () => {\n${body}\n});\n`, { mode: 0o755 });
+    return f;
+  }
+  const delta = (text: string) => `console.log(${JSON.stringify(JSON.stringify({ type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text } } }))});`;
+  const result = (text: string) => `console.log(${JSON.stringify(JSON.stringify({ type: "result", is_error: false, result: text, total_cost_usd: 0 }))});`;
+  function waitForReply(msgId: number) {
+    return new Promise<import("../lib/helperTypes").HelperMessage>((resolve) => {
+      const stop = helper.subscribe(msgId, (e) => {
+        if (e.t === "done") {
+          stop?.();
+          resolve(e.message);
+        }
+      });
+      if (!stop) resolve(hdb.getMessage(msgId)!);
+    });
+  }
+  const saved = { ...helper.helperRun };
+  after(() => Object.assign(helper.helperRun, saved));
+
+  test("the same send twice (same browser id) is one question, one reply, one Claude start", async () => {
+    const starts = path.join(tmp, `starts-${Date.now()}`);
+    helper.helperRun.bin = fakeClaude(`require("node:fs").appendFileSync(${JSON.stringify(starts)}, "x");\n${delta("Hi Nic.")}\n${result("Hi Nic.")}`.replace("require(", "(await import('node:module')).createRequire(import.meta.url)("));
+    helper.helperRun.timeLimitMs = 10_000;
+    const chat = hdb.createChat();
+    const a = helper.sendMessage(chat.id, "Hello", { path: "/", errors: [] }, "test-send-0001");
+    const b = helper.sendMessage(chat.id, "Hello", { path: "/", errors: [] }, "test-send-0001");
+    assert.equal(a.reply.id, b.reply.id);
+    assert.equal(a.user.id, b.user.id);
+    await waitForReply(a.reply.id);
+    const c = helper.sentBefore("test-send-0001")!;
+    assert.equal(c.reply.id, a.reply.id);
+    assert.equal(hdb.listMessages(chat.id).length, 2);
+    assert.equal(fs.readFileSync(starts, "utf8"), "x");
+  });
+
+  test("a reply cut off by the time limit keeps what it wrote and says Stopped partway", async () => {
+    helper.helperRun.bin = fakeClaude(`${delta("Your Lookout workflow is on step 3")}\nsetTimeout(() => {}, 60_000);`);
+    helper.helperRun.timeLimitMs = 400;
+    const chat = hdb.createChat();
+    const { reply } = helper.sendMessage(chat.id, "What's running?", { path: "/", errors: [] });
+    const done = await waitForReply(reply.id);
+    assert.equal(done.status, "done");
+    assert.equal(done.text, "Your Lookout workflow is on step 3");
+    assert.equal(done.meta.cutOff, "time");
+    assert.equal(done.meta.resume?.question, "What's running?");
+  });
+
+  test("Continue finishes the same reply (same id) from where it stopped, only when asked", async () => {
+    helper.helperRun.bin = fakeClaude(`${delta("Your Lookout workflow is on step 3")}\nsetTimeout(() => {}, 60_000);`);
+    helper.helperRun.timeLimitMs = 400;
+    const chat = hdb.createChat();
+    const { reply } = helper.sendMessage(chat.id, "What's running?", { path: "/", errors: [] });
+    await waitForReply(reply.id);
+    helper.helperRun.bin = fakeClaude(`${delta("of 5.")}\n${result("of 5.")}`);
+    helper.helperRun.timeLimitMs = 10_000;
+    const again = helper.continueReply(reply.id);
+    assert.equal(again.id, reply.id);
+    assert.equal(again.status, "streaming");
+    const done = await waitForReply(reply.id);
+    assert.equal(done.text, "Your Lookout workflow is on step 3 of 5.");
+    assert.equal(done.meta.cutOff, undefined);
+    assert.equal(hdb.listMessages(chat.id).length, 2, "no new message, the same one carried on");
+    assert.throws(() => helper.continueReply(reply.id), /nothing to continue/);
+  });
+
+  test("after a restart, a half-written reply is kept as Stopped partway, never started again by itself", () => {
+    const chat = hdb.createChat();
+    const user = hdb.addMessage({ chatId: chat.id, role: "user", text: "Why did it stop?" });
+    const m = hdb.addMessage({ chatId: chat.id, role: "helper", text: "It stopped because", status: "streaming", meta: { resume: { question: "Why did it stop?", ctx: { path: "/", errors: [] }, userMsgId: user.id } } });
+    helper.recoverHelper();
+    const after_ = hdb.getMessage(m.id)!;
+    assert.equal(after_.status, "done");
+    assert.equal(after_.text, "It stopped because");
+    assert.equal(after_.meta.cutOff, "restart");
+    assert.equal(helper.busyChat(chat.id), null, "nothing restarted");
+  });
+
+  test("a reply being written is saved as it goes, so a restart keeps it", async () => {
+    helper.helperRun.bin = fakeClaude(`${delta("First part. ")}\nawait new Promise((r) => setTimeout(r, 1300));\n${delta("Second part.")}\nsetTimeout(() => {}, 60_000);`);
+    helper.helperRun.timeLimitMs = 3000;
+    const chat = hdb.createChat();
+    const { reply } = helper.sendMessage(chat.id, "Tell me", { path: "/", errors: [] });
+    await new Promise((r) => setTimeout(r, 1800));
+    assert.match(hdb.getMessage(reply.id)!.text, /First part\. Second part\./);
+    await waitForReply(reply.id);
+  });
+
+  test("[[fill:goal|…]] becomes a Use this preview only when a goal box is open", () => {
+    const withBox = helper.finalize("Clearer now.\n[[fill:goal|An arcade site with 4 games for phones.]]", {}, { fill: true });
+    assert.equal(withBox.text, "Clearer now.");
+    assert.equal(withBox.meta.actions![0].kind, "fill_goal");
+    assert.equal(withBox.meta.actions![0].task, "An arcade site with 4 games for phones.");
+    const noBox = helper.finalize("Clearer now.\n[[fill:goal|An arcade site.]]", {});
+    assert.equal(noBox.meta.actions!.length, 0);
+    assert.match(noBox.text, /An arcade site\./);
+  });
+});

@@ -27,6 +27,8 @@ export function GET(req: Request) {
   } catch {
     /* defaults */
   }
+  // Just the suggested questions (when a panel opens or closes while the chat is open).
+  if (q.get("only") === "suggestions") return Response.json({ suggestions: suggestions(ctx) });
   const picked = Number.isInteger(id) && id > 0 ? id : null;
   if (picked && !getChat(picked)) return Response.json({ error: "That conversation isn't here any more." }, { status: 404 });
   return Response.json({ ...state(picked), suggestions: suggestions(ctx) });

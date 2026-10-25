@@ -8,6 +8,7 @@ import BriefPicker from "./BriefPicker";
 import { CoachBox, IdeaHelp } from "./Coach";
 import type { SuggestionKey } from "@/lib/coach";
 import ProjectSelect from "./ProjectSelect";
+import { useHelperContext } from "./helper/helperStore";
 import { Icon, btn } from "./ui";
 
 // The start screen asks one thing: what Nic wants to make. The steps come from a sensible default
@@ -42,6 +43,17 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
     const steps = plan.steps.map((s) => (s.type === "agent" ? { ...s, ...(tweaks.moreTime ? { maxMinutes: 120 } : {}), ...(tweaks.smartest ? { model: "opus" as const } : {}) } : s));
     return { ...plan, steps, limits: tweaks.moreTime ? { ...plan.limits, maxMinutes: Math.max(plan.limits.maxMinutes, 180) } : plan.limits };
   }, [plan, tweaks]);
+  // The Helper sees what's typed and can fill the goal box (only when Nic presses Use this).
+  useHelperContext(
+    {
+      editing: `the New workflow screen. "What do you want to make?" box says: "${goal.slice(0, 1200)}" · Project: ${project || "none picked"} · Brief: ${brief ? brief.name : "none attached"} · steps: ${planned.steps.map((s) => stepTitle(s, agents)).join(" → ")}${coach ? " · the prompt coach is open" : ""}${ideas ? " · Help me think of ideas is open" : ""}`,
+      fill: 'the "What do you want to make?" box',
+    },
+    (t) => {
+      setGoal(t);
+      setAutoGoal("");
+    },
+  );
   const planName = choice.from === "template" ? setName(choice.key) : choice.from === "words" ? "Your own steps" : DEFAULT_NAME;
 
   // Next: the coach checks the goal first (once), then the workflow is made.

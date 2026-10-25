@@ -2,7 +2,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import type { BriefRef, Freedom, JobKind, Model, NotifyOn } from "@/lib/types";
-import { BIG_TIME_NOTE, BIG_USAGE_TIP, DEFAULT_JOB, defaultMinutes } from "@/lib/job";
+import { BIG_TIME_NOTE, BIG_USAGE_TIP, DEFAULT_JOB, FREEDOM_WORDS, defaultMinutes } from "@/lib/job";
+import { scheduleWords } from "@/lib/words";
+import { useHelperContext } from "./helper/helperStore";
 import { ErrorBox, Label, Switch, post } from "./bits";
 import { CarefulPicker, Chip, FreedomPicker, MinutesSlider, ModelPicker, PercentSlider, NotifyPicker, WhenPicker, type When } from "./controls";
 import BriefPicker, { MissingFileBox, missingOf, type MissingInfo } from "./BriefPicker";
@@ -92,6 +94,22 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
   const [coached, setCoached] = useState(false);
   const [ideas, setIdeas] = useState(false);
   const [live, setLive] = useState<Connector[] | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  // While it's open, the Helper sees exactly what's in it and can fill the goal box (on Nic's click).
+  useHelperContext(
+    isOpen
+      ? {
+          panels: [
+            `${follow ? `Follow-up panel for ${follow.name}` : "Start a task panel"} · What kind: ${kind === "research" ? "Research something" : "Build something"} · goal box says: "${task.slice(0, 1000)}" · Project: ${project || "none"} · When: ${when.scheduleKind === "manual" ? "Now" : scheduleWords(when.scheduleKind, when.scheduleDays, when.scheduleTime)} · Freedom: ${FREEDOM_WORDS[freedom].label} · ${careful ? "Careful" : "Quick"} · Model: ${model === "opus" ? "Smartest" : "Fast"} · Time limit: ${big ? "doesn't apply (Big job)" : `${minutes} min`}${big ? ` · Big job on, usage budget ${budget}%` : ""}${askEach ? " · Ask me each step on" : ""} · Brief: ${brief ? brief.name : "none"}${coach ? " · the prompt coach is open" : ""}${ideas ? " · Help me think of ideas is open" : ""}${more ? " · More options is unfolded" : ""}`,
+          ],
+          fill: `the goal box of the ${follow ? "Follow-up" : "Start a task"} panel`,
+        }
+      : null,
+    (t) => {
+      setTask(t);
+      setCoached(true); // the Helper already improved it with him; Start goes straight on
+    },
+  );
   useEffect(() => {
     // The newest list of connected apps, when More options opens.
     if (!more || live) return;
@@ -136,6 +154,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       setCoachKey((k) => k + 1);
       setIdeas(!!d.ideas && !f);
       ref.current?.showModal();
+      setIsOpen(true);
       setTimeout(() => document.getElementById(taskId)?.focus(), 30);
     };
     window.addEventListener("agentbox:task-panel", open);
@@ -214,6 +233,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      onClose={() => setIsOpen(false)}
       className="m-0 h-[100dvh] max-h-none w-full max-w-none p-0 backdrop:bg-black/30 sm:m-auto sm:h-auto sm:max-h-[calc(100dvh-48px)] sm:w-[min(640px,calc(100vw-32px))] sm:rounded-[24px]"
     >
       <form onSubmit={next} className="flex min-h-full flex-col">

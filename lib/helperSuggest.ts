@@ -14,6 +14,18 @@ export function suggestions(ctx: HelperContext): string[] {
   if (getSetting<boolean>("pausedAll", false)) out.push("Why is everything paused?");
   const u = usageState();
 
+  // A panel or form that's open comes first: the questions are about what's in it.
+  const top = ctx.panels?.at(-1) ?? "";
+  const emptyGoal = (s: string) => /(goal box|make\?" box) says: ""/.test(s);
+  if (/^(Start a task|Follow-up) panel/.test(top)) {
+    out.push(emptyGoal(top) ? "Help me think of ideas" : "Is my goal detailed enough?", "What does Freedom mean?", "Which settings should I pick?");
+    return finish(out, ctx);
+  }
+  if (ctx.editing?.startsWith("the New workflow screen")) {
+    out.push(emptyGoal(ctx.editing) ? "Help me think of ideas" : "Is my goal detailed enough?", "What happens when I press Next?", "Should I attach a brief?");
+    return finish(out, ctx);
+  }
+
   if (p === "/") {
     out.push("What's running right now?");
     out.push(inboxCount() ? "What needs me?" : "What can my agents do?");
@@ -52,6 +64,11 @@ export function suggestions(ctx: HelperContext): string[] {
   } else if (p.startsWith("/help")) {
     out.push("What should I try first?", "What does the usage meter mean?");
   }
+  return finish(out, ctx);
+}
+
+function finish(out: string[], ctx: HelperContext): string[] {
+  const u = usageState();
   // An error on screen comes first, unless "Why did this stop?" already covers it.
   if (ctx.errors.length && !out.includes("Why did this stop?")) out.unshift("What does this error mean?");
   if (u.session && u.session.pct >= 75 && out.length < 3) out.push("Will I run out of usage?");
