@@ -179,6 +179,65 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
   longer counts (as the ⓘ already promised). The stop messages now name the setting: "…more than its Most usage per
   run of 25%" and "…longer than its Longest run of 2 h".
 
+### Milestone 7: the Helper follows everywhere, no replayed replies, personal and precise
+
+- **Why old replies replayed (found and fixed):** how far a reply had typed out lived inside each message on
+  screen and started at zero every time that message was drawn again. Closing and opening the chat, moving to
+  another page or into a pop-up, or swapping the "sending…" placeholder for the real message all drew it again, so
+  every reply that had ever streamed in that tab typed itself out again from the start (and an unfinished one
+  restarted from its first word). Now how far each reply has typed is remembered per message for the whole tab;
+  a saved reply always shows as finished text, and only a reply that's being written right now types out (and
+  only its new words). Nothing sends a request when the chat is opened, clicked, focused or redrawn.
+- **One question, one reply:** the send button and Enter can't send twice (a guard), and each send carries a
+  one-time id; if the same id arrives again (double press, retried connection) the server hands back the first
+  reply instead of asking Claude again.
+- **Stopped partway:** a reply is saved every second while it's written. If it's cut off (agentbox restarted, it
+  took too long, usage ran out mid-answer, an error) what was written stays, marked "Stopped partway: …" with a
+  **Continue** button that carries on the same message from where it stopped. It's never restarted by itself. A
+  reply that failed before writing anything shows **Try again**. (A question asked while already out of usage
+  still gets "I'll answer this by myself at 6:12 AM", as in v3; that's a first answer, not a restart.)
+- **It follows into every pop-up:** a pop-up (Start a task, "Are you sure?", the brief viewer, the phone Menu,
+  the workflow editor's windows, the welcome tour; the first four are checked by the browser test, the others use
+  the same code) makes the rest of the page unclickable, which is why the bubble
+  used to be stuck behind it. Now the bubble and the open chat move inside whichever pop-up is on top, and come back
+  when it closes, with the same conversation. It picks a spot that covers none of the pop-up's buttons or boxes
+  (on a phone in Start a task it sits next to Cancel). A workflow step's settings panel no longer hides the bubble:
+  it sits beside the panel on a laptop and above the sheet on a phone. Escape in the chat closes the chat, not the
+  pop-up under it.
+- **It knows what's open:** Start a task / follow-up panel (kind, what the goal box says, project, when, Freedom,
+  Careful/Quick, model, time limit, Big job, brief, coach or ideas open), the New workflow screen, the workflow
+  editor's goal box and selected step, and the agent editor. Panels stack, so closing one puts back what the page
+  said. The suggested questions change with it ("Is my goal detailed enough?", "What does Freedom mean?", "Which
+  settings should I pick?", "What happens when I press Next?").
+- **It can fill the open form, only on a click:** asked to improve the goal while a goal box is open, it shows the
+  new goal as a "Suggested goal · preview" card with **Use this**. Nothing changes until that's pressed. With no
+  form open it uses the prompt coach button instead.
+- **Personal and precise:** its instructions now say it's Nic's own agentbox helper: answers start from his real
+  data and name his things; facts and numbers only from this message's data, copied exactly; things that don't
+  exist get "I can't find …" in one line; failures quote the real reason; off-topic questions get one or two lines
+  and a nudge back. Plus length rules for status questions, settings with choices, and workflow descriptions.
+- **Helper test set (`helper-eval/`): 35 of 35 pass** on the dev copy of the real database (Oct 25). 35 questions
+  across Agents, an agent page, a workflow (and a selected step), Workflows, New workflow, Inbox, Projects, Settings
+  and the open Start a task panel, including two about things that don't exist, a trick question (the Reviewer
+  didn't actually stop last time) and three off-topic ones. The grader reads the real facts fresh from the dev copy
+  (usage %, reset time, Inbox count, what's running, heartbeat, workflows) and checks: right facts, no made-up
+  links, no jargon or ids, short enough, and the right buttons. First run was 30/35 (two were grader mistakes,
+  three answers were too long); after tightening the length rules it's 35/35. Every answer is in
+  `helper-eval/last-results.md`. Run: `node helper-eval/run.mjs http://127.0.0.1:PORT path/to/dev/agentbox.db`
+  (uses real Claude usage, about 35 Helper replies).
+- **Tests:** `npm test` has 6 new Helper checks (double send, cut off by time, Continue on the same message,
+  restart keeps the partial reply, saved while streaming, Use this only with a form open): 83 pass.
+  `scripts/helper-replay-test.mjs` (Playwright, 1366px and 390px): 20 rounds of open / click / focus / close /
+  page change / opening a panel show identical text with no new request and no re-streaming; the bubble is on top,
+  clickable and covers no button on Start a task, the brief viewer, "Are you sure?", the phone Menu and a step's
+  panel; Escape closes only the chat. With `real` it also clicks around while a real reply is written (never
+  starts over), sends once on a double Enter, and checks Use this fills the goal box: 31 of 31 pass.
+- **Decisions:** on a phone, tapping a link or a "Set up this task" button in the chat still closes the chat so
+  the page or panel can be seen (the chat is full screen there); the conversation is the same when it's opened
+  again. On a laptop an open chat stays open across pages, and across reloads of that tab. After **Use this** in
+  the Start a task panel, Start doesn't open the prompt coach again (the goal was already improved with the
+  Helper).
+
 
 # v3: simpler, fully in the panel, deep research
 

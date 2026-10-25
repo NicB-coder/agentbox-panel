@@ -7,11 +7,26 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 - [x] 3. Briefs: attach, pick, copy into run, missing-file check
 - [x] 4. Prompt coach with quick questions and idea help
 - [x] 5. Easy workflow editing: in-words changes, duplicate, undo, history
-- [ ] 6. Clearer usage limit wording and Big job defaults
-- [ ] 7. Helper everywhere, replay bug fixed, personal and precise
+- [x] 6. Clearer usage limit wording and Big job defaults
+- [x] 7. Helper everywhere, replay bug fixed, personal and precise
 - [ ] 8. Full check of every button, page and real run
 - [ ] 9. Three or more fresh beginner review rounds as Sam
 - [ ] 10. Test migration on database copy, update notes, open PR
+
+## Handoff (after milestone 7)
+
+- Replay fix: `useCalmReveal(id, text, writing)` in `components/helper/HelperMessageView.tsx` keeps typed length per
+  message id in a module-level map. Send guard + `clientId` (deduped by `sentBefore()` in `lib/helper.ts`, looked up
+  with `findByClientId()` in `lib/helperDb.ts`). Partial replies saved every second; `meta.cutOff` + `meta.resume`;
+  `POST /api/helper/continue` → `continueReply()` carries on the same message.
+- Follows everywhere: `components/helper/helperSpot.ts` finds the top modal `<dialog>`; `HelperBubble` portals into it
+  and places the bubble where it covers no control. Non-modal panels mark themselves `data-helper-avoid` (StepPanel).
+- Context: `useHelperContext(ctx | null, fill?)` in `helperStore.ts` is now a stack of layers; panels use `panels: [...]`,
+  pages use `editing`, `fill` names the goal box. `[[fill:goal|…]]` → `fill_goal` action (`FillCard`, Use this).
+  Suggestions: `GET /api/helper?only=suggestions&ctx=…`.
+- Tests: `npm test` (83), `node scripts/helper-replay-test.mjs <url> [shots] [real]`, `node helper-eval/run.mjs <url> <db>`
+  (35/35, uses real usage). Dev copy for this branch was port 3253 with `.agentbox/dev`.
+- Next: milestone 8 (full check-over, QA-CHECKLIST.md).
 
 ## Handoff (after milestone 5)
 
