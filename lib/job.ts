@@ -92,6 +92,11 @@ export function jobName(task: string, kind: JobKind = "build"): string {
       continue;
     }
     if (/^(with|that|which|so|because|using|from|where|when|but|then)$/i.test(w)) break;
+    // "Add a short comment at the top…" → "Short comment", never a name that ends on "at".
+    if (/^(at|by|into|onto|as|near|under|over|inside|below|above|across|before|after|between|via)$/i.test(w)) {
+      if (keep.length) break;
+      continue;
+    }
     keep.push(w.length > 18 ? w.slice(0, 18) : w);
   }
   if (!keep.length) keep.push(...words.slice(0, 2));

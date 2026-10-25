@@ -95,3 +95,23 @@ describe("the Inbox never stays silent", () => {
     assert.equal(inboxItems().filter((i) => i.kind === "quiet").length, 0);
   });
 });
+
+describe("a workflow that finishes with a pull request lands in the Inbox", () => {
+  test("it shows as Finished with its pull request, until dismissed; quiet or merged runs don't", async () => {
+    const w = db.createWorkflow({ name: "Joke page", project: "arcade", steps: steps("Make a joke page"), limits: wf.DEFAULT_LIMITS }, "First");
+    const wr = db.createWfRun({ workflowId: w.id, status: "running", test: true, input: "", trigger: "test", triggerRef: null, steps: w.steps, stepRuns: {} });
+    db.updateWfRun(wr.id, { status: "done", endedAt: Date.now(), prUrl: "https://github.com/x/arcade/pull/9", summary: "Test run finished. It stopped before shipping.", prWaiting: true });
+    const quietOne = db.createWfRun({ workflowId: w.id, status: "running", test: false, input: "", trigger: "manual", triggerRef: null, steps: w.steps, stepRuns: {} });
+    db.updateWfRun(quietOne.id, { status: "done", endedAt: Date.now(), prWaiting: false });
+
+    const done = inboxItems().filter((i) => i.kind === "wf_done");
+    assert.equal(done.length, 1);
+    const it = done[0];
+    assert.ok(it.kind === "wf_done" && it.wfRunId === wr.id && it.test && it.prUrl.endsWith("/pull/9") && /stopped before shipping/.test(it.text));
+
+    const { POST } = await import("../app/api/workflow-runs/[id]/dismiss/route");
+    await POST(new Request("http://x"), { params: Promise.resolve({ id: String(wr.id) }) });
+    assert.equal(inboxItems().filter((i) => i.kind === "wf_done").length, 0);
+    assert.equal(db.getWfRun(wr.id)!.status, "done");
+  });
+});

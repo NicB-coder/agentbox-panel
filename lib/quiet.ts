@@ -38,8 +38,8 @@ export function quietWfRun(wr: Pick<WorkflowRun, "prUrl" | "startedAt" | "waited
   const ms = (o.now ?? Date.now()) - wr.startedAt - wr.waitedMs;
   if (ms < QUICK_MS) {
     return {
-      why: "It finished in under 2 minutes. That's too quick for real work, so it probably didn't do the job.",
-      next: "Open the run and read what each step said. Then press Try again, or ask the Helper why.",
+      why: "It finished in under 2 minutes. That's very quick for real work, so check it did the whole job.",
+      next: "Press Look at it to see what it changed. If it isn't right, press Try again, or ask the Helper why.",
     };
   }
   return null;

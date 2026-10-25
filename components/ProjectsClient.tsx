@@ -29,6 +29,17 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
     setTimeout(() => document.getElementById(`project-${project}`)?.scrollIntoView({ block: "center" }), 50);
   }, []);
 
+  // The page may have shown what the panel knew a minute ago; pick up the newer copy once it's in.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetch("/api/projects", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((l) => l && setList(l))
+        .catch(() => {});
+    }, 4000);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     fetch("/api/projects/repos", { cache: "no-store" })
       .then((r) => r.json())

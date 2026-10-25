@@ -14,9 +14,13 @@ export default function DiscordBox() {
   useEffect(() => {
     fetch("/api/discord").then((r) => r.json()).then((j) => (setLog(j.log), setPing(j.ping))).catch(() => {});
   }, []);
+  // The switch moves at once; if saving fails it moves back and says so.
   async function save(p: Partial<typeof ping>) {
+    const before = ping;
+    setPing({ ...ping, ...p });
     const j = await post<{ log: DiscordLogEntry[]; ping: typeof ping }>("/api/discord", { ping: p }).catch(() => null);
     if (j) setPing(j.ping);
+    else (setPing(before), setMsg("Couldn't save that. Try again."));
   }
   return (
     <section className="panel flex flex-col gap-4 p-6 sm:p-8" aria-labelledby="dc-h">

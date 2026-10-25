@@ -201,6 +201,8 @@ function migrate(d: Database.Database) {
   `);
   // v3.1: why a run that finished didn't really do anything (no changes, no pull request, or too quick), for the Inbox.
   if (!cols("workflow_runs").has("quiet")) d.exec("ALTER TABLE workflow_runs ADD COLUMN quiet TEXT");
+  // v3.1: a workflow that finished with a pull request still open waits in the Inbox (cleared when merged, closed or dismissed).
+  if (!cols("workflow_runs").has("pr_waiting")) d.exec("ALTER TABLE workflow_runs ADD COLUMN pr_waiting INTEGER NOT NULL DEFAULT 0");
   // v3.1: files Nic added to a project from the Projects page, each as a pull request he merges from the Inbox.
   d.exec(`
     CREATE TABLE IF NOT EXISTS file_prs (
@@ -598,7 +600,7 @@ type WfRunRow = {
   id: number; workflow_id: number; status: string; test: number; input: string; trigger: string; trigger_ref: string | null;
   branch: string | null; worktree: string | null; pr_url: string | null; current: number; steps: string; step_runs: string;
   loops: number; feedback: string | null; gates: string; waiting: string | null; stop_reason: string | null; summary: string | null;
-  usage_start: string | null; waited_ms: number; started_at: number; ended_at: number | null; quiet: string | null;
+  usage_start: string | null; waited_ms: number; started_at: number; ended_at: number | null; quiet: string | null; pr_waiting: number;
 };
 
 function toWfRun(r: WfRunRow): WorkflowRun {
@@ -608,7 +610,7 @@ function toWfRun(r: WfRunRow): WorkflowRun {
     current: r.current, steps: JSON.parse(r.steps), stepRuns: JSON.parse(r.step_runs), loops: r.loops, feedback: r.feedback,
     gates: JSON.parse(r.gates), waiting: r.waiting ? JSON.parse(r.waiting) : null, stopReason: r.stop_reason, summary: r.summary,
     usageStart: r.usage_start ? JSON.parse(r.usage_start) : null, waitedMs: r.waited_ms, startedAt: r.started_at, endedAt: r.ended_at,
-    quiet: r.quiet ? JSON.parse(r.quiet) : null,
+    quiet: r.quiet ? JSON.parse(r.quiet) : null, prWaiting: !!r.pr_waiting,
   };
 }
 
@@ -643,10 +645,15 @@ export function recentQuietWfRuns(sinceMs: number): WorkflowRun[] {
   return (db().prepare("SELECT * FROM workflow_runs WHERE status = 'done' AND quiet IS NOT NULL AND ended_at >= ? ORDER BY ended_at DESC").all(sinceMs) as WfRunRow[]).map(toWfRun);
 }
 
+// Finished with a pull request that's still open: Nic looks at it from the Inbox.
+export function wfRunsWithPrWaiting(sinceMs = 0): WorkflowRun[] {
+  return (db().prepare("SELECT * FROM workflow_runs WHERE status = 'done' AND pr_waiting = 1 AND pr_url IS NOT NULL AND ended_at >= ? ORDER BY ended_at DESC").all(sinceMs) as WfRunRow[]).map(toWfRun);
+}
+
 const WF_COLS: Record<string, string> = {
   status: "status", branch: "branch", worktree: "worktree", prUrl: "pr_url", current: "current", stepRuns: "step_runs", loops: "loops",
   feedback: "feedback", gates: "gates", waiting: "waiting", stopReason: "stop_reason", summary: "summary", usageStart: "usage_start",
-  endedAt: "ended_at", startedAt: "started_at", waitedMs: "waited_ms", quiet: "quiet",
+  endedAt: "ended_at", startedAt: "started_at", waitedMs: "waited_ms", quiet: "quiet", prWaiting: "pr_waiting",
 };
 const WF_JSON = new Set(["stepRuns", "gates", "waiting", "usageStart", "quiet"]);
 
@@ -657,7 +664,7 @@ export function updateWfRun(id: number, patch: Partial<WorkflowRun>) {
     const col = WF_COLS[k];
     if (!col) continue;
     sets.push(`${col} = ?`);
-    vals.push(WF_JSON.has(k) ? (v === null ? null : JSON.stringify(v)) : v);
+    vals.push(WF_JSON.has(k) ? (v === null ? null : JSON.stringify(v)) : typeof v === "boolean" ? Number(v) : v);
   }
   if (!sets.length) return;
   db().prepare(`UPDATE workflow_runs SET ${sets.join(", ")} WHERE id = ?`).run(...vals, id);

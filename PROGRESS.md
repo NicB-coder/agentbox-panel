@@ -9,9 +9,24 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 - [x] 5. Easy workflow editing: in-words changes, duplicate, undo, history
 - [x] 6. Clearer usage limit wording and Big job defaults
 - [x] 7. Helper everywhere, replay bug fixed, personal and precise
-- [ ] 8. Full check of every button, page and real run
+- [x] 8. Full check of every button, page and real run
 - [ ] 9. Three or more fresh beginner review rounds as Sam
 - [ ] 10. Test migration on database copy, update notes, open PR
+
+## Handoff (after milestone 8)
+
+- `QA-CHECKLIST.md` is complete (every control ticked, 8 real end-to-end runs). Check scripts: `scripts/qa/sweep.mjs`,
+  `click-all.mjs`, `tour.mjs`, `labels.mjs`, `e2e.mjs` (see the top of each for usage; `e2e.mjs` uses real Claude and
+  opens real pull requests on PROJECT, default arcade: close them afterwards).
+- New: Inbox kind `wf_done` (finished workflow run with an open pull request), column `workflow_runs.pr_waiting`
+  (migration in lib/db.ts), cleared by `checkPullRequests()` when merged/closed or by the dismiss route. Quiet workflow
+  items carry `prUrl` and show Look at it.
+- `click-all.mjs` really changes the dev copy (pauses, turns workflows off, makes copies, adds ideas). Start a fresh
+  copy before Sam's review rounds.
+- Two dev copies were used: port 3253 (`.agentbox/dev`) for clicking, 3254 (`.agentbox/dev2`) for real runs, so a
+  clicked Pause everything couldn't stop them. `scripts/dev-copy.sh fresh` still can't find the live database from a
+  worktree: copy it read-only with `sqlite3 "file:$HOME/projects/agentbox-panel/data/agentbox.db?mode=ro" ".backup …"`.
+- Next: milestone 9, the beginner review rounds as Sam.
 
 ## Handoff (after milestone 7)
 

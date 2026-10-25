@@ -623,7 +623,7 @@ async function finish(wrId: number, summary?: string) {
   const look = new Set(agentRefs().filter((a) => a.allowed === "look").map((a) => a.id));
   const quiet = quietWfRun(wr, { makesChanges: workflowMakesChanges(wr.steps, look) });
   updateWfRun(wrId, {
-    status: "done", endedAt: Date.now(), waiting: null, quiet,
+    status: "done", endedAt: Date.now(), waiting: null, quiet, prWaiting: !!wr.prUrl && !merged && !quiet,
     summary: summary ?? (merged ? "Shipped: merged into main." : wr.prUrl ? "Finished. The pull request has everything." : quiet ? "Finished without changing anything." : "Finished."),
   });
   if (quiet) ping(wr, `finished, but ${quiet.why.charAt(0).toLowerCase()}${quiet.why.slice(1)}`);

@@ -18,6 +18,7 @@ describe("job names", () => {
     assert.equal(job.jobName("Make an arcade website with 4 games"), "Arcade website");
     assert.equal(job.jobName("Fix the helper replies"), "Helper replies fixes");
     assert.match(job.jobName("What are the best free hosts for a portfolio?", "research"), /research/i);
+    assert.equal(job.jobName("Add a short comment at the top of index.html"), "Short comment");
     assert.equal(job.jobName(""), "New task");
   });
 });

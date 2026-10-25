@@ -174,6 +174,7 @@ const KIND_WORD: Record<InboxItem["kind"], string> = {
   wf_ask: "Waiting for you",
   wf_ship: "Ready to ship",
   wf_failed: "Workflow stopped",
+  wf_done: "Finished",
   quiet: "Didn't do anything",
   file_pr: "A file to add",
 };
@@ -186,8 +187,8 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
   const [done, setDone] = useState("");
   const b = !!busy;
   const soft = it.kind === "failed" && (it.stopKind === "time" || it.stopKind === "budget");
-  const tone = (it.kind === "failed" && !soft) || it.kind === "wf_failed" ? "#A11B12" : "#8A4600";
-  const word = it.kind === "failed" ? (it.stopKind === "time" ? "Ran out of time" : it.stopKind === "budget" ? "Used its budget" : it.stopKind === "signin" ? "Needs signing in" : "Stopped") : KIND_WORD[it.kind];
+  const tone = (it.kind === "failed" && !soft) || it.kind === "wf_failed" ? "#A11B12" : it.kind === "wf_done" ? "#1E6B34" : "#8A4600";
+  const word = it.kind === "quiet" && it.prUrl ? "Finished very fast" : it.kind === "failed" ? (it.stopKind === "time" ? "Ran out of time" : it.stopKind === "budget" ? "Used its budget" : it.stopKind === "signin" ? "Needs signing in" : "Stopped") : KIND_WORD[it.kind];
 
   return (
     <article className="panel p-5 sm:p-6" aria-labelledby={`${it.key}-t`}>
@@ -217,7 +218,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
           )}
           {it.kind === "pr" && it.careful && <p className="mt-2 text-[15px] font-semibold text-[#1E6B34]">{it.careful}</p>}
           {it.kind === "pr" && !it.careful && it.review && <ReviewFindings review={it.review} />}
-          {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed" || it.kind === "file_pr") && (
+          {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed" || it.kind === "wf_done" || it.kind === "file_pr") && (
             <p className="mt-2 text-[15px] leading-relaxed text-muted">{plainText(it.text)}</p>
           )}
           {it.kind === "pr" && it.quick && <p className="mt-2 text-[15px] font-semibold text-[#8A4600]">It finished in under 2 minutes. Check it did the whole job before you merge.</p>}
@@ -375,6 +376,16 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                   )}
                 </>
               )}
+              {it.kind === "wf_done" && (
+                <>
+                  <Link href={`/changes?pr=${encodeURIComponent(it.prUrl)}`} className={btn.primary}>
+                    Look at it
+                  </Link>
+                  <button className={btn.link} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/dismiss`)}>
+                    Dismiss
+                  </button>
+                </>
+              )}
               {it.kind === "wf_failed" && (
                 <>
                   <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/resume`)}>
@@ -404,8 +415,13 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               )}
               {it.kind === "quiet" && (
                 <>
+                  {it.prUrl && (
+                    <Link href={`/changes?pr=${encodeURIComponent(it.prUrl)}`} className={btn.primary}>
+                      Look at it
+                    </Link>
+                  )}
                   {it.canRetry && (
-                    <button className={btn.primary} disabled={b} onClick={() => act(it.key, it.runId ? `/api/runs/${it.runId}/retry` : `/api/workflow-runs/${it.wfRunId}/retry`)}>
+                    <button className={it.prUrl ? btn.secondary : btn.primary} disabled={b} onClick={() => act(it.key, it.runId ? `/api/runs/${it.runId}/retry` : `/api/workflow-runs/${it.wfRunId}/retry`)}>
                       Try again
                     </button>
                   )}

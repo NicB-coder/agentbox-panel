@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   LOG_DIR, activeRun, addRunUsage, createRun, db, denyPendingForRun, getAgent, getRun, getSetting, listRuns, pendingApprovalForRun, runsWithStatus,
   updateRun,
+  updateWfRun, wfRunsWithPrWaiting,
 } from "./db";
 import { addAllArgs, briefPromptLine, placeBrief, placedBrief } from "./briefs";
 import { notify } from "./notify";
@@ -1341,6 +1342,11 @@ export function recoverOnBoot() {
 
 // Needs you (pull request open) → Done when merged, Stopped if closed without merging.
 export async function checkPullRequests() {
+  // Finished workflows waiting in the Inbox: gone from there once their pull request is merged or closed.
+  for (const wr of wfRunsWithPrWaiting()) {
+    const r = await sh("gh", ["pr", "view", wr.prUrl!, "--json", "state", "--jq", ".state"], os.homedir(), 30_000);
+    if (r.ok && (r.out === "MERGED" || r.out === "CLOSED")) updateWfRun(wr.id, { prWaiting: false });
+  }
   for (const run of runsWithStatus("review")) {
     if (!run.prUrl) continue;
     const r = await sh("gh", ["pr", "view", run.prUrl, "--json", "state", "--jq", ".state"], os.homedir(), 30_000);

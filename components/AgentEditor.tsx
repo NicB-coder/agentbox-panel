@@ -8,7 +8,7 @@ import { DEFAULT_JOB, freedomOf, modeFor } from "@/lib/job";
 import { AgentIcon, COLOR_CHOICES, ICON_CHOICES, ICON_NAMES, Icon, btn } from "./ui";
 import { CarefulPicker, FreedomPicker, MinutesSlider, ModelPicker, NotifyPicker, WhenPicker } from "./controls";
 import ProjectSelect from "./ProjectSelect";
-import { ErrorBox, InfoTip, Label, Switch } from "./bits";
+import { Confirm, ErrorBox, InfoTip, Label, Switch } from "./bits";
 import { useHelperContext } from "./helper/helperStore";
 
 const PLACEHOLDER = `For example: Every night, open my portfolio site in a real browser at laptop and phone width. Click every link and check every page loads, images show up and nothing overlaps. A good result is a short list of real problems with which page they're on, or "all good". Never change any code, never fill in forms.`;
@@ -57,8 +57,10 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
     router.refresh();
   }
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
   async function remove() {
-    if (!id || !confirm(`Delete ${initial.name}? Its history goes too. This can't be undone.`)) return;
+    setConfirmDelete(false);
+    if (!id) return;
     const r = await fetch(`/api/agents/${id}`, { method: "DELETE" });
     if (r.ok) {
       router.push("/");
@@ -81,7 +83,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
         <section className="panel flex flex-col gap-6 p-6 sm:p-8">
           <label className="flex flex-col gap-2">
             <Label tip="What you'll call it, like Arcade site. Shown on its tile.">Name</Label>
-            <input value={a.name} onChange={(e) => set("name", e.target.value)} maxLength={40} placeholder="Site Checker" className={`${field} min-h-11`} />
+            <input aria-label="Name" value={a.name} onChange={(e) => set("name", e.target.value)} maxLength={40} placeholder="Site Checker" className={`${field} min-h-11`} />
           </label>
           <fieldset>
             <Label as="legend" tip="Its color on the tile, so you can spot it quickly.">Color</Label>
@@ -158,10 +160,11 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
               Cancel
             </Link>
             {id && (
-              <button type="button" onClick={remove} className="ml-auto min-h-11 px-2 text-[15px] font-semibold text-[#A11B12] underline">
+              <button type="button" onClick={() => setConfirmDelete(true)} className="ml-auto min-h-11 px-2 text-[15px] font-semibold text-[#A11B12] underline">
                 Delete agent
               </button>
             )}
+            <Confirm open={confirmDelete} title={`Delete ${initial.name}?`} text="Its history goes too. This can't be undone." yes="Delete it" danger onYes={remove} onClose={() => setConfirmDelete(false)} />
           </div>
         </div>
       </div>

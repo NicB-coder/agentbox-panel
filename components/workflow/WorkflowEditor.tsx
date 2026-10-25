@@ -704,21 +704,21 @@ function Limits({ limits, onChange }: { limits: WfLimits; onChange: (l: WfLimits
             <Label tip="How many times a Review or Check can send work back before the workflow stops and tells you.">“Needs work” rounds</Label>
             <span className="font-semibold">{limits.maxLoops}</span>
           </span>
-          <input type="range" min={0} max={5} value={limits.maxLoops} onChange={(e) => onChange({ ...limits, maxLoops: Number(e.target.value) }, "loops")} className="h-11 accent-[#15171B]" />
+          <input type="range" aria-label="“Needs work” rounds" min={0} max={5} value={limits.maxLoops} onChange={(e) => onChange({ ...limits, maxLoops: Number(e.target.value) }, "loops")} className="h-11 accent-[#15171B]" />
         </label>
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
             <Label tip={WF_TIME_TIP}>Longest run</Label>
             <span className="font-semibold">{duration(limits.maxMinutes * 60000)}</span>
           </span>
-          <input type="range" min={10} max={480} step={10} value={limits.maxMinutes} onChange={(e) => onChange({ ...limits, maxMinutes: Number(e.target.value) }, "mins")} className="h-11 accent-[#15171B]" />
+          <input type="range" aria-label="Longest run" aria-valuetext={duration(limits.maxMinutes * 60000)} min={10} max={480} step={10} value={limits.maxMinutes} onChange={(e) => onChange({ ...limits, maxMinutes: Number(e.target.value) }, "mins")} className="h-11 accent-[#15171B]" />
         </label>
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
             <Label tip={WF_USAGE_TIP}>Most usage per run</Label>
             <span className="font-semibold">about {limits.maxUsagePct}%</span>
           </span>
-          <input type="range" min={5} max={100} step={5} value={limits.maxUsagePct} onChange={(e) => onChange({ ...limits, maxUsagePct: Number(e.target.value) }, "usage")} className="h-11 accent-[#15171B]" />
+          <input type="range" aria-label="Most usage per run" aria-valuetext={`about ${limits.maxUsagePct}%`} min={5} max={100} step={5} value={limits.maxUsagePct} onChange={(e) => onChange({ ...limits, maxUsagePct: Number(e.target.value) }, "usage")} className="h-11 accent-[#15171B]" />
         </label>
       </div>
     </section>

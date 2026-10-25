@@ -1,6 +1,6 @@
 import {
   getAgent, getRun, getWfRun, getWorkflow, listIdeas, pendingApprovals, recentQuietRuns, recentQuietWfRuns, recentStoppedRuns, recentStoppedWfRuns, runsWithStatus,
-  wfRunsWithStatus,
+  wfRunsWithPrWaiting, wfRunsWithStatus,
 } from "./db";
 import type { Agent, Idea, InboxItem, Run } from "./types";
 import { listNotices, unopenedNotices, type Notice } from "./notices";
@@ -75,6 +75,16 @@ export function inboxItems(): InboxItem[] {
     });
   }
 
+  // Finished with a pull request: like a task's "Pull request ready", until it's merged, closed or dismissed.
+  for (const wr of wfRunsWithPrWaiting()) {
+    const wf = getWorkflow(wr.workflowId);
+    if (!wf || !wr.prUrl) continue;
+    items.push({
+      key: `wfd${wr.id}`, kind: "wf_done", at: wr.endedAt ?? wr.startedAt, title: wr.input || wf.name, who: wf.name, color: "#7048C8", icon: "flow",
+      wfRunId: wr.id, text: wr.summary ?? "Finished. The pull request has everything.", prUrl: wr.prUrl, link: `/workflows/${wf.id}?run=${wr.id}`, test: wr.test,
+    });
+  }
+
   for (const wr of recentStoppedWfRuns(since)) {
     if (userStopped(wr.stopReason)) continue;
     const wf = getWorkflow(wr.workflowId);
@@ -99,7 +109,7 @@ export function inboxItems(): InboxItem[] {
     const said = [...wr.steps].reverse().map((s) => (["agent", "research", "review"].includes(s.type) ? wr.stepRuns[s.id]?.note : null)).find(Boolean) ?? null;
     items.push({
       key: `wfq${wr.id}`, kind: "quiet", at: wr.endedAt ?? wr.startedAt, title: wr.input || wf.name, who: wf.name, color: "#7048C8", icon: "flow",
-      wfRunId: wr.id, text: wr.quiet!.why, next: wr.quiet!.next, said, link: `/workflows/${wf.id}?run=${wr.id}`, canRetry: true,
+      wfRunId: wr.id, text: wr.quiet!.why, next: wr.quiet!.next, said, link: `/workflows/${wf.id}?run=${wr.id}`, canRetry: true, prUrl: wr.prUrl ?? undefined,
     });
   }
 

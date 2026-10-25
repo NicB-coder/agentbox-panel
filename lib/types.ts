@@ -332,6 +332,7 @@ export type WorkflowRun = {
   startedAt: number;
   endedAt: number | null;
   quiet: Quiet | null; // it finished but didn't really do anything: the Inbox says so
+  prWaiting?: boolean; // it finished with an open pull request: the Inbox shows it until it's merged, closed or dismissed
 };
 
 // "It finished without changing anything": what happened and what to do next, in plain words.
@@ -349,6 +350,7 @@ export type InboxItem =
   | { key: string; kind: "pr"; at: number; title: string; who: string; color: string; icon: string; runId: number; prUrl: string; text: string; link: string; careful: string | null; reviewedHere: boolean; review: RunExtra["review"] | null; quick: boolean }
   | { key: string; kind: "failed"; at: number; title: string; who: string; color: string; icon: string; runId: number; agentId: number; text: string; link: string; canRetry: boolean; canContinue: boolean; stopKind: "time" | "budget" | "signin" | "error"; signIn?: "claude" | "github" }
   | { key: string; kind: "wf_ask" | "wf_ship"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string | null; link: string; test: boolean }
+  | { key: string; kind: "wf_done"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string; link: string; test: boolean }
   | { key: string; kind: "wf_failed"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; workflowId: number; text: string; link: string }
   | { key: string; kind: "file_pr"; at: number; title: string; who: string; color: string; icon: string; fileId: number; project: string; file: string; prUrl: string; text: string; link: string }
-  | { key: string; kind: "quiet"; at: number; title: string; who: string; color: string; icon: string; runId?: number; wfRunId?: number; text: string; next: string; said: string | null; link: string; canRetry: boolean };
+  | { key: string; kind: "quiet"; at: number; title: string; who: string; color: string; icon: string; runId?: number; wfRunId?: number; text: string; next: string; said: string | null; link: string; canRetry: boolean; prUrl?: string };

@@ -238,6 +238,35 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
   the Start a task panel, Start doesn't open the prompt coach again (the goal was already improved with the
   Helper).
 
+### Milestone 8: full check-over of every button, page and real run
+
+- **Everything is in `QA-CHECKLIST.md`**, ticked after a real click: 270 controls on 15 pages at laptop width (and the
+  main 8 pages again at phone width, including the phone Menu), every pop-up's own buttons, the welcome tour, and 8
+  real end-to-end runs. All ticked.
+- **New check scripts in `scripts/qa/`** (run them against a dev copy, never the live panel):
+  `sweep.mjs` (every page at 1366/768/390px: console errors, failed requests, sideways scrolling, tap targets, load
+  time, freezing while polling), `click-all.mjs` (clicks every control on a fresh page and records what happened;
+  stops anything that would use Claude or GitHub at the network), `tour.mjs`, `labels.mjs` (every box has a
+  screen-reader name) and `e2e.mjs` (real runs: quick, careful + usage wait, template, coach + change in words, brief,
+  restart mid-run).
+- **Results:** 99 page views clean (no console errors, no failed requests, no layout breaks; median load 41 ms,
+  slowest 748 ms). Every real run finished and landed in the Inbox. `npm test`: 84 pass.
+- **What I fixed:** See what changed with no pull request errored every 8 seconds (now an empty state); Projects waited
+  for GitHub on every visit (now instant, refreshed in the background); finished workflows with a pull request never
+  reached the Inbox (new "Finished" card, cleared when the pull request is merged, closed or dismissed; new column
+  `workflow_runs.pr_waiting`, added by the migration, existing runs untouched); a very quick workflow with a pull
+  request said "Didn't do anything" with no way to see the work (now "Finished very fast" + Look at it); Delete agent
+  used the browser's grey confirm box (now the panel's own pop-up); the Discord ping switches lagged; 5 controls had no
+  screen-reader name; task names could end on "at".
+- **Decisions:** the real runs used the arcade project with tiny jobs (Sonnet, a few minutes each) and Test run for
+  workflows, so nothing shipped; their 5 pull requests (arcade#4 to #8) were closed with a comment and their branches
+  deleted. A finished workflow with an open pull request counts as something that needs Nic (like a task's "Pull
+  request ready"), so it adds to the Inbox number. "Under 2 minutes" still gets flagged (the brief says so), but when
+  there's a pull request it leads with Look at it instead of "Didn't do anything".
+- **Not covered by a real click:** Merge it, Ship it, Install and Add a project from GitHub change Nic's real repos, so
+  the click-through only checked that they send the right request (their code paths ran for real in earlier
+  milestones). The Terminal page's typing goes to a real shell, so it was opened but not typed in.
+
 
 # v3: simpler, fully in the panel, deep research
 

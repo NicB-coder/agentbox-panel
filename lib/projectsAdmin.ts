@@ -27,11 +27,26 @@ export type ProjectInfo = {
   playable: boolean;
 };
 
-type G = typeof globalThis & { __projCache?: { at: number; list: ProjectInfo[] } };
+type G = typeof globalThis & { __projCache?: { at: number; list: ProjectInfo[] }; __projLoading?: Promise<ProjectInfo[]> };
 const g = globalThis as G;
 
+// Asking GitHub takes a second or more, so the page shows what it knew last and refreshes it in the background
+// (a fresh copy every minute). Only the very first look after a restart, or ?fresh=1, waits for GitHub.
 export async function projectInfos(fresh = false): Promise<ProjectInfo[]> {
-  if (!fresh && g.__projCache && Date.now() - g.__projCache.at < 60_000) return g.__projCache.list;
+  const c = g.__projCache;
+  if (!fresh && c) {
+    if (Date.now() - c.at > 60_000) void loadInfos().catch(() => {});
+    return c.list;
+  }
+  return fresh ? readInfos() : loadInfos();
+}
+
+function loadInfos(): Promise<ProjectInfo[]> {
+  g.__projLoading ??= readInfos().finally(() => (g.__projLoading = undefined));
+  return g.__projLoading;
+}
+
+async function readInfos(): Promise<ProjectInfo[]> {
   const list = await Promise.all(
     listProjects().map(async (name): Promise<ProjectInfo> => {
       const dir = path.join(PROJECTS_DIR, name);

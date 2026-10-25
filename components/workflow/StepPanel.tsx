@@ -94,7 +94,7 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
         <Label tip="The longest this step may work. It stops if it runs over, so it can't run forever.">Time limit</Label>
         <span className="text-[15px] font-semibold">{s.maxMinutes ?? 30} minutes</span>
       </span>
-      <input type="range" min={5} max={120} step={5} value={s.maxMinutes ?? 30} onChange={(e) => onChange({ maxMinutes: Number(e.target.value) }, "maxMinutes")} className="h-11 w-full accent-[#15171B]" />
+      <input type="range" aria-label="Time limit" aria-valuetext={`${s.maxMinutes ?? 30} minutes`} min={5} max={120} step={5} value={s.maxMinutes ?? 30} onChange={(e) => onChange({ maxMinutes: Number(e.target.value) }, "maxMinutes")} className="h-11 w-full accent-[#15171B]" />
     </label>
   );
   const modelPick = (tip: string) => (

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { ChangesView } from "@/lib/changes";
 import { plainText } from "@/lib/words";
-import { BackLink, Confirm, ErrorBox, Loading, PageTitle, post } from "./bits";
+import { BackLink, Confirm, EmptyState, ErrorBox, Loading, PageTitle, post } from "./bits";
 import { Icon, StatusPill, btn } from "./ui";
 
 // "See what changed": what it did in plain words, before/after pictures, the code behind a toggle, and what to do next.
@@ -12,6 +12,7 @@ export default function ChangesClient({ pr }: { pr: string }) {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const load = useCallback(async () => {
+    if (!pr) return;
     setError("");
     try {
       const r = await fetch(`/api/changes?pr=${encodeURIComponent(pr)}`, { cache: "no-store" });
@@ -28,6 +29,15 @@ export default function ChangesClient({ pr }: { pr: string }) {
     return () => clearInterval(t);
   }, [load]);
 
+  if (!pr)
+    return (
+      <div className="pt-8">
+        <BackLink href="/inbox">Inbox</BackLink>
+        <div className="mt-6">
+          <EmptyState icon="eye" title="Nothing to show here" text="This page shows what an agent changed. Open it from a finished task in your Inbox." action={<Link href="/inbox" className={btn.primary}>Go to the Inbox</Link>} />
+        </div>
+      </div>
+    );
   if (error && !v)
     return (
       <div className="pt-8">

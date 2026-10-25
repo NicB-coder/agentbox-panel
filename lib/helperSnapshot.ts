@@ -185,7 +185,7 @@ export function buildSnapshot(): string {
   for (const i of items.slice(0, 15)) {
     const ref =
       i.kind === "approval" ? `[approval ${i.approvalId}]` : "runId" in i ? `[run ${i.runId}]` : "wfRunId" in i ? `[wfrun ${i.wfRunId}]` : "";
-    const kind = { approval: "asks for OK on a step", plan: "plan waiting for approval", pr: "pull request to look at", failed: "stopped", wf_ask: "workflow waiting at Ask me", wf_ship: "workflow waiting to Ship", wf_failed: "workflow stopped", quiet: "finished without really doing anything", file_pr: "a file Nic added on the Projects page, waiting to be merged in" }[i.kind];
+    const kind = { approval: "asks for OK on a step", plan: "plan waiting for approval", pr: "pull request to look at", failed: "stopped", wf_ask: "workflow waiting at Ask me", wf_ship: "workflow waiting to Ship", wf_failed: "workflow stopped", wf_done: "workflow finished, pull request to look at", quiet: "finished without really doing anything", file_pr: "a file Nic added on the Projects page, waiting to be merged in" }[i.kind];
     out.push(`- ${ref} ${i.who} · ${kind} · "${cut(i.title, 120)}" · ${cut(i.text, 200)} · ${ago(i.at)}`);
   }
 
