@@ -17,7 +17,7 @@ import { freedomOf, modeFor } from "./job";
 import { REPORT_FORMAT, RESEARCH_METHOD } from "./research";
 import { flowSentence, runTaskText, stepTitle, stepsWithGoal, type AgentRef } from "./wf";
 import { quietWfRun, workflowMakesChanges } from "./quiet";
-import { clockOf, duration, nextRunAfter, plainText, verdictOf, cutWords } from "./words";
+import { clockOf, duration, nextRunAfter, plainText, verdictOf, cutWords, userStop, USER_STOPPED } from "./words";
 
 // Runs a workflow: one shared git worktree and branch, one pull request, steps one after another.
 // Agent-like steps reuse the v1 task runner (same hooks, approvals and the main/force-push block).
@@ -420,7 +420,7 @@ export async function onStepRunEnded(runId: number) {
       updateWfRun(wr.id, { waiting: { kind: "usage", text: "Waiting for usage to reset", until: until ?? Date.now() } });
       return;
     }
-    if (run.stopReason === PAUSED_ALL || run.stopReason === "You stopped it.") return stopWorkflow(wr.id, run.stopReason, { byUser: true });
+    if (run.stopReason === PAUSED_ALL || userStop(run.stopReason)) return stopWorkflow(wr.id, run.stopReason, { byUser: true });
     setStep(wr.id, step.id, { state: "failed", endedAt: Date.now(), note: run.stopReason ?? "It stopped." });
     return stopWorkflow(wr.id, `${stepTitle(step, agentRefs())} stopped: ${run.stopReason ?? "it ran into a problem"}`, { keepStep: true });
   }
@@ -673,7 +673,7 @@ export async function answer(wrId: number, action: "approve" | "send_back" | "st
   const step = wr.steps[wr.current];
   const waited = wr.waiting.until ? Date.now() - wr.waiting.until : 0;
   updateWfRun(wrId, { waitedMs: wr.waitedMs + Math.max(0, waited) });
-  if (action === "stop") return stopWorkflow(wrId, "You stopped it.", { byUser: true });
+  if (action === "stop") return stopWorkflow(wrId, USER_STOPPED, { byUser: true });
   if (action === "approve") {
     if (wr.waiting.kind === "ship") {
       updateWfRun(wrId, { status: "running", waiting: null });

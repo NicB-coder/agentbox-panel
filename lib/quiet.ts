@@ -38,7 +38,7 @@ export function quietWfRun(wr: Pick<WorkflowRun, "prUrl" | "startedAt" | "waited
   const ms = (o.now ?? Date.now()) - wr.startedAt - wr.waitedMs;
   if (ms < QUICK_MS) {
     return {
-      why: "It finished in under 2 minutes. That's very quick for real work, so check it did the whole job.",
+      why: "It finished in under 2 minutes. That's fine for a small job, but for a bigger one it's worth checking it did everything.",
       next: "Press Look at it to see what it changed. If it isn't right, press Try again, or ask the Helper why.",
     };
   }

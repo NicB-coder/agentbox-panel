@@ -170,7 +170,7 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
         break;
       case "review": {
         const t = s.onFail && s.onFail !== "stop" ? steps.find((x) => x.id === s.onFail) : null;
-        parts.push(t ? `a reviewer checks it (back to ${stepTitle(t, agents)} if it needs work, up to ${times(w.limits.maxLoops)})` : "a reviewer checks it (stops if it needs work)");
+        parts.push(t ? `a reviewer checks it (if it needs work, it goes back to the “${stepTitle(t, agents)}” step, up to ${times(w.limits.maxLoops)})` : "a reviewer checks it (stops if it needs work)");
         break;
       }
       case "check": {
@@ -185,12 +185,21 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
         parts.push(s.shipMode === "auto" ? "it ships automatically if every check passed" : "it ships after you say yes");
         break;
       case "tell":
-        parts.push(s.tellWhen === "problems" ? "it tells you if something's wrong" : "it tells you on Discord");
+        parts.push(s.tellWhen === "problems" ? "it sends you a message if something's wrong" : "it sends you a message");
         break;
     }
   }
   if (!parts.length) return `${when}, nothing happens yet. Add a step.`;
-  const text = `${when}, ${joinAnd(parts)}.`;
+  // The same thing twice in a row is said once: "a reviewer checks it (twice)".
+  const said: string[] = [];
+  for (const p of parts) {
+    const prev = said.at(-1);
+    if (prev && prev.replace(/ \((twice|\d+ times)\)$/, "") === p) {
+      const n = (prev.match(/\((\d+) times\)$/)?.[1] ? Number(prev.match(/\((\d+) times\)$/)![1]) : /\(twice\)$/.test(prev) ? 2 : 1) + 1;
+      said[said.length - 1] = `${p} (${n === 2 ? "twice" : `${n} times`})`;
+    } else said.push(p);
+  }
+  const text = `${when}, ${joinAnd(said)}.`;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
@@ -215,7 +224,7 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
   const start = (trigger: StartTrigger, more: Partial<WfStep> = {}): WfStep => ({ id: newId(), type: "start", trigger, task: "", ...more });
   const build = (): WfStep => ({
     id: newId(), type: "agent", agentId: null, freedom: "auto", careful: false, model: "sonnet", maxMinutes: 45,
-    prompt: "Build what the task asks for. Keep the change focused, test that it really works (run the tests, or open the page in a browser), and commit.",
+    prompt: "Build what the task asks for. Keep the change focused, check that it really works (open it in a browser, or run its checks), and save your work.",
   });
   const review = (to: string): WfStep => ({ id: newId(), type: "review", prompt: "", maxMinutes: 15, model: "opus", onFail: to });
   const limits = { ...DEFAULT_LIMITS };
@@ -282,7 +291,7 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
 export function defaultWorkflow(goal: string, project: string): WorkflowInput {
   const b: WfStep = {
     id: newId(), type: "agent", agentId: null, freedom: "auto", careful: true, model: "sonnet", maxMinutes: 60,
-    prompt: "Build what the task asks for. Keep the change focused, test that it really works (run the tests, or open the page in a browser), and commit.",
+    prompt: "Build what the task asks for. Keep the change focused, check that it really works (open it in a browser, or run its checks), and save your work.",
   };
   return {
     name: nameFromGoal(goal),

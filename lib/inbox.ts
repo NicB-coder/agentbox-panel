@@ -6,7 +6,7 @@ import type { Agent, Idea, InboxItem, Run } from "./types";
 import { listNotices, unopenedNotices, type Notice } from "./notices";
 import { listOpenFilePrs } from "./projectFiles";
 import { OUT_OF_TIME, OVER_BUDGET, PAUSED_ALL, canContinue, carefulLine, firstLine } from "./runner";
-import { plainText } from "./words";
+import { plainText, userStop } from "./words";
 
 // Everything that needs Nic, newest first.
 
@@ -26,7 +26,7 @@ function getWorkflowFromRun(run: Run) {
   return wfRun ? getWorkflow(wfRun.workflowId) : null;
 }
 
-const userStopped = (reason: string | null) => reason === "You stopped it." || reason === PAUSED_ALL;
+const userStopped = (reason: string | null) => userStop(reason) || reason === PAUSED_ALL;
 
 export function inboxItems(): InboxItem[] {
   const items: InboxItem[] = [];

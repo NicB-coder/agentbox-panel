@@ -14,7 +14,7 @@ import { projectPath } from "./projects";
 import type { Agent, Allowed, Flow, Milestone, Model, Phase, ProcState, ReviewNote, Run, RunExtra, Step, StreamState, WorkMode } from "./types";
 import { ingestRateLimitEvent, markLimited, usageBlocked, usageState } from "./usage";
 import { researchFixPrompt, researchPrompt, researchReviewPrompt } from "./research";
-import { clockOf, cutWords, verdictOf } from "./words";
+import { clockOf, cutWords, verdictOf, userStop, USER_STOPPED } from "./words";
 import { QUICK_MS, quietLookRun, quietTaskRun } from "./quiet";
 
 // One run = a copy of the project (git worktree) on its own branch + one or more Claude Code sessions in it.
@@ -1272,7 +1272,7 @@ function finishStopped(runId: number, reason: string, detail?: string) {
   updateRun(runId, { status: "stopped", stopReason: reason, endedAt: Date.now(), activity: null, pid: null });
   patchExtra(runId, { stopReq: null, resume: undefined });
   const agent = getAgent(run.agentId);
-  const quiet = reason === "You stopped it." || reason === PAUSED_ALL || reason === OUT_OF_TIME || reason === OVER_BUDGET;
+  const quiet = userStop(reason) || reason === PAUSED_ALL || reason === OUT_OF_TIME || reason === OVER_BUDGET;
   if (agent && !run.workflowRunId && !quiet) notify(agent, "problems", `stopped while doing “${run.task}”: ${reason}`);
   if (agent && !run.workflowRunId && reason === OUT_OF_TIME) notify(agent, "problems", `ran out of time on “${run.task}”. Press Keep going in agentbox to give it 30 more minutes.`);
   if (agent && !run.workflowRunId && reason === OVER_BUDGET) notify(agent, "problems", `used its usage budget on “${run.task}” and is paused. You can raise the budget in agentbox.`);
@@ -1285,7 +1285,7 @@ function finishStopped(runId: number, reason: string, detail?: string) {
 
 // ---------- controls ----------
 
-export function stopRun(runId: number, reason = "You stopped it.") {
+export function stopRun(runId: number, reason = USER_STOPPED) {
   const run = getRun(runId);
   if (!run || (run.status !== "working" && run.status !== "waiting" && run.status !== "queued")) return;
   denyPendingForRun(runId, "The run was stopped.");

@@ -9,15 +9,15 @@ export default function WorkflowsClient({ initial }: { initial: WorkflowsListSta
   const { data } = usePoll<WorkflowsListState>("/api/workflows/state", initial);
   return (
     <div>
-      <PageTitle title="Workflows" sub="Chains of steps that pass work along, from an idea to a finished pull request." />
+      <PageTitle title="Workflows" sub="A workflow is a bigger job done in steps, one after another: for example build it, have it checked, then ask you." />
       {data.tiles.length === 0 ? (
         <EmptyState
           icon="flow"
           title="No workflows yet"
-          text="Start from a template, like Build → Review → Ship, or describe what should happen in your own words."
+          text="Say what you want to make, and agentbox sets up the steps for you."
           action={
             <Link href="/workflows/new" className={btn.primary}>
-              Start from a template
+              New workflow
             </Link>
           }
         />
@@ -62,15 +62,17 @@ function Tile({ t }: { t: WorkflowTile }) {
         <div className="min-w-0 truncate text-[17px] font-semibold leading-tight">{t.name}</div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col justify-center gap-2 py-4">
-        <span className="flex flex-wrap items-center gap-1" aria-hidden="true">
+        <span className="flex flex-wrap items-center gap-x-1 gap-y-1.5" aria-hidden="true">
           {t.chips.map((c, i) => (
             <span key={i} className="flex items-center gap-1">
               {i > 0 && <span className="text-[11px] text-[#9AA0A8]">→</span>}
               <span
-                className={`flex h-7 w-7 items-center justify-center rounded-[9px] ${t.current?.index === i ? "glow" : ""}`}
-                style={{ background: `${c.color}1A`, outline: t.current?.index === i ? `2px solid ${c.color}` : undefined, ["--glow" as string]: c.color }}
+                title={c.title}
+                className={`flex h-7 items-center gap-1 rounded-[9px] px-1.5 text-[12px] font-semibold ${t.current?.index === i ? "glow" : ""}`}
+                style={{ background: `${c.color}1A`, color: "#15171B", outline: t.current?.index === i ? `2px solid ${c.color}` : undefined, ["--glow" as string]: c.color }}
               >
                 <Icon name={c.icon} color={c.color} size={14} />
+                <span className="max-w-[90px] truncate">{c.title}</span>
               </span>
             </span>
           ))}

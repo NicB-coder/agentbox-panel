@@ -4,6 +4,7 @@ import { diffSteps, markWord, type ChangeDraft, type DiffChip } from "@/lib/chan
 import type { WfStep, WorkflowInput } from "@/lib/types";
 import type { AgentRef } from "@/lib/wf";
 import { ErrorBox, post } from "../bits";
+import { useHelperContext } from "../helper/helperStore";
 import { Icon, btn } from "../ui";
 
 // "Change it in your own words": Nic says what to change, Claude drafts it, and he sees the steps
@@ -70,6 +71,13 @@ export default function ChangeBox({
   const diff = draft ? diffSteps(draft.d.before ?? draft.before.steps, draft.d.steps, agents) : null;
   // The editor changed while Claude was drafting (an undo, a click on a step): the preview may be out of date.
   const stale = !!draft && JSON.stringify(draft.before) !== JSON.stringify(def);
+  // The Helper sees the drafted change (not just the saved steps), so "what will this change do?" has an answer.
+  const words = (l: DiffChip[]) => l.map((c) => `${c.title}${c.mark !== "same" ? ` (${markWord(c.mark)})` : ""}`).join(" → ");
+  useHelperContext(
+    busy || (draft && diff)
+      ? { panels: [busy ? `Change it in your own words: drafting "${text.slice(0, 300)}"…` : `Change it in your own words: a drafted change for "${draft!.text.slice(0, 300)}", not applied yet (Apply / Cancel). ${draft!.d.summary ?? ""} Steps before: ${words(diff!.before)}. Steps after: ${words(diff!.after)}.`] }
+      : null,
+  );
 
   return (
     <section className="mt-6 max-w-[860px] rounded-[24px] border border-line bg-[#FAFAFB] p-5 sm:p-6" aria-labelledby={`${boxId}-h`}>

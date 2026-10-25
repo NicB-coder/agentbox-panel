@@ -180,19 +180,19 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
       {s.type === "agent" && (
         <>
           <label className="flex flex-col gap-2">
-            <Label tip="Who works on this step. A fresh agent follows this step's instructions. Or pick one of your jobs to use its own description too.">Who does it?</Label>
+            <Label tip="A fresh agent (best for most steps) starts new and just follows this step's instructions. Or pick one of your agents from the home page: it also brings its own job description with it.">Who does it?</Label>
             <select
               value={s.agentId == null ? "quick" : String(s.agentId)}
               onChange={(e) => onChange({ agentId: e.target.value === "quick" ? null : Number(e.target.value), model: e.target.value === "quick" ? s.model ?? "sonnet" : undefined })}
               className={`${field} min-h-11`}
               aria-label="Who does it?"
             >
-              <option value="quick">A fresh agent</option>
+              <option value="quick">A fresh agent (recommended)</option>
               {agents
                 .filter((a) => !a.archived || a.id === s.agentId)
                 .map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {a.name} (one of your agents)
                   </option>
                 ))}
             </select>

@@ -613,6 +613,9 @@ const RESULT: Record<Run["status"], { status: PillStatus; label: string }> = {
 };
 
 function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["reports"] }) {
+  const [all, setAll] = useState(false);
+  const SHOW = 8;
+  const shown = all ? runs : runs.slice(0, SHOW);
   return (
     <section className="panel p-6 sm:p-8" aria-labelledby="hist-h">
       <h2 id="hist-h" className="text-[18px] font-semibold">
@@ -622,7 +625,7 @@ function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["repo
         <p className="mt-3 text-[15px] text-muted">No runs yet.</p>
       ) : (
         <ul className="mt-2 divide-y divide-line">
-          {runs.map((r) => {
+          {shown.map((r, i) => {
             const res = RESULT[r.status];
             return (
               <li key={r.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:gap-4">
@@ -633,6 +636,11 @@ function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["repo
                     {r.endedAt ? ` · took ${duration(r.endedAt - r.startedAt)}` : ""}
                     {r.status === "stopped" && r.stopReason ? ` · ${r.stopReason}` : ""}
                   </p>
+                  {r.status === "stopped" && (
+                    <p className="mt-0.5 text-[14px] text-muted">
+                      {i === 0 ? "What you can do: see Right now at the top of this page." : "Nothing to do here: newer runs came after it."}
+                    </p>
+                  )}
                   {reports.find((x) => x.runId === r.id) ? (
                     <Link href={`/reports/${reports.find((x) => x.runId === r.id)!.id}`} className="inline-flex min-h-11 items-center text-[14px] font-semibold text-[#2A3F9E] underline">
                       Read the report: {reports.find((x) => x.runId === r.id)!.title}
@@ -653,6 +661,11 @@ function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["repo
             );
           })}
         </ul>
+      )}
+      {runs.length > SHOW && (
+        <button type="button" className={btn.link + " mt-2"} aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show older runs (${runs.length - SHOW} more)`}
+        </button>
       )}
     </section>
   );

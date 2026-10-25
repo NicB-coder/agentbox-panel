@@ -88,6 +88,11 @@ export default function HelperBubble() {
   const errorsOnScreen = screenErrors().length > 0;
   const sendingNow = useRef(false);
   const { host, bubbleStyle, panelStyle } = useHelperSpot(open);
+  // On a laptop the open chat docks on the right: the page and its pop-ups move over so it covers nothing.
+  useEffect(() => {
+    document.documentElement.classList.toggle("helper-docked", open);
+    return () => document.documentElement.classList.remove("helper-docked");
+  }, [open]);
   void storeVersion; // re-render when the page's errors or selection change
 
   const load = useCallback(

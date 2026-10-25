@@ -216,3 +216,7 @@ export function cutWords(s: string, max: number): string {
   const at = cut.lastIndexOf(" ");
   return `${(at > max * 0.6 ? cut.slice(0, at) : cut).replace(/[\s,;:.\-–—]+$/, "").replace(/\s+(and|or|the|a|an|to|of|with|that|in|on|for)$/i, "")}…`;
 }
+
+// Nic pressed Stop. (Older runs say "You stopped it.", which means the same.)
+export const USER_STOPPED = "Stopped with the Stop button.";
+export const userStop = (reason: string | null | undefined) => reason === USER_STOPPED || reason === "You stopped it.";

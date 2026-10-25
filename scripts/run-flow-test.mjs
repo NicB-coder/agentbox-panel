@@ -60,6 +60,6 @@ await page.waitForTimeout(8000);
 await shot("laptop-agent-working");
 await main.getByRole("button", { name: "Stop" }).click();
 s = await waitFor(1, (s) => !s.view.activeRun, "stop");
-console.log(s.runs[0].stopReason === "You stopped it." ? "✓ stopped" : `✗ stop gave ${s.runs[0].status} ${s.runs[0].stopReason}`);
+console.log(/^(You stopped it\.|Stopped with the Stop button\.)$/.test(s.runs[0].stopReason) ? "✓ stopped" : `✗ stop gave ${s.runs[0].status} ${s.runs[0].stopReason}`);
 await shot("laptop-agent-history");
 await browser.close();

@@ -55,7 +55,10 @@ export function computeSpot(open: boolean): Spot {
 
   const right0 = phone ? 16 : 24;
   const bottom0 = host ? 16 : phone ? 72 : 24;
-  const xs = [vw - right0 - SIZE, ...avoid.map((r) => r.left - 12 - SIZE).filter((x) => x >= MARGIN), 16];
+  // The corner first, then beside side panels, then anywhere along the row (a crowded pop-up on a phone).
+  const across: number[] = [];
+  for (let x = vw - right0 - SIZE - 64; x > 16; x -= 64) across.push(x);
+  const xs = [vw - right0 - SIZE, ...avoid.map((r) => r.left - 12 - SIZE).filter((x) => x >= MARGIN), 16, ...across];
   let bubble: Spot["bubble"];
   for (let y = vh - bottom0 - SIZE; y >= 72 && !bubble; y -= 60) {
     for (const x of xs)

@@ -188,7 +188,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
   const b = !!busy;
   const soft = it.kind === "failed" && (it.stopKind === "time" || it.stopKind === "budget");
   const tone = (it.kind === "failed" && !soft) || it.kind === "wf_failed" ? "#A11B12" : it.kind === "wf_done" ? "#1E6B34" : "#8A4600";
-  const word = it.kind === "quiet" && it.prUrl ? "Finished very fast" : it.kind === "failed" ? (it.stopKind === "time" ? "Ran out of time" : it.stopKind === "budget" ? "Used its budget" : it.stopKind === "signin" ? "Needs signing in" : "Stopped") : KIND_WORD[it.kind];
+  const word = it.kind === "quiet" && it.prUrl ? "Finished quickly" : it.kind === "failed" ? (it.stopKind === "time" ? "Ran out of time" : it.stopKind === "budget" ? "Used its budget" : it.stopKind === "signin" ? "Needs signing in" : "Stopped") : KIND_WORD[it.kind];
 
   return (
     <article className="panel p-5 sm:p-6" aria-labelledby={`${it.key}-t`}>
@@ -221,7 +221,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
           {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed" || it.kind === "wf_done" || it.kind === "file_pr") && (
             <p className="mt-2 text-[15px] leading-relaxed text-muted">{plainText(it.text)}</p>
           )}
-          {it.kind === "pr" && it.quick && <p className="mt-2 text-[15px] font-semibold text-[#8A4600]">It finished in under 2 minutes. Check it did the whole job before you merge.</p>}
+          {it.kind === "pr" && it.quick && <p className="mt-2 text-[15px] font-semibold text-[#8A4600]">It finished in under 2 minutes. That's fine for a small job. For a bigger one, look before you merge to check it did everything.</p>}
           {it.kind === "quiet" && (
             <>
               <p className="mt-2 text-[16px] leading-relaxed">{it.text}</p>
@@ -306,15 +306,18 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                       Send back to fix
                     </button>
                   ) : null}
-                  {!done && it.review?.status !== "running" && (
-                    <button className={btn.link} aria-expanded={more} onClick={() => setMore(!more)}>
-                      More
-                    </button>
-                  )}
+                  <button className={btn.link} aria-expanded={more} onClick={() => setMore(!more)}>
+                    {more ? "Fewer options" : "More options"}
+                  </button>
                   {more && !done && it.review?.status !== "running" && (
                     <button className={btn.secondary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/ask-review`, {}, () => setDone("A second reviewer is on it."))}>
                       Get a second opinion
                     </button>
+                  )}
+                  {more && (
+                    <Link href={it.link} className={btn.secondary}>
+                      See its whole history
+                    </Link>
                   )}
                   <Confirm
                     open={confirm}
@@ -433,9 +436,11 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                   </button>
                 </>
               )}
-              <Link href={it.link} className={btn.link}>
-                Open
-              </Link>
+              {it.kind !== "pr" && (
+                <Link href={it.link} className={btn.link}>
+                  {it.kind === "quiet" || it.kind === "failed" || it.kind === "wf_failed" ? "See what happened" : "Open"}
+                </Link>
+              )}
             </div>
           )}
         </div>

@@ -272,6 +272,21 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       setBusy("");
     }
   }
+  async function retryRun() {
+    if (!viewing) return;
+    setBusy("retry");
+    setError(null);
+    try {
+      const fresh = await post<{ id: number }>(`/api/workflow-runs/${viewing.id}/retry`);
+      await refresh();
+      refreshHeader();
+      if (fresh?.id) viewRun(fresh.id);
+    } catch (e) {
+      setError({ msg: (e as Error).message, retry: retryRun });
+    } finally {
+      setBusy("");
+    }
+  }
   // Apply and Restore save straight away (each becomes a version), and Undo still brings the old steps back.
   function applyChange(d: ChangeDraft, text: string) {
     const next = { ...def, steps: normalize(d.steps), limits: d.limits };
@@ -317,11 +332,11 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-end">
           <label className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-[14px] font-semibold text-muted">Workflow name</span>
+            <span className="text-[14px] font-semibold text-muted">Name (click it to change it)</span>
             <input
               value={def.name}
               onChange={(e) => update({ ...def, name: e.target.value }, "name")}
-              className="min-h-12 rounded-[14px] border border-transparent px-2 -mx-2 text-[28px] font-bold tracking-tight hover:border-line focus:border-[#C9CDD4] sm:text-[32px]"
+              className="min-h-12 w-full text-ellipsis rounded-[14px] border border-line px-2 -mx-2 text-[22px] font-bold tracking-tight focus:border-[#C9CDD4] sm:text-[28px]"
               maxLength={60}
               disabled={live}
             />
@@ -331,16 +346,18 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-[150px]">
-            <Switch label={enabled ? "On" : "Off"} checked={enabled} onChange={toggle} disabled={!!busy} tip="When it's on, it starts by itself (on its schedule or from GitHub). When it's off, only Test run works." />
-          </div>
-          {enabled && manualStart && (
+          {!manualStart && (
+            <div className="min-w-[150px]">
+              <Switch label={enabled ? "On" : "Off"} checked={enabled} onChange={toggle} disabled={!!busy} tip="On: it starts by itself (on its schedule or from GitHub). Off: it only runs when you press Run now or Test run." />
+            </div>
+          )}
+          {(enabled || manualStart) && (
             <RunButton
               label={busy === "run" ? "Starting…" : "Run now"}
               primary
               onRun={() => runNow(false)}
               onOther={() => setRunDialog("run")}
-              other="Run with a different goal…"
+              other={manualStart ? "Run with a different goal…" : ""}
               disabled={!!busy || !!data.active}
             />
           )}
@@ -352,9 +369,15 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
             disabled={!!busy || !!data.active}
             tip={`A safe try: it does every step for real${def.steps.some((x) => x.type === "ship") ? ", but stops before Ship" : ""} and never sends Discord messages. It still uses some Claude usage and may open a draft pull request you can close.`}
           />
-          <button type="button" className={btn.primary} onClick={() => save()} disabled={!dirty || !!busy}>
-            {busy === "save" ? "Saving…" : dirty ? "Save" : "Saved"}
-          </button>
+          {dirty || busy === "save" ? (
+            <button type="button" className={btn.primary} onClick={() => save()} disabled={!!busy}>
+              {busy === "save" ? "Saving…" : "Save changes"}
+            </button>
+          ) : (
+            <span className="inline-flex min-h-11 items-center px-2 text-[15px] font-semibold text-[#1E6B34]" role="status">
+              Saved ✓
+            </span>
+          )}
         </div>
       </div>
 
@@ -433,12 +456,12 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       )}
       {fresh && !live && (
         <p className="mt-4 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
-          Your workflow is ready. Check the goal and the steps, then press Test run to try it safely. Turn it on when you're happy, and Run now appears.
+          Your workflow is ready. Check the goal and the steps, then press Run now. Not sure yet? Test run tries it safely first: it stops before anything goes into your project.
         </p>
       )}
       {drafted && !live && (
         <p className="mt-4 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
-          Claude drafted these steps from what you wrote. Click each one to check it, then try a Test run before you turn it on.
+          These steps were drafted from what you wrote. Click each one to check it, then press Run now (or Test run to try it safely first).
         </p>
       )}
       {missing && !live && (
@@ -477,12 +500,17 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
                 </button>
               )}
               {viewing!.prUrl && (
-                <a href={viewing!.prUrl} target="_blank" rel="noreferrer" className={btn.secondary}>
-                  Pull request
-                </a>
+                <Link href={`/changes?pr=${encodeURIComponent(viewing!.prUrl)}`} className={btn.primary}>
+                  Look at it
+                </Link>
+              )}
+              {["done", "stopped"].includes(viewing!.status) && !data.active && (
+                <button type="button" className={btn.secondary} onClick={retryRun} disabled={!!busy}>
+                  Try again
+                </button>
               )}
               <button type="button" className={btn.secondary} onClick={() => viewRun(null)}>
-                Edit
+                Back to editing
               </button>
             </div>
           ) : (
@@ -732,7 +760,7 @@ function History({ runs, viewingId, onView }: { runs: WorkflowRun[]; viewingId: 
         Run history
       </h2>
       {runs.length === 0 ? (
-        <p className="mt-3 text-[15px] text-muted">No runs yet. Press Test run to try it safely: it stops before shipping and sends no messages.</p>
+        <p className="mt-3 text-[15px] text-muted">No runs yet. Press Run now to start it, or Test run to try it safely first (it stops before shipping and sends no messages).</p>
       ) : (
         <ul className="mt-2 divide-y divide-line">
           {runs.map((r) => (
@@ -751,12 +779,12 @@ function History({ runs, viewingId, onView }: { runs: WorkflowRun[]; viewingId: 
               <div className="flex flex-wrap items-center gap-3">
                 <StatusPill status={RUN_PILL[r.status]} label={RUN_WORD[r.status]} />
                 {r.prUrl && (
-                  <a href={r.prUrl} target="_blank" rel="noreferrer" className={btn.link + " !text-[14px] !text-[#2A3F9E]"}>
-                    Pull request
-                  </a>
+                  <Link href={`/changes?pr=${encodeURIComponent(r.prUrl)}`} className={btn.link + " !text-[14px] !text-[#2A3F9E]"}>
+                    Look at it
+                  </Link>
                 )}
                 <button type="button" className={btn.secondary} onClick={() => onView(r.id)} aria-pressed={viewingId === r.id}>
-                  {["running", "needs", "queued"].includes(r.status) ? "Watch" : "See it"}
+                  {["running", "needs", "queued"].includes(r.status) ? "Watch" : "See its steps"}
                 </button>
               </div>
             </li>

@@ -7,7 +7,7 @@ import { inboxCount } from "./inbox";
 import { usageState } from "./usage";
 import { bigUsage, canContinue, carefulLine } from "./runner";
 import type { Agent, AgentView, HeartbeatInfo, Run } from "./types";
-import { ago, clock, clockOf, duration, inWords, nextRunAfter, plainText, scheduleWords } from "./words";
+import { ago, clock, clockOf, duration, inWords, nextRunAfter, plainText, scheduleWords, userStop } from "./words";
 
 // "Step 3 of 6 · Final check"
 export function progressOf(run: Run): { step: number; of: number; label: string } | null {
@@ -121,7 +121,7 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
       timeLabel: last ? ago(last.endedAt ?? last.startedAt, now) : "",
     };
   }
-  if (last?.status === "stopped" && (last.extra.outOfTime || last.extra.overBudget) && last.stopReason !== "You stopped it.") {
+  if (last?.status === "stopped" && (last.extra.outOfTime || last.extra.overBudget) && !userStop(last.stopReason)) {
     return {
       ...base,
       status: "timeout",

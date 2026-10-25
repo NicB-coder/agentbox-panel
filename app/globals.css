@@ -139,3 +139,14 @@ button.tile:hover {
   main { padding: 0 !important; max-width: none !important; }
   .prose-report a.cite { color: #2a3f9e; }
 }
+
+/* The Helper chat, open on a laptop, sits beside the page instead of on top of it. */
+@media (min-width: 1024px) {
+  html.helper-docked body {
+    padding-right: 412px;
+  }
+  html.helper-docked dialog[open] {
+    margin-left: auto;
+    margin-right: clamp(16px, calc(100vw - 680px), 412px);
+  }
+}

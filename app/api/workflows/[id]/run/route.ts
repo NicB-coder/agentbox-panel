@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const b = (await req.json().catch(() => ({}))) as { input?: string; goal?: string; test?: boolean; ideaId?: number };
   const p = workflowProblems(w, agentRefs(), listProjects());
   if (p.length) return Response.json({ error: p[0] }, { status: 400 });
-  if (!b.test && !w.enabled) return Response.json({ error: "Turn the workflow on first, or use Test run." }, { status: 400 });
+  // Off only means "doesn't start by itself": Nic can always start one by hand.
   if (b.input && b.input.length > 8000) return Response.json({ error: "That's too long. Keep it under 8,000 characters." }, { status: 400 });
   if (b.goal && b.goal.length > GOAL_MAX) return Response.json({ error: `That goal is too long. Keep it under ${GOAL_MAX.toLocaleString("en-US")} characters.` }, { status: 400 });
   // Run now with no goal anywhere: say so instead of starting a run that has nothing to work on.

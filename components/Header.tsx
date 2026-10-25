@@ -231,7 +231,7 @@ function PhoneMenu({ open, onClose, onNewTask, onPause, pausedAll }: { open: boo
           <Icon name="heart" color="#15171B" /> Machine
         </Link>
         <Link href="/terminal" className={item} onClick={onClose}>
-          <Icon name="flow" color="#15171B" /> Terminal
+          <Icon name="flow" color="#15171B" /> Terminal (advanced)
         </Link>
         <Link href="/settings" className={item} onClick={onClose}>
           <Icon name="bolt" color="#15171B" /> Settings
@@ -363,9 +363,9 @@ export function UsagePanel({ u, now }: { u: UsageView; now: number }) {
       )}
       <div>
         <p className="font-semibold">
-          Right now: {s.session ? `${about}${s.session.pct}% used` : "not checked yet"}
+          This session: {s.session ? `${about}${s.session.pct}% used` : "not checked yet"}
         </p>
-        <p className="mt-0.5 text-[13px] text-muted">Claude lets you use a set amount every few hours. This is how much of that you've used.</p>
+        <p className="mt-0.5 text-[13px] text-muted">Claude lets you use a set amount every few hours (a session). This is how much of it you've used.</p>
         {s.session && bar(s.session.pct, tone.bar)}
         {s.session?.resetsAt && <p className="mt-1 text-[14px] text-muted">Resets at {dayClock(s.session.resetsAt)} (in {until(s.session.resetsAt, now)})</p>}
       </div>

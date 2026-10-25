@@ -1,3 +1,4 @@
+import { agentRunsText } from "./helperSnapshot";
 import { spawn, type ChildProcess } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -155,6 +156,8 @@ function describeContext(ctx: HelperContext): string {
   else if (p.startsWith("/settings")) page += " (Settings)";
   else if (p.startsWith("/help")) page += " (Help)";
   lines.push(page);
+  // The history Nic can see on this agent's page, so "did anything run out of time?" is answered from it.
+  if (agent && /^\/agents\/\d+$/.test(p)) lines.push(`This agent's runs on the page (newest first):\n${agentRunsText(agent.id, 15)}`);
   if (ctx.title) lines.push(`Page heading: ${ctx.title.slice(0, 120)}`);
   if (ctx.wfRunId) lines.push(`Showing workflow run [wfrun ${ctx.wfRunId}] on the canvas.`);
   if (ctx.stepId && wf) {

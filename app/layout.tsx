@@ -43,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Machine
             </Link>
             <Link href="/terminal" className="inline-flex min-h-11 items-center px-2 font-medium hover:text-ink">
-              Terminal
+              Terminal (advanced)
             </Link>
             <Link href="/settings" className="inline-flex min-h-11 items-center px-2 font-medium hover:text-ink">
               Settings
