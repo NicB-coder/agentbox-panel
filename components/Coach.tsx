@@ -174,7 +174,7 @@ export function CoachBox(props: {
   return (
     <section ref={box} className="flex flex-col gap-5 rounded-[24px] border border-[#C9D3F5] bg-[#F6F8FE] p-5 sm:p-6" aria-labelledby="coach-h" aria-live="polite">
       <h2 id="coach-h" className="text-[18px] font-bold">
-        {phase.at === "good" ? "Looks good ✓" : phase.at === "improved" ? "Here's an improved version" : phase.at === "questions" ? "A few quick questions" : "Checking your goal"}
+        {phase.at === "good" ? (/^looks good/i.test(phase.check.verdict) ? "Looks good ✓" : "One thing to check") : phase.at === "improved" ? "Here's an improved version" : phase.at === "questions" ? "A few quick questions" : "Checking your goal"}
       </h2>
 
       {phase.at === "checking" && <Working text="Reading what you wrote. This takes a few seconds." onSkip={skip} skipLabel={`Skip this and ${doneLabel.toLowerCase()}`} />}

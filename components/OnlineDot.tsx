@@ -23,7 +23,7 @@ export default function OnlineDot() {
   return (
     <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted" role="status">
       <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-online" : "bg-[#9AA0A8]"}`} aria-hidden="true" />
-      {online ? "Online" : "Offline"}
+      <span className="max-sm:sr-only">{online ? "Online" : "Offline"}</span>
     </span>
   );
 }

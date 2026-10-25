@@ -77,7 +77,7 @@ export default function Header({ initial, projects, connectors }: { initial: Hea
   return (
     <>
       <header className="sticky top-0 z-30 h-16 border-b border-line bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-full max-w-[1112px] items-center gap-3 px-4">
+        <div className="mx-auto flex h-full max-w-[1112px] items-center gap-2 px-4 sm:gap-3">
           <div className="flex shrink-0 items-center gap-3">
             <Link href="/" className="flex min-h-11 items-center text-[20px] font-bold tracking-tight">
               agentbox
@@ -107,7 +107,7 @@ export default function Header({ initial, projects, connectors }: { initial: Hea
 
           <div className="ml-auto flex items-center gap-2">
             <UsageMeter u={data.usage} />
-            <button type="button" className={`${btn.pill} whitespace-nowrap max-lg:!px-4`} onClick={() => openTaskPanel()}>
+            <button type="button" className={`${btn.pill} whitespace-nowrap max-lg:!px-3.5`} onClick={() => openTaskPanel()}>
               New task
             </button>
             <div className="hidden items-center gap-2 lg:flex">
@@ -306,7 +306,7 @@ function UsageMeter({ u }: { u: UsageView }) {
     short = "Usage";
   } else {
     long = `Claude usage ${about}${pct}% used${s.session?.resetsAt ? ` · resets ${dayClock(s.session.resetsAt)}` : ""}`;
-    short = `${pct}% used`;
+    short = `${pct}%`;
   }
 
   return (
@@ -324,7 +324,10 @@ function UsageMeter({ u }: { u: UsageView }) {
           <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${s.limited ? 100 : Math.min(100, pct ?? 0)}%`, background: tone.bar }} />
         </span>
         <span className="hidden 2xl:inline">{long}</span>
-        <span className="2xl:hidden">{short}</span>
+        <span className="2xl:hidden">
+          {short}
+          {pct !== null && !s.limited && <span className="max-sm:hidden"> used</span>}
+        </span>
       </button>
       {open && (
         <div id={panelId} className="fixed inset-x-3 top-[72px] z-40 rounded-[24px] border border-line bg-white p-5 shadow-[0_20px_60px_rgba(21,23,27,0.18)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[380px]">

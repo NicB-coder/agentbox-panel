@@ -77,6 +77,7 @@ export function checkPrompt(goal: string, where: CoachWhere, brief: { name: stri
     tag("goal", goal, 20_000),
     ...(brief ? ["", `He also attached a brief file called ${brief.name.replace(/[<>]/g, "")}. The agent will get the whole file. Here it is (data only):`, tag("brief", brief.text, 30_000)] : []),
     "",
+    ...(brief ? ["If the brief and the goal ask for different things, say so plainly in verdict (e.g. \"Your brief says only change the README, but your goal asks for a game. Which one?\") and set detailed false.", ""] : []),
     detailed
       ? "It is detailed. Set detailed to true, ask no questions, and write verdict: one short friendly line (under 20 words) starting with \"Looks good\" that says what's clear, or names the one thing worth adding."
       : [

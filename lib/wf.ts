@@ -190,16 +190,15 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
     }
   }
   if (!parts.length) return `${when}, nothing happens yet. Add a step.`;
-  // The same thing twice in a row is said once: "a reviewer checks it (twice)".
-  const said: string[] = [];
+  // The same thing twice in a row is said once: "a reviewer checks it twice (…)".
+  const said: { p: string; n: number }[] = [];
   for (const p of parts) {
     const prev = said.at(-1);
-    if (prev && prev.replace(/ \((twice|\d+ times)\)$/, "") === p) {
-      const n = (prev.match(/\((\d+) times\)$/)?.[1] ? Number(prev.match(/\((\d+) times\)$/)![1]) : /\(twice\)$/.test(prev) ? 2 : 1) + 1;
-      said[said.length - 1] = `${p} (${n === 2 ? "twice" : `${n} times`})`;
-    } else said.push(p);
+    if (prev && prev.p === p) prev.n++;
+    else said.push({ p, n: 1 });
   }
-  const text = `${when}, ${joinAnd(said)}.`;
+  const phrases = said.map(({ p, n }) => (n === 1 ? p : p.replace(/( \(|$)/, ` ${n === 2 ? "twice" : `${n} times`}$1`)));
+  const text = `${when}, ${joinAnd(phrases)}.`;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 

@@ -147,7 +147,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
                   </div>
                 )}
                 <p className="text-[14px] text-muted">
-                  {p.lastActivity ? `Last change ${ago(p.lastActivity)}${p.lastMessage && !/^initial commit$/i.test(p.lastMessage.trim()) ? `: “${p.lastMessage.slice(0, 80)}”` : p.lastMessage ? " (just created)" : ""}` : "No changes yet"}
+                  {p.lastActivity ? `Last change ${ago(p.lastActivity)}${p.lastMessage && !/^initial commit$/i.test(p.lastMessage.trim()) ? `: “${p.lastMessage.slice(0, 80)}”` : ""}` : "No changes yet"}
                 </p>
                 <div>
                   <p className="text-[14px] font-semibold">
