@@ -379,7 +379,7 @@ export function MessageView({
   const reveal = useCalmReveal(m.id, sofar.text, writing);
   if (m.role === "user") {
     return (
-      <li className="flex flex-col items-end gap-1">
+      <li data-role="user" className="flex flex-col items-end gap-1">
         <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15px] leading-snug text-white">{m.text}</div>
         {m.meta.context && <span className="pr-1 text-[12px] text-muted">on {m.meta.context}</span>}
       </li>

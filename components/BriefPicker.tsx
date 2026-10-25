@@ -100,14 +100,15 @@ export default function BriefPicker({
         Attach a brief (optional)
         <InfoTip
           label="Attach a brief"
-          text={tip ?? "A longer file that says exactly what to make, like a CLAUDE.md. It's copied into the agent's own copy of the project when a run starts, so the agent always sees it."}
+          text={tip ?? "Optional. A text file with longer instructions. The agent reads it before every run, so it always knows the details."}
         />
       </p>
+      <p className="-mt-1 text-[14px] text-muted">A brief is a text file with longer instructions, like a list of everything your game must have. Skip this if your goal says it all.</p>
 
       {own && (
         <p className="flex flex-wrap items-center gap-x-2 text-[15px] text-[#1E6B34]">
-          <span className="font-semibold">This project has a brief ✓</span>
-          <span className="text-muted">({briefLabel(own)})</span>
+          <span className="font-semibold">This project already has a brief ✓</span>
+          <span className="text-muted">(agents read it by themselves)</span>
           <button type="button" className={btn.link} onClick={() => setView({ title: `${own.name} in ${project}`, text: own.text })}>
             View
           </button>
@@ -142,7 +143,7 @@ export default function BriefPicker({
           }}
           className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[14px] border-2 border-dashed px-4 py-2 text-[15px] text-muted ${over ? "border-ink bg-soft" : "border-[#B9BEC6]"}`}
         >
-          <span>{busy ? "Attaching it…" : "Drag a .md file here, or"}</span>
+          <span>{busy ? "Attaching it…" : "Drag a text file (.md or .txt) here, or"}</span>
           <button type="button" className={btn.link} onClick={() => fileRef.current?.click()} disabled={disabled || busy}>
             Upload a file
           </button>

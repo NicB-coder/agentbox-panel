@@ -17,8 +17,11 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
   const [newDesc, setNewDesc] = useState("");
   const [confirmNew, setConfirmNew] = useState(false);
   const [busy, setBusy] = useState("");
-  const [error, setError] = useState<{ msg: string; retry: () => void } | null>(null);
-  const [done, setDone] = useState("");
+  type Where = "clone" | "pick" | "create";
+  const [error, setError] = useState<{ msg: string; retry?: () => void; where: Where; typo?: boolean } | null>(null);
+  const [done, setDone] = useState<{ msg: string; where: Where } | null>(null);
+  // What a new project will really be called (the same rule the server uses).
+  const slug = newName.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|-+$/g, "").slice(0, 60);
   // "Add to project" from a run that couldn't find a file: /projects?add=lookout&file=CLAUDE.md
   const [want, setWant] = useState<{ project: string; file: string } | null>(null);
   useEffect(() => {
@@ -56,19 +59,20 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
     router.refresh();
   }
 
-  async function clone(repo: string) {
-    if (!repo.trim()) return setError({ msg: "Type a repo like owner/name first.", retry: () => clone(repo) });
+  async function clone(repo: string, where: Where) {
+    if (!repo.trim()) return setError({ msg: "Paste the project's GitHub address first, like github.com/NicB-coder/portfolio.", where, typo: true });
     setBusy("clone");
     setError(null);
-    setDone("");
+    setDone(null);
     try {
       const j = await post<{ name: string }>("/api/projects/clone", { repo });
-      setDone(`${j.name} is ready. You can pick it in any project list now.`);
+      setDone({ msg: `${j.name} is ready. It's at the top of this page, and you can pick it when you start a task.`, where });
       setTyped("");
       setRepos((r) => r?.filter((x) => x.name !== repo) ?? r);
       await reload();
     } catch (e) {
-      setError({ msg: (e as Error).message, retry: () => clone(repo) });
+      const msg = (e as Error).message;
+      setError({ msg, retry: () => clone(repo, where), where, typo: /Paste the whole address|already a project|won't work/.test(msg) });
     } finally {
       setBusy("");
     }
@@ -78,33 +82,35 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
     setConfirmNew(false);
     setBusy("create");
     setError(null);
-    setDone("");
+    setDone(null);
     try {
       const j = await post<{ name: string }>("/api/projects/create", { name: newName, description: newDesc });
-      setDone(`Made ${j.name} on GitHub and copied it here.`);
+      setDone({ msg: `${j.name} is ready. It's at the top of this page, and you can pick it when you start a task.`, where: "create" });
       setNewName("");
       setNewDesc("");
       await reload();
     } catch (e) {
-      setError({ msg: (e as Error).message, retry: create });
+      const msg = (e as Error).message;
+      setError({ msg, retry: create, where: "create", typo: /already/.test(msg) });
     } finally {
       setBusy("");
     }
   }
 
-  return (
-    <div>
-      <PageTitle title="Projects" sub="The code your agents and workflows work on. Each one is a GitHub repo copied onto this Mac." />
-      {error && (
-        <div className="mb-6">
-          <ErrorBox message={error.msg} onRetry={error.retry} where="Projects" />
-        </div>
-      )}
-      {done && (
-        <p role="status" className="mb-6 rounded-[14px] bg-[#E6F4EA] px-4 py-3 text-[15px] font-semibold text-[#1E6B34]">
-          {done}
+  const Result = ({ where }: { where: Where }) => (
+    <>
+      {error?.where === where && <ErrorBox compact message={error.msg} onRetry={error.typo ? undefined : error.retry} noFix={error.typo} where="Projects" />}
+      {done?.where === where && (
+        <p role="status" className="rounded-[14px] bg-[#E6F4EA] px-4 py-3 text-[15px] font-semibold text-[#1E6B34]">
+          {done.msg}
         </p>
       )}
+    </>
+  );
+
+  return (
+    <div>
+      <PageTitle title="Projects" sub="A project is one app, game or website. Agents build inside it. Each one is also saved on GitHub, a website that keeps your code safe." />
 
       <section aria-labelledby="have-h">
         <h2 id="have-h" className="text-[22px] font-bold">
@@ -112,7 +118,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
         </h2>
         {list.length === 0 ? (
           <div className="mt-4">
-            <EmptyState icon="folder" title="No projects yet" text="Add one below: paste a GitHub repo, pick one of the bot's, or make a brand new one." />
+            <EmptyState icon="folder" title="No projects yet" text="Start a new one below. Give it a name, like my-game, and press Make it." />
           </div>
         ) : (
           <ul className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2">
@@ -141,11 +147,11 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
                   </div>
                 )}
                 <p className="text-[14px] text-muted">
-                  {p.lastActivity ? `Last change ${ago(p.lastActivity)}${p.lastMessage ? `: “${p.lastMessage.slice(0, 80)}”` : ""}` : "No changes yet"}
+                  {p.lastActivity ? `Last change ${ago(p.lastActivity)}${p.lastMessage && !/^initial commit$/i.test(p.lastMessage.trim()) ? `: “${p.lastMessage.slice(0, 80)}”` : p.lastMessage ? " (just created)" : ""}` : "No changes yet"}
                 </p>
                 <div>
                   <p className="text-[14px] font-semibold">
-                    {p.prs.length ? `${p.prs.length} open pull request${p.prs.length === 1 ? "" : "s"}` : "No open pull requests"}
+                    {p.prs.length ? `${p.prs.length} ${p.prs.length === 1 ? "change" : "changes"} waiting for you to look at` : "No changes waiting for you"}
                   </p>
                   {p.prs.length > 0 && (
                     <ul className="mt-1 flex flex-col">
@@ -155,7 +161,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
                             <span className="truncate">
                               #{pr.number} {pr.title}
                             </span>
-                            {pr.draft && <span className="shrink-0 rounded-full bg-soft px-2 text-[12px] font-semibold text-[#4A4F57] no-underline">draft</span>}
+                            {pr.draft && <span className="shrink-0 rounded-full bg-soft px-2 text-[12px] font-semibold text-[#4A4F57] no-underline">not finished yet</span>}
                           </a>
                         </li>
                       ))}
@@ -178,81 +184,88 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
             className="panel flex flex-col gap-3 p-6"
             onSubmit={(e) => {
               e.preventDefault();
-              clone(typed);
+              if (!slug) return setError({ msg: "Give your new project a name first, like my-game.", where: "create", typo: true });
+              setError(null);
+              setConfirmNew(true);
             }}
           >
             <h3 className="flex items-center text-[17px] font-semibold">
-              Paste a GitHub repo
-              <InfoTip text="The part of the address after github.com, like NicB-coder/portfolio. The bot needs to be able to see it." label="Paste a GitHub repo" />
+              Start a new project
+              <InfoTip text="Makes a new, empty project for your app, game or site. Agents can start building in it straight away." label="Start a new project" />
             </h3>
             <label className="flex flex-col gap-2">
-              <span className="text-[14px] font-semibold">Repo (owner/name)</span>
-              <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="NicB-coder/portfolio" className={`${field} min-h-11`} />
+              <span className="text-[14px] font-semibold">Name</span>
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="my-game" className={`${field} min-h-11`} maxLength={60} aria-describedby="new-name-hint" />
+            </label>
+            <p id="new-name-hint" className="-mt-1 text-[13px] text-muted">
+              {slug && slug !== newName.trim() ? `It will be called “${slug}” (small letters and dashes only).` : "Small letters and dashes work best."}
+            </p>
+            <label className="flex flex-col gap-2">
+              <span className="text-[14px] font-semibold">What is it? (optional)</span>
+              <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="A game where you dodge falling blocks" className={`${field} min-h-11`} maxLength={200} />
             </label>
             <button type="submit" className={btn.primary + " mt-auto"} disabled={!!busy}>
-              {busy === "clone" ? "Copying…" : "Add it"}
+              {busy === "create" ? "Making it…" : "Make it"}
             </button>
+            <Result where="create" />
           </form>
-
-          <div className="panel flex flex-col gap-3 p-6">
-            <h3 className="flex items-center text-[17px] font-semibold">
-              Pick one of the bot's repos
-              <InfoTip text="Repos the bot account owns or was invited to, that aren't on this Mac yet." label="Pick one of the bot's repos" />
-            </h3>
-            {repos === null ? (
-              <Loading text="Asking GitHub…" />
-            ) : repos.length === 0 ? (
-              <p className="text-[14px] text-muted">There aren't any others. Every repo the bot can see is already here.</p>
-            ) : (
-              <>
-                <label className="flex flex-col gap-2">
-                  <span className="text-[14px] font-semibold">Repo</span>
-                  <select value={picked} onChange={(e) => setPicked(e.target.value)} className={`${field} min-h-11`}>
-                    {repos.map((r) => (
-                      <option key={r.name} value={r.name}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button type="button" className={btn.primary + " mt-auto"} disabled={!!busy || !picked} onClick={() => clone(picked)}>
-                  {busy === "clone" ? "Copying…" : "Add it"}
-                </button>
-              </>
-            )}
-          </div>
 
           <form
             className="panel flex flex-col gap-3 p-6"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!newName.trim()) return setError({ msg: "Give the new repo a name, like my-first-site.", retry: () => setError(null) });
-              setConfirmNew(true);
+              clone(typed, "clone");
             }}
           >
             <h3 className="flex items-center text-[17px] font-semibold">
-              Make a new repo
-              <InfoTip text="Starts an empty project on GitHub under the bot account, then copies it here so agents can build in it." label="Make a new repo" />
+              Already on GitHub?
+              <InfoTip text="If the project is already saved on GitHub, paste its address and agentbox copies it onto this Mac. The agentbox GitHub account (NicB-coder-bot) needs to be allowed to see it." label="Already on GitHub?" />
             </h3>
             <label className="flex flex-col gap-2">
-              <span className="text-[14px] font-semibold">Name</span>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="my-first-site" className={`${field} min-h-11`} maxLength={60} />
+              <span className="text-[14px] font-semibold">Its GitHub address</span>
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="github.com/NicB-coder/portfolio" className={`${field} min-h-11`} />
             </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-[14px] font-semibold">What is it? (optional)</span>
-              <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="My portfolio site" className={`${field} min-h-11`} maxLength={200} />
-            </label>
-            <button type="submit" className={btn.primary + " mt-auto"} disabled={!!busy}>
-              {busy === "create" ? "Making it…" : "Make it"}
+            <button type="submit" className={btn.primary + " mt-auto"} disabled={!!busy || !typed.trim()}>
+              {busy === "clone" ? "Copying…" : "Add it"}
             </button>
+            <Result where="clone" />
           </form>
+
+          <div className="panel flex flex-col gap-3 p-6">
+            <h3 className="flex items-center text-[17px] font-semibold">
+              Or pick one from GitHub
+              <InfoTip text="Projects the agentbox GitHub account can already see that aren't on this Mac yet." label="Or pick one from GitHub" />
+            </h3>
+            {repos === null ? (
+              <Loading text="Asking GitHub…" />
+            ) : repos.length === 0 ? (
+              <p className="text-[14px] text-muted">There aren't any others. Every project agentbox can see is already here.</p>
+            ) : (
+              <>
+                <label className="flex flex-col gap-2">
+                  <span className="text-[14px] font-semibold">Project</span>
+                  <select value={picked} onChange={(e) => setPicked(e.target.value)} className={`${field} min-h-11`}>
+                    {repos.map((r) => (
+                      <option key={r.name} value={r.name}>
+                        {r.name.split("/")[1]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className={btn.primary + " mt-auto"} disabled={!!busy || !picked} onClick={() => clone(picked, "pick")}>
+                  {busy === "clone" ? "Copying…" : "Add it"}
+                </button>
+              </>
+            )}
+            <Result where="pick" />
+          </div>
         </div>
       </section>
 
       <Confirm
         open={confirmNew}
-        title="Make a public repo?"
-        text={`This makes “${newName.trim()}” on GitHub under the bot account. It's public, so anyone can see the code. Never put passwords or keys in it.`}
+        title={`Make “${slug}”?`}
+        text="It's saved on GitHub as a public project: other people can look at the code, like most school and hobby projects. That's fine for games and sites. Just never put passwords or private info in it."
         yes="Make it"
         onYes={create}
         onClose={() => setConfirmNew(false)}
@@ -302,7 +315,7 @@ function AddFile({ project, want }: { project: string; want: string }) {
         <button type="button" className={want && !sent ? btn.primary : btn.secondary} onClick={() => input.current?.click()} disabled={busy}>
           {busy ? "Adding it…" : "Add a file"}
         </button>
-        <InfoTip label="Add a file" text="Puts a file from your computer (like a CLAUDE.md brief) into this project. It opens a pull request; merge it from the Inbox with one click and every agent can read it." />
+        <InfoTip label="Add a file" text="Puts a file from your computer (like a list of instructions for agents) into this project. It shows up in your Inbox first: press Merge it there to finish adding it." />
       </div>
       <input
         ref={input}

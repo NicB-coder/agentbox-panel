@@ -72,7 +72,18 @@ export default function ChangesClient({ pr }: { pr: string }) {
             </p>
           </section>
 
-          {v.playable && v.before && v.after && <Pictures v={v} />}
+          {v.playable && v.before && v.after && (v.files.some((f) => SHOWS_ON_PAGE.test(f.path)) ? (
+            <Pictures v={v} />
+          ) : (
+            <section className="panel p-6 sm:p-8" aria-labelledby="pics-h">
+              <h2 id="pics-h" className="text-[18px] font-semibold">
+                Before and after
+              </h2>
+              <p className="mt-2 text-[15px] leading-relaxed text-muted">
+                This change is in {v.files.length === 1 ? "a file" : "files"} that don't show on the page ({v.files.map((f) => f.path.split("/").pop()).join(", ")}), so the site looks the same as before. Press Show the exact changes below to see the new words.
+              </p>
+            </section>
+          ))}
 
           <Code pr={pr} files={v.files} />
         </div>
@@ -104,6 +115,9 @@ function ReviewLine({ review }: { review: ChangesView["review"] }) {
     </div>
   );
 }
+
+// Files that can change what the page looks like (anything else, like a README, can't).
+const SHOWS_ON_PAGE = /\.(html?|css|js|mjs|jsx|ts|tsx|vue|svelte|svg|png|jpe?g|gif|webp|ico|json|mp3|wav|ogg|woff2?)$/i;
 
 function Pictures({ v }: { v: ChangesView }) {
   const q = `project=${v.project}&before=${v.before}&after=${v.after}&page=${encodeURIComponent(v.page)}`;
@@ -174,7 +188,7 @@ function Code({ pr, files }: { pr: string; files: ChangesView["files"] }) {
   return (
     <section>
       <button className={btn.secondary} aria-expanded={open} onClick={toggle}>
-        {open ? "Hide the code changes" : "Show the code changes"}
+        {open ? "Hide the exact changes" : "Show the exact changes"}
       </button>
       {open && (
         <div className="panel mt-4 p-4 sm:p-6">
@@ -191,16 +205,25 @@ function Code({ pr, files }: { pr: string; files: ChangesView["files"] }) {
           {diff === null ? (
             <Loading />
           ) : (
+            <>
             <pre className="max-h-[40rem] overflow-auto rounded-[14px] bg-soft p-4 text-[12px] leading-relaxed">
-              {diff.split("\n").map((l, i) => (
-                <span
-                  key={i}
-                  className={`block ${l.startsWith("diff --git") ? "mt-3 font-bold" : l.startsWith("+") && !l.startsWith("+++") ? "bg-[#E6F4EA] text-[#1E6B34]" : l.startsWith("-") && !l.startsWith("---") ? "bg-[#FDE8E6] text-[#A11B12]" : l.startsWith("@@") ? "text-[#2A3F9E]" : ""}`}
-                >
-                  {l || " "}
-                </span>
-              ))}
+              {diff
+                .split("\n")
+                .filter((l) => !/^(index |--- |\+\+\+ |new file mode|deleted file mode|similarity index|rename (from|to) )/.test(l))
+                .map((l, i) => {
+                  const file = l.match(/^diff --git a\/(.+?) b\//)?.[1];
+                  if (file) return <span key={i} className="mt-3 block font-sans text-[14px] font-bold first:mt-0">{file}</span>;
+                  if (l.startsWith("@@")) return <span key={i} className="block text-muted">⋯</span>;
+                  return (
+                    <span key={i} className={`block ${l.startsWith("+") ? "bg-[#E6F4EA] text-[#1E6B34]" : l.startsWith("-") ? "bg-[#FDE8E6] text-[#A11B12]" : ""}`}>
+                      {l || " "}
+                    </span>
+                  );
+                })}
             </pre>
+            <p className="mt-2 text-[13px] text-muted">Green lines were added, red lines were taken out.</p>
+            </>
+
           )}
         </div>
       )}
@@ -287,8 +310,8 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
       )}
       <Confirm
         open={confirm}
-        title="Merge this pull request?"
-        text="Its changes go into main, the real version of your project. You can't undo this from here."
+        title="Put these changes into your project?"
+        text="This adds the changes to the real version of your project (this is called merging). If you change your mind later, start a task that says what to undo."
         yes="Merge it"
         onYes={() => {
           setConfirm(false);

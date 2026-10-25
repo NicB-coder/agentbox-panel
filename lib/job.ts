@@ -70,7 +70,8 @@ const MAKE = new Set(["make", "build", "create", "write", "add", "design", "set"
 
 // A short name for the job from the task: "Make an arcade website with 4 games" → "Arcade website".
 export function jobName(task: string, kind: JobKind = "build"): string {
-  const first = task.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s|\n/)[0] ?? "";
+  // The coach's improved goals start with labels like "What to make: …": name it from what follows.
+  const first = task.replace(/^\s*(what to (make|build|do)|goal|task)\s*:\s*/i, "").replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s|\n/)[0] ?? "";
   const words = first.replace(LEAD, "").replace(/[^\p{L}\p{N}'\- ]/gu, " ").split(" ").filter(Boolean);
   if (!words.length) return kind === "research" ? "Research" : "New task";
   let suffix = "";
@@ -97,6 +98,7 @@ export function jobName(task: string, kind: JobKind = "build"): string {
       if (keep.length) break;
       continue;
     }
+    if (keep.at(-1)?.toLowerCase() === w.toLowerCase()) continue; // never "Make Make"
     keep.push(w.length > 18 ? w.slice(0, 18) : w);
   }
   if (!keep.length) keep.push(...words.slice(0, 2));

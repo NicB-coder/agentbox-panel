@@ -211,6 +211,18 @@ export function ProgressBar({ p, color = "#2F4FD8" }: { p: { step: number; of: n
 
 type Act = (l: string, u: string, b?: unknown) => Promise<void>;
 
+// After "Change it" on a plan, the job is what Nic changed it to: say so right under the task.
+function Changed({ run }: { run: Run }) {
+  const c = run.extra.planChanges;
+  if (!c?.length) return null;
+  return (
+    <p className="mt-2 rounded-[14px] bg-[#EEF1FD] px-4 py-2 text-[15px] text-[#2A3F9E]">
+      <span className="font-semibold">You changed it: </span>
+      {c.at(-1)}
+    </p>
+  );
+}
+
 function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: string }) {
   const { view, runs } = data;
   const run = view.activeRun;
@@ -226,6 +238,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
       {run ? (
         <>
           <p className="clamp-3 mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
+          <Changed run={run} />
           {run.status === "queued" ? (
             <p className="mt-2 rounded-[14px] bg-soft px-4 py-3 text-[15px] font-medium">
               {run.activity ?? "Waiting"}. {run.extra.resume ? "It carries on by itself, right where it left off." : "It starts by itself."}
@@ -320,6 +333,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   return (
     <>
       <p className="clamp-3 mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
+      <Changed run={run} />
       <p className="mt-1 text-[15px] text-muted">{run.result ? plainText(run.result) : "It finished and opened a pull request for you."}</p>
       {careful && <p className="mt-3 text-[15px] font-semibold text-[#1E6B34]">{careful}</p>}
       {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>}
@@ -386,8 +400,8 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
       />
       <Confirm
         open={confirm}
-        title="Merge this pull request?"
-        text="Its changes go into main, the real version of your project. You can't undo this from here."
+        title="Put these changes into your project?"
+        text="This adds the changes to the real version of your project (this is called merging). If you change your mind later, start a task that says what to undo."
         yes="Merge it"
         onYes={() => {
           setConfirm(false);
@@ -490,13 +504,23 @@ function AskBox({ approval, act, busy }: { approval: Approval; act: Act; busy: s
   );
 }
 
+// The plan as Nic reads it: no markdown marks, no notes about plan files or plan mode.
+function planText(p: string): string {
+  return plainText(p)
+    .split("\n")
+    .filter((l) => !/plan mode|plan (file|is saved)|\.claude\/plans|ExitPlanMode|submit (it|the plan) for approval/i.test(l))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function PlanBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   const [changing, setChanging] = useState(false);
   const [msg, setMsg] = useState("");
   return (
     <div className="mt-6 rounded-[18px] bg-[#FDF0DC] p-5">
       <p className="text-[14px] font-semibold text-[#8A4600]">Here's its plan. Is this OK?</p>
-      <div className="mt-3 max-h-[28rem] overflow-auto rounded-[14px] bg-white p-4 text-[15px] leading-relaxed whitespace-pre-wrap">{run.plan}</div>
+      <div className="mt-3 max-h-[28rem] overflow-auto rounded-[14px] bg-white p-4 text-[15px] leading-relaxed whitespace-pre-wrap">{planText(run.plan ?? "")}</div>
       {!changing ? (
         <div className="mt-4 flex flex-wrap gap-3">
           <button className={btn.primary} disabled={!!busy} onClick={() => act("approve", `/api/runs/${run.id}/plan`, { approve: true })}>
@@ -516,7 +540,7 @@ function PlanBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
         >
           <label className="flex flex-col gap-2">
             <span className="text-[15px] font-semibold">What should it change?</span>
-            <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={3} className="rounded-[14px] border border-[#C9CDD4] bg-white p-3 text-[15px]" />
+            <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={3} placeholder="For example: Make it smaller, just one game." className="rounded-[14px] border border-[#C9CDD4] bg-white p-3 text-[15px]" />
           </label>
           <div className="flex gap-3">
             <button type="submit" className={btn.primary} disabled={!!busy || !msg.trim()}>

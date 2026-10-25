@@ -184,8 +184,9 @@ export function shortPlace(ctx: HelperContext): string {
   if (p === "/workflows/new") return "New workflow";
   const w = ctx.workflowId ? getWorkflow(ctx.workflowId) : null;
   if (/^\/workflows\/\d+/.test(p)) return w?.name ?? "Workflow";
-  const names: Record<string, string> = { "/workflows": "Workflows", "/inbox": "Inbox", "/projects": "Projects", "/settings": "Settings", "/help": "Help" };
-  return names[p] ?? p;
+  const names: Record<string, string> = { "/workflows": "Workflows", "/inbox": "Inbox", "/projects": "Projects", "/settings": "Settings", "/help": "Help", "/changes": "What changed", "/connectors": "Connectors", "/machine": "Machine", "/terminal": "Terminal" };
+  if (/^\/reports\//.test(p)) return "Report";
+  return names[p] ?? ctx.title?.slice(0, 40) ?? "this page";
 }
 
 // History as the Helper sees it: its own replies plus a note of any cards it showed.

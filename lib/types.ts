@@ -123,6 +123,7 @@ export type RunExtra = {
   // v3.1
   quiet?: Quiet; // it finished but didn't really do anything: the Inbox says so
   quick?: boolean; // it opened a pull request in under 2 minutes: worth a closer look
+  planChanges?: string[]; // what Nic asked to change in its plan (Change it), oldest first
 };
 
 export type Phase = "plan" | "work" | "review" | "fix" | "polish" | "final" | "outline" | "milestone";

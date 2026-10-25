@@ -107,11 +107,9 @@ export default function Header({ initial, projects, connectors }: { initial: Hea
 
           <div className="ml-auto flex items-center gap-2">
             <UsageMeter u={data.usage} />
-            <span className="hidden lg:block">
-              <button type="button" className={`${btn.pill} whitespace-nowrap`} onClick={() => openTaskPanel()}>
-                New task
-              </button>
-            </span>
+            <button type="button" className={`${btn.pill} whitespace-nowrap max-lg:!px-4`} onClick={() => openTaskPanel()}>
+              New task
+            </button>
             <div className="hidden items-center gap-2 lg:flex">
               <button type="button" className={btn.secondary + " !rounded-full !px-4 whitespace-nowrap"} onClick={() => (data.pausedAll ? togglePause() : setConfirm(true))} disabled={busy}>
                 {data.pausedAll ? "Resume everything" : "Pause everything"}
@@ -307,8 +305,8 @@ function UsageMeter({ u }: { u: UsageView }) {
     long = "Claude usage · checking…";
     short = "Usage";
   } else {
-    long = `Claude usage ${about}${pct}%${s.session?.resetsAt ? ` · resets ${dayClock(s.session.resetsAt)}` : ""}`;
-    short = `${pct}%`;
+    long = `Claude usage ${about}${pct}% used${s.session?.resetsAt ? ` · resets ${dayClock(s.session.resetsAt)}` : ""}`;
+    short = `${pct}% used`;
   }
 
   return (
@@ -365,20 +363,22 @@ export function UsagePanel({ u, now }: { u: UsageView; now: number }) {
       )}
       <div>
         <p className="font-semibold">
-          This session: {s.session ? `${about}${s.session.pct}% used` : "not checked yet"}
+          Right now: {s.session ? `${about}${s.session.pct}% used` : "not checked yet"}
         </p>
+        <p className="mt-0.5 text-[13px] text-muted">Claude lets you use a set amount every few hours. This is how much of that you've used.</p>
         {s.session && bar(s.session.pct, tone.bar)}
         {s.session?.resetsAt && <p className="mt-1 text-[14px] text-muted">Resets at {dayClock(s.session.resetsAt)} (in {until(s.session.resetsAt, now)})</p>}
       </div>
       <div>
         <p className="font-semibold">This week: {s.week ? `${about}${s.week.pct}% used` : "not checked yet"}</p>
+        <p className="mt-0.5 text-[13px] text-muted">There's also a bigger amount for the whole week.</p>
         {s.week && bar(s.week.pct, "#7048C8")}
         {s.week?.resetsAt && <p className="mt-1 text-[14px] text-muted">Resets {dayClock(s.week.resetsAt)}</p>}
       </div>
-      <Breakdown title="Today, by agent" items={u.byAgent} empty="No agent runs yet today." />
-      <Breakdown title="Today, by workflow" items={u.byWorkflow} empty="No workflow runs yet today." />
+      <Breakdown title="Who used it today (share of today's total)" items={u.byAgent} empty="No agent runs yet today." />
+      <Breakdown title="Workflows today (share of today's total)" items={u.byWorkflow} empty="No workflow runs yet today." />
       <p className="text-[13px] leading-snug text-muted">
-        {s.exact ? "Numbers come from Claude Code's own usage check" : "These numbers are an estimate"}
+        {s.exact ? "Numbers come from Claude's own usage check" : "These numbers are an estimate"}
         {s.updatedAt ? `, updated ${Math.max(0, Math.round((now - s.updatedAt) / 60000))} min ago` : ""}. They include everything on your Claude account, not only agentbox.
       </p>
       <Link href="/settings" className="text-[14px] font-semibold underline">
@@ -401,7 +401,7 @@ function Breakdown({ title, items, empty }: { title: string; items: UsageView["b
               <span className="flex justify-between gap-2">
                 <span className="truncate">{i.name}</span>
                 <span className="shrink-0 text-muted">
-                  {i.share}% · {i.runs} {i.runs === 1 ? i.unit?.[0] ?? "run" : i.unit?.[1] ?? "runs"}
+                  {i.share}% of today · {i.runs} {i.runs === 1 ? i.unit?.[0] ?? "run" : i.unit?.[1] ?? "runs"}
                 </span>
               </span>
               <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-[#E6E8EC]" aria-hidden="true">

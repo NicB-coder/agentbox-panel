@@ -318,8 +318,8 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                   )}
                   <Confirm
                     open={confirm}
-                    title="Merge this pull request?"
-                    text="Its changes go into main, the real version of your project. You can't undo this from here."
+                    title="Put these changes into your project?"
+                    text="This adds the changes to the real version of your project (this is called merging). If you change your mind later, start a task that says what to undo."
                     yes="Merge it"
                     onYes={() => {
                       setConfirm(false);

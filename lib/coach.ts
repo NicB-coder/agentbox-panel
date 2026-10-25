@@ -67,7 +67,7 @@ export function looksDetailed(goal: string, hasBrief: boolean): boolean {
 }
 
 // Far too short to be detailed, whatever Claude thinks.
-export const tooShort = (goal: string) => goal.trim().split(/\s+/).filter(Boolean).length < 8;
+export const tooShort = (goal: string) => goal.trim().split(/\s+/).filter(Boolean).length < 5;
 
 export function checkPrompt(goal: string, where: CoachWhere, brief: { name: string; text: string } | null, current: string[] = []): string {
   const detailed = looksDetailed(goal, !!brief);
@@ -81,6 +81,7 @@ export function checkPrompt(goal: string, where: CoachWhere, brief: { name: stri
       ? "It is detailed. Set detailed to true, ask no questions, and write verdict: one short friendly line (under 20 words) starting with \"Looks good\" that says what's clear, or names the one thing worth adding."
       : [
           "If it already says what to make, who it's for, the must-haves and what done looks like, set detailed true, no questions, and a short \"Looks good…\" verdict.",
+          "A small, specific change (fix one thing, add a line, change a colour or a word) is detailed enough even when it's short: set detailed true and don't ask questions. Only ask when the answers would really change what gets made.",
           "Otherwise set detailed false and ask 2 to 4 quick questions that would make the biggest difference, each with 3 to 5 short tappable choices (2 to 6 words each, concrete, no \"Other\": the app adds that). Use multi true when several choices can be picked together (like features). For \"make a game\" good questions are: What kind of game? Who plays it? Phone, laptop or both? Anything it must have?",
           "Don't ask about things he already said. verdict: one short line on what's missing.",
         ].join("\n"),

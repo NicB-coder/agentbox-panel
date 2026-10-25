@@ -10,6 +10,8 @@ DEV="${AGENTBOX_DEV_DIR:-/tmp/agentbox-dev-v3}"
 mkdir -p "$DEV/data/logs"
 if [[ "${1:-}" == "fresh" || ! -f "$DEV/data/agentbox.db" ]]; then
   rm -f "$DEV/data/agentbox.db" "$DEV/data/agentbox.db-wal" "$DEV/data/agentbox.db-shm"
+  # Old test logs would show under the copied runs' numbers: start with none.
+  rm -f "$DEV/data/logs/"*.log
   sqlite3 "$APP_DIR/data/agentbox.db" ".backup '$DEV/data/agentbox.db'"
   # Runs that are live in the real panel aren't ours to stop or resume in the copy.
   sqlite3 "$DEV/data/agentbox.db" "UPDATE runs SET status='done', activity=NULL, pid=NULL WHERE status IN ('working','queued','waiting'); UPDATE workflow_runs SET status='stopped', stop_reason='Copied from the live panel' WHERE status IN ('running','queued','needs'); UPDATE sqlite_sequence SET seq = seq + 10000 WHERE name IN ('runs','agents','workflow_runs','approvals');"

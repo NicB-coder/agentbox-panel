@@ -85,26 +85,26 @@ export async function availableRepos(): Promise<{ name: string; description: str
 }
 
 export async function cloneRepo(full: string): Promise<string> {
-  const m = full.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").match(/^([\w.-]+)\/([\w.-]+)$/);
-  if (!m) throw new Error("Type it like owner/name, for example NicB-coder/portfolio.");
+  const m = full.trim().replace(/^(https?:\/\/)?(www\.)?github\.com\//, "").replace(/\/+$/, "").replace(/\.git$/, "").match(/^([\w.-]+)\/([\w.-]+)$/);
+  if (!m) throw new Error("Paste the whole address, like github.com/NicB-coder/portfolio.");
   const name = m[2];
   if (name.startsWith(".")) throw new Error("That name won't work as a folder.");
   const dest = path.join(PROJECTS_DIR, name);
   if (fs.existsSync(dest)) throw new Error(`There's already a project called ${name} on this Mac.`);
   const r = await sh("gh", ["repo", "clone", `${m[1]}/${name}`, dest], PROJECTS_DIR, 5 * 60_000);
-  if (!r.ok) throw new Error(/not found|Could not resolve/i.test(r.err) ? "GitHub couldn't find that repo, or the bot can't see it. Check the name, or invite NicB-coder-bot to it." : "Couldn't copy it from GitHub. Try again in a moment.");
+  if (!r.ok) throw new Error(/not found|Could not resolve/i.test(r.err) ? "GitHub couldn't find that project, or agentbox isn't allowed to see it. Check the address, or invite NicB-coder-bot to it on GitHub." : "Couldn't copy it from GitHub. Try again in a moment.");
   g.__projCache = undefined;
   return name;
 }
 
 export async function createRepo(rawName: string, description: string): Promise<string> {
   const name = rawName.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|-+$/g, "").slice(0, 60);
-  if (!name) throw new Error("Give the new repo a name, like my-first-site.");
+  if (!name) throw new Error("Give your new project a name, like my-game.");
   if (fs.existsSync(path.join(PROJECTS_DIR, name))) throw new Error(`There's already a project called ${name} on this Mac.`);
   const args = ["repo", "create", name, "--public", "--add-readme", "--clone"];
   if (description.trim()) args.push("--description", description.trim().slice(0, 200));
   const r = await sh("gh", args, PROJECTS_DIR, 2 * 60_000);
-  if (!r.ok) throw new Error(/already exists/i.test(r.err) ? "The bot already has a repo with that name. Pick another name, or add it from the list." : "GitHub wouldn't make the repo. Try again in a moment.");
+  if (!r.ok) throw new Error(/already exists/i.test(r.err) ? "There's already a project with that name on GitHub. Pick another name, or add it from the list." : "GitHub wouldn't make the project. Try again in a moment.");
   g.__projCache = undefined;
   return name;
 }

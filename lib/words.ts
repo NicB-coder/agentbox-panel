@@ -109,7 +109,7 @@ export const ALLOWED_WORDS: Record<Allowed, { label: string; hint: string }> = {
 
 export const MODE_WORDS: Record<WorkMode, { label: string; hint: string }> = {
   auto: { label: "Auto", hint: "Works on its own. A safety checker approves each step." },
-  plan: { label: "Plan first", hint: "Writes a short plan, then waits for your OK." },
+  plan: { label: "Check with me first", hint: "Writes a short plan, then waits for your OK." },
   ask: { label: "Ask me each step", hint: "Pauses before every command or change." },
   look: { label: "Look only", hint: "Never changes anything, just reports." },
 };
@@ -117,7 +117,7 @@ export const MODE_WORDS: Record<WorkMode, { label: string; hint: string }> = {
 export const NOTIFY_WORDS: Record<NotifyOn | "never", string> = {
   finished: "Finished",
   needs_ok: "Needs my OK",
-  problems: "Only if something goes wrong",
+  problems: "Something goes wrong",
   never: "Never",
 };
 
@@ -198,4 +198,21 @@ export function dayAt(ms: number, now = Date.now()): string {
           ? d.toLocaleDateString("en-US", { weekday: "long" })
           : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `${day} at ${clockOf(ms)}`;
+}
+
+// The reviewer's verdict. If it forgot the VERDICT line, its words decide: a review that says it isn't
+// ready must never show as "Nothing to fix".
+export function verdictOf(text: string): "passed" | "needs work" {
+  const said = text.match(/VERDICT:\s*(passed|needs work)/gi)?.at(-1);
+  if (said) return /needs work/i.test(said) ? "needs work" : "passed";
+  return /\b(not ready|isn't ready|is not ready|needs work|needs to be fixed|must be fixed|must fix|changes needed|should be fixed|is missing|are missing|doesn't work|does not work|broken)\b/i.test(text) ? "needs work" : "passed";
+}
+
+// Shorten at a word, with "…" when something was cut ("…coming faster and" → "…coming faster…").
+export function cutWords(s: string, max: number): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const at = cut.lastIndexOf(" ");
+  return `${(at > max * 0.6 ? cut.slice(0, at) : cut).replace(/[\s,;:.\-–—]+$/, "").replace(/\s+(and|or|the|a|an|to|of|with|that|in|on|for)$/i, "")}…`;
 }

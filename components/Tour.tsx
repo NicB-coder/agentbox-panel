@@ -12,17 +12,17 @@ const STEPS = [
   {
     icon: "hammer",
     title: "Every task gets its own agent",
-    text: "Press New task, say what you want, and press Start. It becomes an agent named after the job, with its own tile. Click a tile to see what it's doing right now or add a follow-up. Nothing goes into your main code until you say so.",
+    text: "Your work lives in a project (a folder for one app or game). Make one on the Projects page, or use one you have. Then press New task, say what you want, and press Start. It gets its own tile: click it to see what it's doing right now. Nothing changes in your real project until you say so.",
   },
   {
     icon: "flow",
     title: "Workflows chain steps together",
-    text: "A workflow passes work from one step to the next: research it, build it, review it, test it, then ask you. Start from a ready-made template, or just describe what should happen.",
+    text: "A workflow is a bigger job done in steps, one after another: build it, have it checked, then ask you. Say what you want to make and agentbox sets up the steps for you.",
   },
   {
     icon: "inbox",
     title: "The Inbox and the usage meter",
-    text: "Anything that needs you (an OK, a pull request to look at, something that went wrong) shows up in the Inbox. The meter at the top shows how much of your Claude usage is left and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
+    text: "Anything that needs you (a finished change to look at, a question, something that went wrong) shows up in the Inbox. The meter at the top shows how much of your Claude usage you've used so far and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
   },
 ];
 

@@ -87,7 +87,7 @@ export function NotifyPicker({ value, onChange }: { value: NotifyOn[]; onChange:
   };
   return (
     <fieldset>
-      <Label as="legend" tip="When it sends you a Discord message. Pick as many as you like.">
+      <Label as="legend" tip="agentbox can send you a message on Discord (a chat app) when these things happen. Tick as many as you like, or Never for no messages.">
         Tell me when
       </Label>
       <div className="flex flex-wrap gap-2">
@@ -125,7 +125,7 @@ export function WhenPicker({ value, onChange, nowLabel = "Now" }: { value: When;
     <div className="flex flex-col gap-3">
       <Segmented<ScheduleKind>
         legend="When does it run?"
-        tip="Now starts it straight away, once. The others start it by themselves on a timetable, until you pause or archive it."
+        tip={`${nowLabel === "Now" ? "Now starts it straight away, once." : `${nowLabel}: it only runs when you press Run now.`} The others start it by themselves on a timetable, until you pause or archive it.`}
         value={value.scheduleKind}
         onChange={(k) => set({ scheduleKind: k, scheduleDays: k === "days" && !value.scheduleDays.length ? [1, 2, 3, 4, 5] : value.scheduleDays })}
         options={(["manual", "hourly", "daily", "days"] as ScheduleKind[]).map((k) => ({ value: k, label: k === "manual" ? nowLabel : SCHEDULE_WORDS[k] }))}

@@ -55,7 +55,7 @@ function Suggestions({ list, applied, onApply }: { list: Suggestion[]; applied: 
                 <span className="text-muted"> · {s.why}</span>
               </span>
               <button type="button" className={`${btn.secondary} !min-h-11 !px-4 !text-[14px]`} disabled={on} onClick={() => onApply(s.key)}>
-                {on ? "✓ Done" : "Use this"}
+                {on ? "✓ Turned on" : "Turn it on"}
               </button>
             </li>
           );

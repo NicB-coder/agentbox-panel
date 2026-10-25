@@ -17,7 +17,7 @@ import { freedomOf, modeFor } from "./job";
 import { REPORT_FORMAT, RESEARCH_METHOD } from "./research";
 import { flowSentence, runTaskText, stepTitle, stepsWithGoal, type AgentRef } from "./wf";
 import { quietWfRun, workflowMakesChanges } from "./quiet";
-import { clockOf, duration, nextRunAfter, plainText } from "./words";
+import { clockOf, duration, nextRunAfter, plainText, verdictOf, cutWords } from "./words";
 
 // Runs a workflow: one shared git worktree and branch, one pull request, steps one after another.
 // Agent-like steps reuse the v1 task runner (same hooks, approvals and the main/force-push block).
@@ -386,7 +386,7 @@ async function startStep(wr: WorkflowRun, step: WfStep) {
   const sr = wr.stepRuns[step.id] ?? freshStepRun();
   try {
     const run = await startRun(agent.id, {
-      task: wr.input ? `${wf.name}: ${wr.input.split("\n")[0].slice(0, 120)}` : wf.name,
+      task: wr.input ? `${wf.name}: ${cutWords(wr.input.split("\n")[0], 120)}` : wf.name,
       mode: cfg.mode, trigger: "workflow", project: wf.project, workflowRunId: wr.id, stepId: step.id, extra: cfg.extra,
     });
     updateWfRun(wr.id, { waiting: null });
@@ -441,7 +441,7 @@ export async function onStepRunEnded(runId: number) {
   const agents = agentRefs();
 
   if (step.type === "review") {
-    const verdict = text.match(/VERDICT:\s*(passed|needs work)/i)?.[1]?.toLowerCase() ?? (/needs work|changes needed|must fix/i.test(text) ? "needs work" : "passed");
+    const verdict = verdictOf(text);
     const body = text.replace(/^\s*VERDICT:.*$/gim, "").trim();
     await comment(fresh, `**Review${fresh.loops ? ` (round ${fresh.loops + 1})` : ""}: ${verdict === "passed" ? "passed ✅" : "needs work"}**\n\n${body}`);
     if (verdict === "passed") {
@@ -600,7 +600,7 @@ async function tell(wr: WorkflowRun, step: WfStep): Promise<string> {
     issueUrl = r.ok ? r.out.split("\n").filter((l) => l.startsWith("http")).pop() ?? "" : "";
   }
   const shippedIt = earlier.some((s) => s.type === "ship" && wr.stepRuns[s.id]?.state === "done");
-  const name = `${wf.name}${wr.input ? `: ${wr.input.split("\n")[0].slice(0, 100)}` : ""}`;
+  const name = `${wf.name}${wr.input ? `: ${cutWords(wr.input.split("\n")[0], 100)}` : ""}`;
   const title = shippedIt ? `Shipped: ${name}` : problems ? `Problems found: ${name}` : `Finished: ${name}`;
   const msg = [...lines.slice(-6).map((l) => l.slice(0, 400)), wr.prUrl ? `Pull request: ${wr.prUrl}` : "", issueUrl ? `Issue: ${issueUrl}` : ""].filter(Boolean).join("\n");
   const ok = await sendDiscord(msg, { title, url: wr.prUrl ?? undefined, ping: shippedIt ? "shipped" : undefined });

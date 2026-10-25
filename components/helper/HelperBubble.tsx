@@ -190,6 +190,7 @@ export default function HelperBubble() {
   const toEnd = (smooth = false) => {
     const el = list.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    follow.current = true;
     setNewText(false);
   };
   useEffect(() => {
@@ -204,14 +205,27 @@ export default function HelperBubble() {
       requestAnimationFrame(() => toEnd());
     }
   }, [open, data, showChats]);
+  // While Nic hasn't scrolled away, a new reply is followed until his question reaches the top of the
+  // chat, so the answer is in view from its first line. Then it holds still and shows "↓ New text".
+  const follow = useRef(true);
   useEffect(() => {
     const el = list.current;
     const inner = el?.firstElementChild;
     if (!open || !el || !inner) return;
     let last = inner.getBoundingClientRect().height;
+    follow.current = true;
     const ro = new ResizeObserver(() => {
       const h = inner.getBoundingClientRect().height;
-      if (h > last + 1 && !atEnd()) setNewText(true);
+      if (h > last + 1 && follow.current) {
+        const asks = inner.querySelectorAll<HTMLElement>("[data-role='user']");
+        const q = asks[asks.length - 1];
+        const stop = q ? q.offsetTop - 12 : el.scrollHeight;
+        el.scrollTo({ top: Math.min(el.scrollHeight, Math.max(el.scrollTop, stop)) });
+        if (!atEnd()) {
+          follow.current = false;
+          setNewText(true);
+        }
+      } else if (h > last + 1 && !atEnd()) setNewText(true);
       last = h;
     });
     ro.observe(inner);
@@ -442,7 +456,12 @@ export default function HelperBubble() {
               </ul>
             </div>
           ) : (
-            <div ref={list} className="relative flex-1 overflow-y-auto px-4 py-4" onScroll={() => newText && atEnd() && setNewText(false)}>
+            <div ref={list} className="relative flex-1 overflow-y-auto px-4 py-4" onScroll={() => {
+                if (atEnd()) {
+                  follow.current = true;
+                  if (newText) setNewText(false);
+                }
+              }}>
               {messages.length === 0 ? (
                 <div className="flex flex-col gap-3 pt-2 text-[15px] leading-relaxed">
                   <p className="text-[17px] font-semibold">Hi Nic! I'm the Helper.</p>

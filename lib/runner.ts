@@ -14,7 +14,7 @@ import { projectPath } from "./projects";
 import type { Agent, Allowed, Flow, Milestone, Model, Phase, ProcState, ReviewNote, Run, RunExtra, Step, StreamState, WorkMode } from "./types";
 import { ingestRateLimitEvent, markLimited, usageBlocked, usageState } from "./usage";
 import { researchFixPrompt, researchPrompt, researchReviewPrompt } from "./research";
-import { clockOf } from "./words";
+import { clockOf, cutWords, verdictOf } from "./words";
 import { QUICK_MS, quietLookRun, quietTaskRun } from "./quiet";
 
 // One run = a copy of the project (git worktree) on its own branch + one or more Claude Code sessions in it.
@@ -196,7 +196,7 @@ export async function startRun(agentId: number, opts: StartOpts): Promise<Run> {
   const extra = opts.extra ?? {};
   const allowed = extra.allowed ?? agent.allowed;
   const firstOfJob = !opts.task?.trim() && opts.trigger === "manual" && agent.kind === "claude" && !listRuns(agentId, 1).length;
-  const task = opts.task?.trim() || (opts.trigger === "schedule" ? "Scheduled run" : firstOfJob ? firstLine(agent.prompt).slice(0, 200) || "Its usual job" : "Its usual job");
+  const task = opts.task?.trim() || (opts.trigger === "schedule" ? "Scheduled run" : firstOfJob ? cutWords(firstLine(agent.prompt), 200) || "Its usual job" : "Its usual job");
   const blocked = usageBlocked();
   const held = opts.trigger === "schedule" ? heldBy(agent) : null;
   const run = createRun({
@@ -206,6 +206,7 @@ export async function startRun(agentId: number, opts: StartOpts): Promise<Run> {
     workflowRunId: opts.workflowRunId, stepId: opts.stepId, extra: { ...extra, project, ...(firstOfJob ? { jobStart: true } : {}), ...(held ? { held: true } : {}) },
   });
   const by = opts.trigger === "schedule" ? "the schedule" : opts.trigger === "workflow" ? "a workflow" : "Nic";
+  fs.rmSync(logPath(run.id), { force: true }); // a new run never shows an older log that had the same number
   log(run.id, `Run started by ${by} · task: ${task} · mode: ${mode} · allowed: ${allowed} · model: ${extra.model ?? agent.model}`);
   if (opts.trigger === "schedule") clearStaleScheduled(agent.id, run.id);
   if (held) {
@@ -404,16 +405,26 @@ function rules(agent: Agent, run: Run, phase: Phase): string {
   const look = lookOnly(e.allowed, run.mode) || reviewer || phase === "outline";
   const lines = [
     reviewer
-      ? "You are a reviewer started from Nic's agentbox panel. Another AI did the work; you check it. Nic is a high-school developer, so write in plain, friendly English without jargon."
+      ? "You are a reviewer started from Nic's agentbox panel. Another AI did the work; you check it. Nic is a high-school developer, so write in plain, friendly English without jargon. Don't mention branch names, file paths, commands or code words in what you write; describe things by what they do."
       : `You are "${e.name}", an AI agent started from Nic's agentbox panel. Nic is a high-school developer who reads your progress in the panel, so write for him in plain, friendly English without jargon.`,
     "",
   ];
   if (!reviewer && phase !== "outline") {
     lines.push(
       "Progress lines (the panel reads these, put each on its own line):",
-      `- Before you start, write: PLAN: first step | second step | third step   (3 to 5 short plain-English steps such as "Understand the problem", "Make the changes", "Test it in a browser"${look ? "" : ". Don't include sending a pull request, the panel does that"}).`,
+      `- Before you start, write: PLAN: first step | second step | third step   (3 to 5 short plain-English steps such as "Understand the problem", "Make the changes", "Test it in a browser", with no code words like commit, branch or test suite${look ? "" : ". Don't include sending a pull request, the panel does that"}).`,
       "- Each time you begin a step, write: STEP: <its number, starting at 1>",
-      "- At the very end, write: SUMMARY: <one plain-English sentence saying what you did or found>",
+      "- At the very end, write: SUMMARY: <one plain-English sentence saying what you did or found, with no code words like commit, branch, diff or file paths>",
+      "",
+    );
+  }
+  if (phase === "plan") {
+    lines.push(
+      "Right now you only PLAN. Nic reads your plan in the panel and presses Approve plan or Change it. Write it for a 15-year-old who has never coded:",
+      "- Start with one plain sentence saying what you'll make or change.",
+      "- Then 3 to 6 short bullet points, one per step, in everyday words.",
+      "- No file names, folder paths, commands, code words (branch, commit, repo, npm, test suite) or markdown bold.",
+      "- Don't mention plan mode, plan files, tools or how you'll submit the plan. Just write the plan as your final message.",
       "",
     );
   }
@@ -466,7 +477,10 @@ function whatWasAsked(agent: Agent, run: Run): string {
   if (run.workflowRunId) return eff(agent, run).prompt.slice(0, 6000);
   const extra = run.extra.followUp || !(run.extra.jobStart || run.task === "Its usual job" || run.task === "Scheduled run") ? `\n\nThis time Nic asked for:\n${run.task}` : "";
   const brief = agent.job.brief && !briefLine(agent, run) ? `\n\nNic attached a brief: ${agent.job.brief}` : "";
-  return `${jobText(agent, run)}${brief}${extra}`;
+  const changed = run.extra.planChanges?.length
+    ? `\n\nAfter reading the plan, Nic changed what he wants. His changes come last and win over anything above:\n${run.extra.planChanges.map((c, i) => `${i + 1}. ${c}`).join("\n")}`
+    : "";
+  return `${jobText(agent, run)}${brief}${extra}${changed}`;
 }
 
 function reviewPrompt(agent: Agent, run: Run, base: string, final: boolean): string {
@@ -743,7 +757,7 @@ function onEvent(runId: number, line: string, state: StreamState, phase: Phase) 
         const input = c.input ?? {};
         log(runId, `Tool ${c.name}: ${JSON.stringify(input).slice(0, 1500)}`);
         let activity = PLAIN_TOOL[c.name] ?? "Working on it";
-        if (c.name === "Bash") activity = typeof input.description === "string" && input.description ? sentence(input.description) : "Running a check";
+        if (c.name === "Bash") activity = typeof input.description === "string" && input.description ? plainActivity(input.description) : "Running a check";
         if (c.name.startsWith("mcp__")) activity = "Using a connected app";
         updateRun(runId, { activity: `${phase === "review" || phase === "final" ? "Reviewing: " : ""}${activity}…` });
         if (!builder) continue;
@@ -789,6 +803,21 @@ function onEvent(runId: number, line: string, state: StreamState, phase: Phase) 
 
 function sentence(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1).replace(/\.$/, "");
+}
+
+// What a command is doing, in words Nic's friends would understand ("Show branch commits, diff" → "Looking at what changed").
+export function plainActivity(desc: string): string {
+  const d = desc.toLowerCase();
+  if (/\bpush\b/.test(d)) return "Sending the work";
+  if (/\b(commit|stage|git add)\b/.test(d)) return "Saving the work";
+  if (/\b(test|tests|lint|type ?check|tsc)\b/.test(d)) return "Running the checks";
+  if (/\b(diff|git log|git status|git show|branch|commits?)\b/.test(d)) return "Looking at what changed";
+  if (/\b(install|dependenc|npm i\b|packages?)/.test(d)) return "Getting what the project needs";
+  if (/\b(browser|playwright|screenshot|server|localhost|serve)\b/.test(d)) return "Trying it in a browser";
+  if (/\b(build|compile|bundle)\b/.test(d)) return "Building it";
+  if (/\b(pr|pull request|gh )\b/.test(d)) return "Reading the pull request";
+  if (/[\/`]|\.\w{1,4}\b|--|\b(npm|npx|node|git|grep|ls|cat|sed|curl|json|repo|cli|config)\b/.test(d)) return "Running a check";
+  return sentence(desc);
 }
 
 function readMarkers(runId: number, text: string, state: StreamState) {
@@ -978,7 +1007,7 @@ async function next(runId: number, phase: Phase, text: string, session: string |
   }
 
   if (phase === "review" || phase === "final") {
-    const verdict: ReviewNote["verdict"] = /VERDICT:\s*needs work/i.test(text) ? "needs work" : /VERDICT:\s*passed/i.test(text) ? "passed" : /needs work|must fix|should be fixed/i.test(text) ? "needs work" : "passed";
+    const verdict: ReviewNote["verdict"] = verdictOf(text);
     const body = text.replace(/^\s*VERDICT:.*$/gim, "").trim();
     const note: ReviewNote = { kind: phase === "final" ? "final" : "review", verdict, text: body.slice(0, 8000), at: Date.now(), model: otherModel(e.model) };
     const reviews = [...flow.reviews, note];
@@ -1150,7 +1179,7 @@ export function firstLine(s: string) {
 
 async function shipIt(agent: Agent, run: Run, summary: string) {
   const dir = run.worktree!;
-  updateRun(run.id, { activity: "Sending a pull request…" });
+  updateRun(run.id, { activity: "Getting it ready for you to look at…" });
   const cur = getRun(run.id)!;
   updateRun(run.id, { steps: cur.steps.map((s, i) => ({ ...s, state: i < cur.steps.length - 1 ? "done" : "now" })) });
 
@@ -1277,7 +1306,7 @@ export function approvePlan(runId: number) {
   log(runId, "Nic approved the plan.");
   updateRun(runId, { status: "working", activity: "Starting on the plan…" });
   patchExtra(runId, { lastTickAt: Date.now() });
-  launchPhase(runId, "work", "Nic approved your plan. Go ahead and carry it out now, following the progress-line rules.", run.sessionId).catch((e) =>
+  launchPhase(runId, "work", `Nic approved your plan. Go ahead and carry it out now, following the progress-line rules. Begin with a fresh PLAN: line that matches the plan he approved${run.extra.planChanges?.length ? " (including the changes he asked for)" : ""}.`, run.sessionId).catch((e) =>
     finishStopped(runId, "It couldn't start on the plan.", String(e)),
   );
 }
@@ -1287,7 +1316,8 @@ export function changePlan(runId: number, message: string) {
   if (!run || run.status !== "waiting" || !run.sessionId) throw new Error("There's no plan waiting for an OK.");
   log(runId, `Nic asked for changes to the plan: ${message}`);
   updateRun(runId, { status: "working", plan: null, activity: "Changing its plan…" });
-  patchExtra(runId, { lastTickAt: Date.now() });
+  // Kept with the run, so the page, the steps and the reviewer all go by the changed request.
+  patchExtra(runId, { lastTickAt: Date.now(), planChanges: [...(run.extra.planChanges ?? []), message.slice(0, 2000)] });
   launchPhase(runId, "plan", `Nic read your plan and wants changes:\n${message}\n\nWrite the updated plan.`, run.sessionId).catch((e) =>
     finishStopped(runId, "It couldn't change its plan.", String(e)),
   );

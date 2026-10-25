@@ -10,7 +10,7 @@ import { CarefulPicker, Chip, FreedomPicker, MinutesSlider, ModelPicker, Percent
 import BriefPicker, { MissingFileBox, missingOf, type MissingInfo } from "./BriefPicker";
 import { CoachBox, IdeaHelp } from "./Coach";
 import type { SuggestionKey } from "@/lib/coach";
-import ProjectSelect from "./ProjectSelect";
+import ProjectSelect, { defaultProjectOf, rememberProject } from "./ProjectSelect";
 import Segmented from "./Segmented";
 import { Icon, btn } from "./ui";
 
@@ -133,7 +133,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       setTask(d.task ?? "");
       const k = f?.kind ?? (TASK_FEATURES.research ? d.kind ?? "build" : "build");
       setKind(k);
-      setProject(f?.project ?? d.project ?? (projects.includes(defaultProject ?? "") ? defaultProject! : projects[0] ?? ""));
+      setProject(f?.project ?? d.project ?? (projects.includes(defaultProject ?? "") ? defaultProject! : defaultProjectOf(projects)));
       setWhen({ scheduleKind: "manual", scheduleDays: [1, 2, 3, 4, 5], scheduleTime: "18:00" });
       setFreedom(f?.freedom ?? (k === "research" ? "look" : "auto"));
       setCareful(f?.careful ?? true);
@@ -178,6 +178,8 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
     setIdeas(false);
     setCoachKey((k) => k + 1);
     setCoach(true);
+    // The questions show at the bottom of the panel: bring them into view.
+    setTimeout(() => document.getElementById(`${taskId}-coach`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   }
 
   function coachDone(t: string) {
@@ -212,6 +214,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
         kind, task: task_, project, ...when, freedom, careful, maxMinutes: minutes, model, connectors: picked, notify, askEachStep: askEach,
         big, budgetPct: budget, holdSmall, autoInstall, saveReport, brief, followUpOf: follow?.id, ideaId,
       });
+      rememberProject(project);
       ref.current?.close();
       window.dispatchEvent(new Event("agentbox:changed"));
       router.push(`/agents/${j.agentId}`);
@@ -315,7 +318,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               onChange={setProject}
               projects={projects}
               optional={research}
-              tip={research ? "Optional. Pick one if the question is about a project, or to save the report there." : "The code it works on. It always works in its own copy, never straight in main."}
+              tip={research ? "Optional. Pick one if the question is about a project, or to save the report there." : "Which app, game or site it works on. It works on its own copy, so your real project only changes when you say so."}
             />
           )}
 
@@ -328,7 +331,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
                 setMissing(null);
               }}
               openRef={openBrief}
-              tip="A longer file that says exactly what to do, like a CLAUDE.md. It's copied into the agent's own copy of the project when it starts, so it always sees it."
+              tip="Optional. A text file with longer instructions (for example a list of what the game must have). The agent reads it before it starts."
             />
           )}
 
@@ -400,6 +403,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               </div>
             )}
           </div>
+          {coach && <div id={`${taskId}-coach`} className="-mb-7 scroll-mt-20" />}
           {coach && (
             <CoachBox
               key={coachKey}

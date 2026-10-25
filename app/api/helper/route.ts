@@ -6,13 +6,17 @@ import type { HelperContext, HelperState } from "@/lib/helperTypes";
 export const dynamic = "force-dynamic";
 
 let recovered = false;
+const STALE_MS = 3 * 3600_000;
 
 function state(chatId?: number | null): HelperState {
   if (!recovered) {
     recovered = true;
     recoverHelper();
   }
-  const chat = chatId ? getChat(chatId) : latestChat();
+  let chat = chatId ? getChat(chatId) : latestChat();
+  // After a long break the bubble opens on a clean page instead of an old conversation
+  // (it's still under "Earlier chats"). A reply that's still being written is always shown.
+  if (!chatId && chat && Date.now() - chat.updatedAt > STALE_MS && !busyChat(chat.id)) chat = null;
   return { chat, messages: chat ? listMessages(chat.id) : [], chats: listChats(), outOfUsage: outOfUsage() };
 }
 
