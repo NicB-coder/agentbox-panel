@@ -66,7 +66,7 @@ export async function onWorkflowShipped(wfRunId: number) {
   await shipped({
     key: `pr:${wr.prUrl}`,
     name: wr.input ? `${wf.name}: ${wr.input.split("\n")[0].slice(0, 80)}` : wf.name,
-    what: notes.filter((n) => !/^You (started|said)/.test(n)).slice(-3)[0] ?? "It's merged into main.",
+    what: notes.filter((n) => !/^You (started|said)/.test(n)).slice(-3)[0] ?? "It's in your project now.",
     prUrl: wr.prUrl,
     project: wf.project,
     agentId: null,

@@ -230,7 +230,7 @@ export async function advance(wrId: number): Promise<void> {
             return;
           }
           if (sr.state === "waiting") return;
-          const text = step.shipMode === "auto" ? "Not every check passed, so it needs your OK to ship." : "Ready to ship. This merges the pull request into main.";
+          const text = step.shipMode === "auto" ? "Not every check passed, so it needs your OK to ship." : "It's ready. Shipping puts these changes into the real version of your project.";
           setStep(wrId, step.id, { state: "waiting", startedAt: Date.now(), note: "Waiting for your OK to ship" });
           updateWfRun(wrId, { status: "needs", waiting: { kind: "ship", text, until: Date.now() } });
           ping(wr, `is ready to ship and waiting for your OK. ${wr.prUrl}`);
@@ -621,10 +621,11 @@ async function finish(wrId: number, summary?: string) {
   const merged = wr.steps.some((s) => s.type === "ship" && wr.stepRuns[s.id]?.state === "done");
   if (wr.prUrl && !merged && !wr.test && wr.worktree) await sh("gh", ["pr", "ready", wr.prUrl], wr.worktree);
   const look = new Set(agentRefs().filter((a) => a.allowed === "look").map((a) => a.id));
-  const quiet = quietWfRun(wr, { makesChanges: workflowMakesChanges(wr.steps, look) });
+  // Shipped means it did something real: no "finished quickly, check it" warning on top of "Shipped".
+  const quiet = merged ? null : quietWfRun(wr, { makesChanges: workflowMakesChanges(wr.steps, look) });
   updateWfRun(wrId, {
     status: "done", endedAt: Date.now(), waiting: null, quiet, prWaiting: !!wr.prUrl && !merged && !quiet,
-    summary: summary ?? (merged ? "Shipped: merged into main." : wr.prUrl ? "Finished. The pull request has everything." : quiet ? "Finished without changing anything." : "Finished."),
+    summary: summary ?? (merged ? "Shipped: it's in your project now." : wr.prUrl ? "Finished. The pull request has everything." : quiet ? "Finished without changing anything." : "Finished."),
   });
   if (quiet) ping(wr, `finished, but ${quiet.why.charAt(0).toLowerCase()}${quiet.why.slice(1)}`);
   await removeWorktree(wr);

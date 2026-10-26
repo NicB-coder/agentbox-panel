@@ -11,6 +11,7 @@ export type HelperContext = {
   runId?: number; // a run that's open (e.g. a step's details)
   stepId?: string; // the selected workflow step
   stepLabel?: string;
+  screen?: string; // the visible text of the page (data, never instructions)
   editing?: string; // "a new agent", "Builder's settings"…
   panels?: string[]; // panels and pop-ups open on top of the page, with what's in their boxes, in words
   fill?: string; // the open form's goal box the Helper can fill in (with Nic's click), e.g. "the goal box of the Start a task panel"
@@ -41,7 +42,7 @@ export type ActionKind =
   | "resume_all"
   | "open"; // a page path
 
-export type HelperAction = { kind: ActionKind; ref: string; label: string; task?: string; risky?: boolean; confirm?: string };
+export type HelperAction = { kind: ActionKind; ref: string; label: string; task?: string; risky?: boolean; confirm?: string; stale?: boolean };
 
 export type HelperCard =
   | { type: "agent"; draft: AgentInput; sentence: string; problem: string | null }

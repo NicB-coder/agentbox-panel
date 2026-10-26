@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StepType, WfLimits, WfStep, WorkflowInput, WorkflowRun, WorkflowVersion } from "@/lib/types";
-import { ADDABLE, STEP_INFO, type AgentRef, briefLabel, flowSentence, hasFailPath, newStep, stepTitle, workflowProblems } from "@/lib/wf";
+import { ADDABLE, STEP_INFO, type AgentRef, briefLabel, flowSentence, hasFailPath, newStep, shipsOnOk, stepTitle, workflowProblems } from "@/lib/wf";
 import type { WorkflowPageState } from "@/lib/workflowViews";
 import type { ChangeDraft } from "@/lib/changeView";
 import { ago, clockOf, duration } from "@/lib/words";
@@ -346,6 +346,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {manualStart && <span className="text-[14px] text-muted">Runs when you press Run now</span>}
           {!manualStart && (
             <div className="min-w-[150px]">
               <Switch label={enabled ? "On" : "Off"} checked={enabled} onChange={toggle} disabled={!!busy} tip="On: it starts by itself (on its schedule or from GitHub). Off: it only runs when you press Run now or Test run." />
@@ -670,8 +671,11 @@ function WaitingBox({ run, onDone }: { run: WorkflowRun; onDone: () => Promise<v
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
+  const [sure, setSure] = useState(false);
+  const ships = shipsOnOk(run);
   const act = async (action: string) => {
     setErr("");
+    setSure(false);
     try {
       await post(`/api/workflow-runs/${run.id}/answer`, { action, note });
       await onDone();
@@ -682,7 +686,7 @@ function WaitingBox({ run, onDone }: { run: WorkflowRun; onDone: () => Promise<v
   };
   return (
     <div className="mx-4 mb-4 rounded-[18px] bg-[#FDF0DC] p-5 sm:mx-6">
-      <p className="text-[14px] font-semibold text-[#8A4600]">{run.waiting!.kind === "ship" ? "Ready to ship" : "It's waiting for you"}</p>
+      <p className="text-[14px] font-semibold text-[#8A4600]">{run.waiting!.kind === "ship" ? "Ready to go into your project" : "It's waiting for you"}</p>
       <p className="mt-1 text-[17px] font-semibold">{run.waiting!.text}</p>
       {sending ? (
         <div className="mt-3 flex flex-col gap-3">
@@ -701,8 +705,8 @@ function WaitingBox({ run, onDone }: { run: WorkflowRun; onDone: () => Promise<v
         </div>
       ) : (
         <div className="mt-4 flex flex-wrap gap-2">
-          <button className={btn.primary} onClick={() => act("approve")}>
-            {run.waiting!.kind === "ship" ? "Ship it" : "Approve"}
+          <button className={btn.primary} onClick={() => (ships ? setSure(true) : act("approve"))}>
+            {run.waiting!.kind === "ship" ? "Ship it" : ships ? "Approve and ship" : "Approve"}
           </button>
           {run.waiting!.kind === "ask" && (
             <button className={btn.secondary} onClick={() => setSending(true)}>
@@ -715,6 +719,14 @@ function WaitingBox({ run, onDone }: { run: WorkflowRun; onDone: () => Promise<v
         </div>
       )}
       {err && <p className="mt-2 text-[14px] font-medium text-[#A11B12]">{err}</p>}
+      <Confirm
+        open={sure}
+        title="Ship it: put these changes into your project?"
+        text="Shipping adds the changes to the real version of your project (this is also called merging). If you change your mind later, start a task that says what to undo."
+        yes="Ship it"
+        onYes={() => act("approve")}
+        onClose={() => setSure(false)}
+      />
     </div>
   );
 }
@@ -729,10 +741,10 @@ function Limits({ limits, onChange }: { limits: WfLimits; onChange: (l: WfLimits
       <div className="mt-4 grid gap-6 md:grid-cols-3">
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
-            <Label tip="How many times a Review or Check can send work back before the workflow stops and tells you.">“Needs work” rounds</Label>
-            <span className="font-semibold">{limits.maxLoops}</span>
+            <Label tip="How many times a Review or Check can send the work back to be fixed before the workflow stops and tells you.">Send back to fix, at most</Label>
+            <span className="font-semibold">{limits.maxLoops === 0 ? "never" : limits.maxLoops === 1 ? "once" : limits.maxLoops === 2 ? "twice" : `${limits.maxLoops} times`}</span>
           </span>
-          <input type="range" aria-label="“Needs work” rounds" min={0} max={5} value={limits.maxLoops} onChange={(e) => onChange({ ...limits, maxLoops: Number(e.target.value) }, "loops")} className="h-11 accent-[#15171B]" />
+          <input type="range" aria-label="Send back to fix, at most" min={0} max={5} value={limits.maxLoops} onChange={(e) => onChange({ ...limits, maxLoops: Number(e.target.value) }, "loops")} className="h-11 accent-[#15171B]" />
         </label>
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
@@ -744,7 +756,7 @@ function Limits({ limits, onChange }: { limits: WfLimits; onChange: (l: WfLimits
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
             <Label tip={WF_USAGE_TIP}>Most usage per run</Label>
-            <span className="font-semibold">about {limits.maxUsagePct}%</span>
+            <span className="font-semibold">{limits.maxUsagePct}% of a session</span>
           </span>
           <input type="range" aria-label="Most usage per run" aria-valuetext={`about ${limits.maxUsagePct}%`} min={5} max={100} step={5} value={limits.maxUsagePct} onChange={(e) => onChange({ ...limits, maxUsagePct: Number(e.target.value) }, "usage")} className="h-11 accent-[#15171B]" />
         </label>

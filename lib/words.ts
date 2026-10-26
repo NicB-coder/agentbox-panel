@@ -220,3 +220,13 @@ export function cutWords(s: string, max: number): string {
 // Nic pressed Stop. (Older runs say "You stopped it.", which means the same.)
 export const USER_STOPPED = "Stopped with the Stop button.";
 export const userStop = (reason: string | null | undefined) => reason === USER_STOPPED || reason === "You stopped it.";
+
+// The plan as Nic reads it: no markdown marks, no notes about plan files or plan mode.
+export function planText(p: string): string {
+  return plainText(p)
+    .split("\n")
+    .filter((l) => !/plan mode|plan (file|is saved)|\.claude\/plans|ExitPlanMode|submit (it|the plan) for approval/i.test(l))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}

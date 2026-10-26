@@ -7,7 +7,8 @@ import { BackLink, ErrorBox, InfoTip, Label, post } from "./bits";
 import BriefPicker from "./BriefPicker";
 import { CoachBox, IdeaHelp } from "./Coach";
 import type { SuggestionKey } from "@/lib/coach";
-import ProjectSelect from "./ProjectSelect";
+import StartTaskLink from "./StartTaskLink";
+import ProjectSelect, { defaultProjectOf, rememberProject } from "./ProjectSelect";
 import { useHelperContext } from "./helper/helperStore";
 import { Icon, btn } from "./ui";
 
@@ -18,7 +19,7 @@ type Steps = { from: "default" } | { from: "template"; key: TemplateKey } | { fr
 export default function NewWorkflow({ projects, agents }: { projects: string[]; agents: AgentRef[] }) {
   const router = useRouter();
   const [goal, setGoal] = useState("");
-  const [project, setProject] = useState(projects[0] ?? "");
+  const [project, setProject] = useState(() => (typeof window === "undefined" ? projects.find((p) => p !== "agentbox-panel") ?? projects[0] ?? "" : defaultProjectOf(projects)));
   const [brief, setBrief] = useState<BriefRef | null>(null);
   const [choice, setChoice] = useState<Steps>({ from: "default" });
   const [changing, setChanging] = useState(false);
@@ -82,6 +83,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
       // Named from Nic's own words when he typed some (shorter than the coach's version).
       const name = fromBrief || (!typed.trim() || (autoGoal && typed === autoGoal) ? plan.name : nameFromGoal(goal.trim() || g));
       const w = await post<{ id: number }>("/api/workflows", { name, project, steps, limits: planned.limits });
+      rememberProject(project);
       router.push(`/workflows/${w.id}?new=1`);
     } catch (err) {
       setError({ msg: (err as Error).message, retry: () => make(g) });
@@ -139,6 +141,9 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
       <BackLink href="/workflows">All workflows</BackLink>
       <h1 className="mt-4 text-[30px] font-bold leading-tight tracking-tight sm:text-[36px]">New workflow</h1>
       <p className="mt-2 text-[17px] text-muted">Say what you want. You'll see every step before anything runs.</p>
+      <p className="mt-2 max-w-[860px] text-[15px] text-muted">
+        A workflow is for bigger jobs you want done in the same careful steps every time (build it, have it checked, then ask you). For a quick one-off, <StartTaskLink /> is simpler.
+      </p>
 
       <form onSubmit={next} className="panel mt-8 flex max-w-[860px] flex-col gap-6 p-6 sm:p-8">
         <div className="flex flex-col gap-2">
@@ -181,7 +186,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
         </div>
 
         <div className="max-w-[420px]">
-          <ProjectSelect value={project} onChange={setProject} projects={projects} tip="The code this workflow works on. All its steps share one copy of it." />
+          <ProjectSelect value={project} onChange={setProject} projects={projects} tip="Which app, game or site it works on. All its steps work on one copy of it, so your real project only changes when you say so." />
         </div>
 
         <BriefPicker project={project} value={brief} onChange={setBrief} disabled={busy === "make"} />

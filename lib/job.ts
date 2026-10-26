@@ -35,7 +35,7 @@ export function jobOf(raw: unknown): JobSettings {
 export const FREEDOM_WORDS: Record<Freedom, { label: string; tip: string }> = {
   look: { label: "Look only", tip: "It reads and reports back. It never changes anything." },
   check: { label: "Check with me first", tip: "It writes a short plan and waits for your OK before it changes anything." },
-  auto: { label: "On its own", tip: "It works by itself. A safety checker approves each step, and you always get the result as a pull request." },
+  auto: { label: "On its own", tip: "It works by itself. A safety checker approves each step, and you look at the finished change before it goes into your project." },
 };
 
 export const FREEDOM_ORDER: Freedom[] = ["look", "check", "auto"];

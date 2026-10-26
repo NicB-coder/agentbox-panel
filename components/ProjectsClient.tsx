@@ -157,11 +157,9 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
                     <ul className="mt-1 flex flex-col">
                       {p.prs.slice(0, 5).map((pr) => (
                         <li key={pr.number}>
-                          <a href={`/changes?pr=${encodeURIComponent(pr.url)}`} className="flex min-h-11 items-center gap-2 text-[14px] underline">
-                            <span className="truncate">
-                              #{pr.number} {pr.title}
-                            </span>
-                            {pr.draft && <span className="shrink-0 rounded-full bg-soft px-2 text-[12px] font-semibold text-[#4A4F57] no-underline">not finished yet</span>}
+                          <a href={`/changes?pr=${encodeURIComponent(pr.url)}`} className="flex min-h-11 items-center gap-2 text-[14px]">
+                            <span className="truncate underline">{pr.title}</span>
+                            {pr.draft && <span className="shrink-0 rounded-full bg-soft px-2 text-[12px] font-semibold text-[#4A4F57]">still being built</span>}
                           </a>
                         </li>
                       ))}
@@ -195,7 +193,10 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
             </h3>
             <label className="flex flex-col gap-2">
               <span className="text-[14px] font-semibold">Name</span>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="my-game" className={`${field} min-h-11`} maxLength={60} aria-describedby="new-name-hint" />
+              <input value={newName} onChange={(e) => {
+                  setNewName(e.target.value);
+                  if (error?.where === "create" && error.typo) setError(null);
+                }} placeholder="my-game" className={`${field} min-h-11`} maxLength={60} aria-describedby="new-name-hint" />
             </label>
             <p id="new-name-hint" className="-mt-1 text-[13px] text-muted">
               {slug && slug !== newName.trim() ? `It will be called “${slug}” (small letters and dashes only).` : "Small letters and dashes work best."}
@@ -223,7 +224,10 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
             </h3>
             <label className="flex flex-col gap-2">
               <span className="text-[14px] font-semibold">Its GitHub address</span>
-              <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="github.com/NicB-coder/portfolio" className={`${field} min-h-11`} />
+              <input value={typed} onChange={(e) => {
+                  setTyped(e.target.value);
+                  if (error?.where === "clone" && error.typo) setError(null);
+                }} placeholder="github.com/NicB-coder/portfolio" className={`${field} min-h-11`} />
             </label>
             <button type="submit" className={btn.primary + " mt-auto"} disabled={!!busy || !typed.trim()}>
               {busy === "clone" ? "Copying…" : "Add it"}

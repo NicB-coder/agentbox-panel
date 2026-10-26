@@ -118,7 +118,16 @@ export default function ChangeBox({
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-[14px] text-muted">Try:</span>
           {EXAMPLES.map((x) => (
-            <button key={x} type="button" className="min-h-11 rounded-full border border-[#C9CDD4] bg-white px-4 text-[14px] font-medium hover:bg-soft" onClick={() => setText(x)}>
+            <button
+              key={x}
+              type="button"
+              className="min-h-11 rounded-full border border-[#C9CDD4] bg-white px-4 text-[14px] font-medium hover:bg-soft"
+              onClick={() => {
+                setText(x);
+                ask(x);
+              }}
+              disabled={busy}
+            >
               {x}
             </button>
           ))}

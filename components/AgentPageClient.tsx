@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { AgentPageState } from "@/lib/views";
 import type { Agent, Approval, PillStatus, Run, Step } from "@/lib/types";
-import { ago, clockOf, duration, agentSentence, plainText } from "@/lib/words";
+import { ago, clockOf, duration, agentSentence, plainText, planText, userStop } from "@/lib/words";
 import { FREEDOM_WORDS, freedomOf } from "@/lib/job";
 import { AgentIcon, StatusPill, btn } from "./ui";
 import { usePoll } from "./usePoll";
@@ -23,6 +23,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [archiveAsk, setArchiveAsk] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const { view, schedule, runs, heartbeat } = data;
   const a = view.agent;
   const isHeartbeat = a.kind === "heartbeat";
@@ -76,12 +77,12 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
               </button>
             )}
             {working && (
-              <button className={btn.danger} disabled={!!busy} onClick={() => act("stop", `/api/agents/${id}/stop`)}>
+              <button className={btn.danger} disabled={!!busy} onClick={() => setStopping(true)}>
                 {busy === "stop" ? "Stopping…" : "Stop"}
               </button>
             )}
             <Link href={`/agents/${id}/edit`} className={btn.secondary}>
-              Settings
+              Change this agent
             </Link>
             {!working && (
               <button className={btn.secondary} disabled={!!busy} onClick={() => (a.archived ? act("archive", `/api/agents/${id}/archive`, { archived: false }) : setArchiveAsk(true))}>
@@ -103,6 +104,19 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
         }}
         onClose={() => setArchiveAsk(false)}
       />
+      <Confirm
+        open={stopping}
+        title={`Stop ${a.name}?`}
+        text="It stops what it's doing now. Its work so far is kept, and you can pick up where it stopped later."
+        yes="Stop it"
+        no="Keep it going"
+        danger
+        onYes={() => {
+          setStopping(false);
+          act("stop", `/api/agents/${id}/stop`);
+        }}
+        onClose={() => setStopping(false)}
+      />
       {error && (
         <div className="mt-4">
           <ErrorBox message={error} onRetry={() => setError("")} where={`${a.name}'s page`} />
@@ -112,7 +126,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-6">
           {isHeartbeat ? <HeartbeatNow data={data} /> : <RightNow data={data} act={act} busy={busy} />}
-          {!isHeartbeat && <FollowUp agent={a} disabled={working} />}
+          {!isHeartbeat && <FollowUp agent={a} disabled={working} waiting={data.view.activeRun?.status === "waiting"} />}
           {isHeartbeat ? <HeartbeatHistory data={data} /> : <History runs={runs} reports={data.reports} />}
         </div>
         <aside className="flex flex-col gap-6">
@@ -312,7 +326,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
                   </div>
                 </div>
               ) : (
-                <ErrorBox compact message={last.stopReason ?? "It stopped before finishing."} onRetry={() => act("retry", `/api/runs/${last.id}/retry`)} retryLabel={data.canContinue[last.id] ? "Pick up where it stopped" : undefined} where={`${view.agent.name}: "${last.task}"`} />
+                <ErrorBox compact noFix={userStop(last.stopReason)} message={last.stopReason ?? "It stopped before finishing."} onRetry={() => act("retry", `/api/runs/${last.id}/retry`)} retryLabel={data.canContinue[last.id] ? "Pick up where it stopped" : undefined} where={`${view.agent.name}: "${last.task}"`} />
               )}
             </div>
           )}
@@ -339,7 +353,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
       {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>}
       {!careful && r?.status === "done" && (
         <div className="mt-3">
-          <p className={`text-[15px] font-semibold ${r.verdict === "passed" ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{r.verdict === "passed" ? "Reviewed ✓ Nothing to fix." : "The reviewer found things to fix:"}</p>
+          <p className={`text-[15px] font-semibold ${r.verdict === "passed" ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{r.verdict === "passed" ? "Reviewed ✓ No problems found." : "The reviewer found things to fix:"}</p>
           {r.verdict !== "passed" && r.text && <div className="mt-2 max-h-72 overflow-auto rounded-[14px] bg-soft p-4 text-[14px] leading-relaxed whitespace-pre-wrap">{plainText(r.text)}</div>}
         </div>
       )}
@@ -504,16 +518,6 @@ function AskBox({ approval, act, busy }: { approval: Approval; act: Act; busy: s
   );
 }
 
-// The plan as Nic reads it: no markdown marks, no notes about plan files or plan mode.
-function planText(p: string): string {
-  return plainText(p)
-    .split("\n")
-    .filter((l) => !/plan mode|plan (file|is saved)|\.claude\/plans|ExitPlanMode|submit (it|the plan) for approval/i.test(l))
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 function PlanBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   const [changing, setChanging] = useState(false);
   const [msg, setMsg] = useState("");
@@ -564,7 +568,7 @@ export function openFollowUp(a: Agent, task?: string) {
 }
 
 // Follow-ups continue the same job; they open the shared Start a task panel.
-function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
+function FollowUp({ agent, disabled, waiting }: { agent: Agent; disabled: boolean; waiting?: boolean }) {
   const [task, setTask] = useState("");
   return (
     <section className="panel p-6 sm:p-8" aria-labelledby="give-h">
@@ -572,7 +576,7 @@ function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
         Add a follow-up
       </h2>
       <p className="mt-1 text-[15px] text-muted">
-        {agent.job.kind === "research" ? "Ask more about the same topic. It builds on the earlier report." : "It continues this job: same project, same branch and pull request if one is open."}
+        {agent.job.kind === "research" ? "Ask more about the same topic. It builds on the earlier report." : "It carries on with this same job, so it remembers what it did and keeps working on the same change."}
       </p>
       <form
         className="mt-4 flex flex-col gap-4"
@@ -596,7 +600,7 @@ function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
           <button type="submit" className={btn.primary} disabled={disabled}>
             Next
           </button>
-          {disabled && <span className="text-[14px] text-muted">It's working right now. You can add a follow-up when it's done.</span>}
+          {disabled && <span className="text-[14px] text-muted">{waiting ? "It's waiting for your answer above. You can add a follow-up when it's done." : "It's working right now. You can add a follow-up when it's done."}</span>}
         </div>
       </form>
     </section>
@@ -630,7 +634,7 @@ function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["repo
             return (
               <li key={r.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-semibold leading-snug">{r.task}</p>
+                  <p className="clamp-2 text-[15px] font-semibold leading-snug" title={r.task.slice(0, 600)}>{plainText(r.task.split("\n")[0])}</p>
                   <p className="mt-0.5 text-[14px] text-muted">
                     {new Date(r.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, {clockOf(r.startedAt)}
                     {r.endedAt ? ` · took ${duration(r.endedAt - r.startedAt)}` : ""}
@@ -638,7 +642,7 @@ function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["repo
                   </p>
                   {r.status === "stopped" && (
                     <p className="mt-0.5 text-[14px] text-muted">
-                      {i === 0 ? "What you can do: see Right now at the top of this page." : "Nothing to do here: newer runs came after it."}
+                      {i === 0 ? "What you can do: see Right now at the top of this page." : `Later runs came after it, so there's nothing to do.${/ran out of time/i.test(r.stopReason ?? "") ? " If this keeps happening, give it more time in Change this agent." : ""}`}
                     </p>
                   )}
                   {reports.find((x) => x.runId === r.id) ? (
@@ -783,7 +787,7 @@ function FullLog({ id, runs, heartbeatLog }: { id: number; runs: Run[]; heartbea
                 >
                   {runs.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {clockOf(r.startedAt)} · {r.task.slice(0, 60)}
+                      {new Date(r.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, {clockOf(r.startedAt)} · {r.task.slice(0, 60)}
                     </option>
                   ))}
                 </select>

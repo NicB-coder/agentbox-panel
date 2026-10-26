@@ -83,6 +83,7 @@ export function checkPrompt(goal: string, where: CoachWhere, brief: { name: stri
       : [
           "If it already says what to make, who it's for, the must-haves and what done looks like, set detailed true, no questions, and a short \"Looks good…\" verdict.",
           "A small, specific change (fix one thing, add a line, change a colour or a word) is detailed enough even when it's short: set detailed true and don't ask questions. Only ask when the answers would really change what gets made.",
+          "Choices must be things the panel can do: games and sites are played on Nic's own phone or laptop from the panel; there's no sharing online, so never offer choices like \"Anyone online\" or \"My friends on their phones\".",
           "Otherwise set detailed false and ask 2 to 4 quick questions that would make the biggest difference, each with 3 to 5 short tappable choices (2 to 6 words each, concrete, no \"Other\": the app adds that). Use multi true when several choices can be picked together (like features). For \"make a game\" good questions are: What kind of game? Who plays it? Phone, laptop or both? Anything it must have?",
           "Don't ask about things he already said. verdict: one short line on what's missing.",
         ].join("\n"),
@@ -104,7 +105,8 @@ export function improvePrompt(goal: string, where: CoachWhere, answers: CoachAns
     where === "research"
       ? "The question: … / Why I'm asking: … / What to look at: … / What the report should have: … / Don't: …"
       : "What to make: … / Who it's for: … / Must have: (a few short points) / Done means: (how to tell it works, e.g. opens on a phone, no errors) / Don't: (things to avoid, e.g. no sign-ups, no paid services)",
-    "Keep everything he asked for. Don't invent big extra features. Size it so one overnight run can finish it.",
+    "Keep everything he asked for. Don't invent big extra features. When he skipped the questions or the goal was vague, keep the first version small and simple (one level, a few must-haves), so it can be finished in about an hour; he can ask for more in a follow-up.",
+    "What he makes can be played on his own phone and laptop from the panel, but there's no way to share it online with friends yet, so never promise that friends can open it.",
     "",
     settingsHelp(where, current),
   ].join("\n");

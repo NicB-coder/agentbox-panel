@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
 import { post } from "./bits";
+import { openTaskPanel } from "./TaskPanel";
 import { Icon, btn } from "./ui";
 
 const STEPS = [
@@ -69,9 +70,23 @@ export default function Tour({ done }: { done: boolean }) {
         </h2>
         <p className="text-[16px] leading-relaxed text-muted">{s.text}</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button type="button" className={btn.primary} onClick={() => (last ? end() : setI(i + 1))} autoFocus>
-            {last ? "Let's go" : "Next"}
+          <button
+            type="button"
+            className={btn.primary}
+            onClick={() => {
+              if (!last) return setI(i + 1);
+              end();
+              setTimeout(() => openTaskPanel(), 50);
+            }}
+            autoFocus
+          >
+            {last ? "Start my first task" : "Next"}
           </button>
+          {last && (
+            <button type="button" className={btn.secondary} onClick={end}>
+              Just look around
+            </button>
+          )}
           {i > 0 && (
             <button type="button" className={btn.secondary} onClick={() => setI(i - 1)}>
               Back

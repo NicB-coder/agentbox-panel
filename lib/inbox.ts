@@ -1,3 +1,4 @@
+import { shipsOnOk } from "./wf";
 import {
   getAgent, getRun, getWfRun, getWorkflow, listIdeas, pendingApprovals, recentQuietRuns, recentQuietWfRuns, recentStoppedRuns, recentStoppedWfRuns, runsWithStatus,
   wfRunsWithPrWaiting, wfRunsWithStatus,
@@ -27,6 +28,7 @@ function getWorkflowFromRun(run: Run) {
 }
 
 const userStopped = (reason: string | null) => userStop(reason) || reason === PAUSED_ALL;
+
 
 export function inboxItems(): InboxItem[] {
   const items: InboxItem[] = [];
@@ -71,7 +73,7 @@ export function inboxItems(): InboxItem[] {
     items.push({
       key: `wf${wr.id}`, kind: wr.waiting.kind === "ask" ? "wf_ask" : "wf_ship", at: wr.stepRuns[wr.steps[wr.current]?.id]?.startedAt ?? wr.startedAt,
       title: wr.input || wf.name, who: wf.name, color: "#7048C8", icon: "flow", wfRunId: wr.id, text: wr.waiting.text, prUrl: wr.prUrl,
-      link: `/workflows/${wf.id}?run=${wr.id}`, test: wr.test,
+      link: `/workflows/${wf.id}?run=${wr.id}`, test: wr.test, ships: shipsOnOk(wr), project: wf.project,
     });
   }
 

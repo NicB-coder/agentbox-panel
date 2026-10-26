@@ -196,6 +196,12 @@ function ActionButton({ a, onNavigate }: { a: HelperAction; onNavigate: () => vo
   const [confirm, setConfirm] = useState(false);
   const nav = a.kind === "open" || a.kind === "test_run" || a.kind === "new_task" || a.kind === "coach_goal" || a.kind === "idea_help" || a.kind === "change_workflow";
 
+  if (a.stale)
+    return (
+      <span className="inline-flex min-h-11 items-center rounded-full border border-dashed border-[#C9CDD4] px-4 text-[14px] text-muted">
+        {a.label} · no longer needed
+      </span>
+    );
   async function go() {
     setConfirm(false);
     setErr("");

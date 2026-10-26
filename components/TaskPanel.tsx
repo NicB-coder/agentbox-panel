@@ -255,7 +255,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
           {TASK_FEATURES.research && !follow && (
             <Segmented<JobKind>
               legend="What kind?"
-              tip="Build something: it makes or changes things in a project and gives you a pull request. Research something: it looks things up across many sources and writes you a report with every source linked."
+              tip="Build something: it makes or changes things in a project, and you look at the change before it goes in. Research something: it looks things up across many sources and writes you a report with every source linked."
               value={kind}
               onChange={switchKind}
               options={[
@@ -310,7 +310,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
 
           {follow ? (
             <p className="text-[15px] text-muted">
-              {follow.kind === "research" ? "It builds on the earlier report." : `Same project (${follow.project || "none"}), same branch and pull request if one is open.`}
+              {follow.kind === "research" ? "It builds on the earlier report." : `Same project (${follow.project || "none"}). It carries on with the same change.`}
             </p>
           ) : (
             <ProjectSelect
@@ -381,11 +381,11 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
                   </fieldset>
                 )}
                 <NotifyPicker value={notify} onChange={setNotify} />
-                {freedom !== "look" && <Switch label="Ask me each step" tip="It stops before every command or change and waits for your Allow or Deny. Slow, but you see everything." checked={askEach} onChange={setAskEach} />}
+                {freedom !== "look" && <Switch label="Ask me each step" tip="Even stricter than Check with me first: it stops before every single change and waits for you to press Allow or Deny. Slow, but you see everything." checked={askEach} onChange={setAskEach} />}
                 {TASK_FEATURES.big && !follow && !research && (
                   <Switch
                     label="Big job"
-                    tip="For long jobs that take hours. No time limit: it works milestone by milestone, saves its work after each one, waits out usage limits, and keeps going after restarts. Instead of a time limit it has Most usage per run (about 75% of your weekly usage to start with)."
+                    tip="Only for jobs that take hours; most tasks leave this off. It works in stages, saves its work after each one, and waits out usage limits. Instead of a time limit it may use up to about 75% of your weekly usage (you can change that)."
                     checked={big}
                     onChange={setBig}
                   />
@@ -399,7 +399,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
                     )}
                   </div>
                 )}
-                {research && project && <Switch label="Save the report in the project" tip="Also adds the report to the project's reports folder as a pull request." checked={saveReport} onChange={setSaveReport} />}
+                {research && project && <Switch label="Save the report in the project" tip="Also adds the report to the project's reports folder (you OK it in the Inbox first)." checked={saveReport} onChange={setSaveReport} />}
               </div>
             )}
           </div>
@@ -434,9 +434,13 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
           <button type="button" className={btn.secondary} onClick={() => ref.current?.close()}>
             Cancel
           </button>
-          {!coach && (
+          {!coach ? (
             <button type="submit" className={btn.primary} disabled={busy}>
               {busy ? "Starting…" : scheduled ? "Save" : "Start"}
+            </button>
+          ) : (
+            <button type="button" className={btn.secondary} disabled={busy} onClick={() => coachDone(task)}>
+              {busy ? "Starting…" : `Skip this and ${scheduled ? "save" : "start"}`}
             </button>
           )}
         </div>

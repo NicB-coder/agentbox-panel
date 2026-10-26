@@ -26,6 +26,7 @@ export type ChangesView = {
   files: PrFile[];
   additions: number;
   deletions: number;
+  clash: boolean; // a newer change touched the same lines: it can't go in as it is
   run: { id: number; agentId: number; agentName: string; task: string } | null;
   playable: boolean;
   before: string | null; // preview tokens
@@ -55,11 +56,11 @@ export async function changesView(prUrl: string): Promise<ChangesView | null> {
   if (!validPr(prUrl)) return null;
   const project = await projectFor(prUrl);
   const cwd = (project && projectPath(project)) || os.homedir();
-  const r = await sh("gh", ["pr", "view", prUrl, "--json", "number,title,state,headRefName,body,additions,deletions,files,mergeCommit"], cwd, 30_000);
+  const r = await sh("gh", ["pr", "view", prUrl, "--json", "number,title,state,headRefName,body,additions,deletions,files,mergeCommit,mergeable"], cwd, 30_000);
   if (!r.ok) return null;
   const pr = JSON.parse(r.out) as {
     number: number; title: string; state: ChangesView["state"]; headRefName: string; body: string; additions: number; deletions: number;
-    files: PrFile[]; mergeCommit: { oid: string } | null;
+    files: PrFile[]; mergeCommit: { oid: string } | null; mergeable?: string;
   };
   const run = runForPr(prUrl);
   const agent = run && getAgent(run.agentId);
@@ -90,7 +91,7 @@ export async function changesView(prUrl: string): Promise<ChangesView | null> {
     careful: carefulLine(run?.extra.flow) ?? carefulLine(first?.extra.flow), review: review ? { status: review.status, verdict: review.verdict, text: review.text } : null,
     files: pr.files.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })), additions: pr.additions, deletions: pr.deletions,
     run: run && agent ? { id: run.id, agentId: agent.id, agentName: agent.name, task: run.task } : null,
-    playable, before, after, page,
+    playable, before, after, page, clash: pr.state === "OPEN" && pr.mergeable === "CONFLICTING",
   };
 }
 

@@ -1,12 +1,21 @@
-import { busyChat, cleanContext, outOfUsage, recoverHelper } from "@/lib/helper";
+import { actionFor, busyChat, cleanContext, outOfUsage, recoverHelper } from "@/lib/helper";
 import { createChat, getChat, latestChat, listChats, listMessages } from "@/lib/helperDb";
 import { suggestions } from "@/lib/helperSuggest";
-import type { HelperContext, HelperState } from "@/lib/helperTypes";
+import type { HelperContext, HelperMessage, HelperState } from "@/lib/helperTypes";
 
 export const dynamic = "force-dynamic";
 
 let recovered = false;
 const STALE_MS = 3 * 3600_000;
+
+// Buttons in older replies that act on something (Approve plan, Allow, Merge…) are checked again:
+// once that plan was answered or that run stopped, they show as no longer needed instead of failing.
+const LIVE_KINDS = new Set(["retry_run", "approve_plan", "allow", "deny", "approve_wfrun", "ship_wfrun", "merge_pr", "resume_wfrun"]);
+function freshen(m: HelperMessage): HelperMessage {
+  if (m.role !== "helper" || !m.meta.actions?.length) return m;
+  const actions = m.meta.actions.map((a) => (LIVE_KINDS.has(a.kind) && !actionFor(a.kind, a.ref) ? { ...a, stale: true } : a));
+  return { ...m, meta: { ...m.meta, actions } };
+}
 
 function state(chatId?: number | null): HelperState {
   if (!recovered) {
@@ -17,7 +26,7 @@ function state(chatId?: number | null): HelperState {
   // After a long break the bubble opens on a clean page instead of an old conversation
   // (it's still under "Earlier chats"). A reply that's still being written is always shown.
   if (!chatId && chat && Date.now() - chat.updatedAt > STALE_MS && !busyChat(chat.id)) chat = null;
-  return { chat, messages: chat ? listMessages(chat.id) : [], chats: listChats(), outOfUsage: outOfUsage() };
+  return { chat, messages: chat ? listMessages(chat.id).map(freshen) : [], chats: listChats(), outOfUsage: outOfUsage() };
 }
 
 // The conversation the bubble shows (the latest one, unless a chat is picked).

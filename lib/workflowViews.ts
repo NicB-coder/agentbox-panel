@@ -19,7 +19,9 @@ export function workflowTile(w: Workflow, agents = agentRefs()): WorkflowTile {
   const runs = listWfRuns(w.id, 1);
   const last = runs[0];
   const active = activeWfRun(w.id);
-  let status: PillStatus = w.enabled ? "on" : "off";
+  // One you start by hand is simply "Ready": On/Off only matters for ones that start by themselves.
+  const manual = (w.steps[0]?.trigger ?? "manual") === "manual";
+  let status: PillStatus = manual ? "ready" : w.enabled ? "on" : "off";
   let note: string | null = null;
   let current: WorkflowTile["current"] = null;
   if (active) {

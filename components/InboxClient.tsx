@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { InboxState } from "@/lib/inbox";
 import type { InboxItem } from "@/lib/types";
-import { ago, plainText } from "@/lib/words";
+import { ago, plainText, planText } from "@/lib/words";
 import { Confirm, EmptyState, ErrorBox, InfoTip, PageTitle, post } from "./bits";
 import { refreshHeader } from "./Header";
 import { openNewTask } from "./TaskPanel";
@@ -58,7 +58,7 @@ export default function InboxClient({ initial, workflows }: { initial: InboxStat
     <div>
       <PageTitle
         title="Inbox"
-        sub={n || fresh ? [n ? `${n} ${n === 1 ? "thing needs" : "things need"} you` : "", fresh ? `${fresh} new` : ""].filter(Boolean).join(" · ") + ". Newest first." : "Everything that needs you shows up here."}
+        sub={n || fresh ? `${n + fresh} for you: ${[n ? `${n} ${n === 1 ? "needs" : "need"} you` : "", fresh ? `${fresh} new to read` : ""].filter(Boolean).join(" · ")}. Newest first.` : "Everything that needs you shows up here."}
       />
       <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Show">
         {FILTERS.map(([k, label]) => (
@@ -80,7 +80,7 @@ export default function InboxClient({ initial, workflows }: { initial: InboxStat
       )}
       <section aria-labelledby="needs-h">
         <h2 id="needs-h" className="sr-only">
-          Needs you
+          {filter === "shipped" ? "Done & shipped" : filter === "reports" ? "Reports" : filter === "needs" ? "Needs you" : "Everything for you"}
         </h2>
         {rows.length === 0 ? (
           <EmptyState
@@ -88,10 +88,10 @@ export default function InboxClient({ initial, workflows }: { initial: InboxStat
             title={filter === "shipped" ? "Nothing shipped this week yet" : filter === "reports" ? "No reports yet" : "Nothing needs you. Nice."}
             text={
               filter === "shipped"
-                ? "When a pull request is merged, it shows up here with what changed and a Play button."
+                ? "When a change goes into your project, it shows up here with what changed and a Play button."
                 : filter === "reports"
                   ? "Start a task and pick Research something. Its report lands here."
-                  : "When an agent asks for your OK, opens a pull request, or something goes wrong, it lands here."
+                  : "When an agent asks for your OK, finishes a change for you to look at, or something goes wrong, it lands here."
             }
             action={
               <Link href="/" className={btn.secondary}>
@@ -172,7 +172,7 @@ const KIND_WORD: Record<InboxItem["kind"], string> = {
   pr: "Pull request ready",
   failed: "Stopped",
   wf_ask: "Waiting for you",
-  wf_ship: "Ready to ship",
+  wf_ship: "Ready to go in",
   wf_failed: "Workflow stopped",
   wf_done: "Finished",
   quiet: "Didn't do anything",
@@ -214,7 +214,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
             </p>
           )}
           {it.kind === "plan" && (
-            <div className={`mt-3 overflow-hidden rounded-[14px] bg-soft p-4 text-[15px] leading-relaxed whitespace-pre-wrap ${more ? "" : "max-h-40"}`}>{it.text}</div>
+            <div className={`mt-3 overflow-hidden rounded-[14px] bg-soft p-4 text-[15px] leading-relaxed whitespace-pre-wrap ${more ? "" : "max-h-40"}`}>{planText(it.text)}</div>
           )}
           {it.kind === "pr" && it.careful && <p className="mt-2 text-[15px] font-semibold text-[#1E6B34]">{it.careful}</p>}
           {it.kind === "pr" && !it.careful && it.review && <ReviewFindings review={it.review} />}
@@ -361,9 +361,20 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               )}
               {(it.kind === "wf_ask" || it.kind === "wf_ship") && (
                 <>
-                  <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/answer`, { action: "approve" })}>
-                    {it.kind === "wf_ship" ? "Ship it" : "Approve"}
+                  <button className={btn.primary} disabled={b} onClick={() => (it.ships ? setConfirm(true) : act(it.key, `/api/workflow-runs/${it.wfRunId}/answer`, { action: "approve" }))}>
+                    {it.kind === "wf_ship" ? "Ship it" : it.ships ? "Approve and ship" : "Approve"}
                   </button>
+                  <Confirm
+                    open={confirm}
+                    title="Ship it: put these changes into your project?"
+                    text="Shipping adds the changes to the real version of your project (this is also called merging). If you change your mind later, start a task that says what to undo."
+                    yes="Ship it"
+                    onYes={() => {
+                      setConfirm(false);
+                      act(it.key, `/api/workflow-runs/${it.wfRunId}/answer`, { action: "approve" });
+                    }}
+                    onClose={() => setConfirm(false)}
+                  />
                   {it.kind === "wf_ask" && (
                     <button className={btn.secondary} disabled={b} onClick={() => setNoting(true)}>
                       Send back
@@ -456,7 +467,7 @@ function ReviewFindings({ review }: { review: NonNullable<Extract<InboxItem, { k
   const ok = review.verdict === "passed";
   return (
     <div className="mt-2">
-      <p className={`text-[15px] font-semibold ${ok ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{ok ? "Reviewed ✓ Nothing to fix." : "The reviewer found things to fix."}</p>
+      <p className={`text-[15px] font-semibold ${ok ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{ok ? "Reviewed ✓ No problems found." : "The reviewer found things to fix."}</p>
       {review.text && (
         <>
           <button className={btn.link + " !text-[14px]"} aria-expanded={open} onClick={() => setOpen(!open)}>

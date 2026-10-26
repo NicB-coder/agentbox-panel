@@ -9,7 +9,7 @@ export const STEP_INFO: Record<StepType, { title: string; icon: string; color: s
   start: { title: "Start", icon: "play", color: "#2B8A3E", help: "What starts the workflow." },
   agent: { title: "Build", icon: "hammer", color: "#2F4FD8", help: "An agent does a piece of the work: builds or changes something, or just takes a look." },
   research: { title: "Research", icon: "book", color: "#7048C8", help: "Looks things up and writes research.md for the later steps to use." },
-  review: { title: "Review", icon: "eye", color: "#0F7B6C", help: "A reviewer checks the work against the task and the research. Passed, or needs work." },
+  review: { title: "Review", icon: "eye", color: "#0F7B6C", help: "A second AI checks the work against what you asked for. It either passes it, or sends it back to be fixed." },
   check: { title: "Check", icon: "check", color: "#0E7490", help: "Hard tests, not opinions: tests pass, the page loads, no errors." },
   ask: { title: "Ask me", icon: "hand", color: "#B45309", help: "Waits for you in the Inbox: Approve, Send back or Stop." },
   ship: { title: "Ship", icon: "rocket", color: "#BE185D", help: "Merges the pull request into main." },
@@ -212,10 +212,10 @@ function joinAnd(xs: string[]) {
 export type TemplateKey = "build-review-ship" | "nightly-site-check" | "research-report" | "issues-to-prs";
 
 export const TEMPLATES: { key: TemplateKey; name: string; blurb: string }[] = [
-  { key: "build-review-ship", name: "Build → Review → Ship", blurb: "Research an idea, build it, get it reviewed and tested, then ship it after you say yes." },
-  { key: "nightly-site-check", name: "Nightly site check", blurb: "Every night it looks at your site in a real browser. If something's wrong, you get a message and a GitHub issue." },
-  { key: "research-report", name: "Research report", blurb: "Research a topic and write a short report as a pull request in a reports folder." },
-  { key: "issues-to-prs", name: "Ideas to pull requests", blurb: "When a GitHub issue gets the “agent” label, it gets built, a reviewer checks it, then it asks you." },
+  { key: "build-review-ship", name: "Build → Review → Ship", blurb: "Look things up first, build it, have it checked and tested, then put it in after you say yes." },
+  { key: "nightly-site-check", name: "Nightly site check", blurb: "Every night it opens your site in a real browser and tells you if something's broken." },
+  { key: "research-report", name: "Research report", blurb: "Look a topic up and write you a short report, saved in your project." },
+  { key: "issues-to-prs", name: "Ideas to pull requests", blurb: "For people who use GitHub: when an idea there gets the “agent” label, it gets built, checked, then it asks you." },
 ];
 
 export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: string): WorkflowInput {
@@ -428,4 +428,10 @@ export function workflowProblems(w: WorkflowInput, agents: AgentRef[], projects:
 export function stepIconOf(s: WfStep): string {
   if (s.type === "agent" && s.agentId == null && (s.freedom ?? (s.mode === "look" ? "look" : "auto")) === "look") return "eye";
   return STEP_INFO[s.type].icon;
+}
+
+// Pressing OK here puts the changes into the real project (a Ship step, or an Ask right before one): it asks first.
+export function shipsOnOk(wr: { waiting: { kind: string } | null; steps: { type: string }[]; current: number; test: boolean }): boolean {
+  if (wr.test || !wr.waiting) return false;
+  return wr.waiting.kind === "ship" || (wr.waiting.kind === "ask" && wr.steps[wr.current + 1]?.type === "ship");
 }

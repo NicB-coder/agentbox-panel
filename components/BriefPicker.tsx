@@ -143,7 +143,7 @@ export default function BriefPicker({
           }}
           className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[14px] border-2 border-dashed px-4 py-2 text-[15px] text-muted ${over ? "border-ink bg-soft" : "border-[#B9BEC6]"}`}
         >
-          <span>{busy ? "Attaching it…" : "Drag a text file (.md or .txt) here, or"}</span>
+          <span>{busy ? "Attaching it…" : <><span className="max-sm:hidden">Drag a text file (.md or .txt) here, or</span><span className="sm:hidden">A text file (.md or .txt):</span></>}</span>
           <button type="button" className={btn.link} onClick={() => fileRef.current?.click()} disabled={disabled || busy}>
             Upload a file
           </button>
@@ -171,7 +171,16 @@ export default function BriefPicker({
       />
 
       {pick && !value && (
-        <div className="rounded-[14px] border border-line p-3">
+        <div
+          className="rounded-[14px] border border-line p-3"
+          onKeyDown={(e) => {
+            // Escape closes this list only, never the pop-up it's in (and what's typed there).
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            e.stopPropagation();
+            setPick(null);
+          }}
+        >
           {pick.length === 0 ? (
             <p className="text-[14px] text-muted">There are no .md or .txt files in {project}. Upload one instead.</p>
           ) : (

@@ -124,6 +124,8 @@ export function CoachBox(props: {
       const r = await post<CoachCheck & { skip?: string }>("/api/coach", { step: "check", goal, where, brief: briefArg, current });
       if (!alive.current) return;
       if (r.skip) return onDone(goal);
+      // Nothing to add and nothing to suggest: carry on, so Start doesn't need pressing twice.
+      if (r.detailed && /^looks good/i.test(r.verdict) && r.suggestions.length === 0) return onDone(goal);
       setPhase(r.detailed ? { at: "good", check: r } : { at: "questions", check: r });
     } catch (e) {
       if (alive.current) setPhase({ at: "error", message: (e as Error).message, retry: check });
@@ -329,7 +331,7 @@ export function IdeaHelp({ where, onPick, onClose }: { where: CoachWhere; onPick
       )}
       {ideas && ideas.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-[15px] text-muted">Each one fits in one overnight run. Tap one to put it in the goal box.</p>
+          <p className="text-[15px] text-muted">Each one is small enough to finish in one go. Tap one to put it in the goal box.</p>
           <ul className="grid gap-3 sm:grid-cols-2">
             {ideas.map((i) => (
               <li key={i.title}>

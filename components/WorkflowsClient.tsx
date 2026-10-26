@@ -63,7 +63,7 @@ function Tile({ t }: { t: WorkflowTile }) {
       </div>
       <div className="flex min-h-0 flex-1 flex-col justify-center gap-2 py-4">
         <span className="flex flex-wrap items-center gap-x-1 gap-y-1.5" aria-hidden="true">
-          {t.chips.map((c, i) => (
+          {(t.chips.length > 5 ? t.chips.slice(0, 4) : t.chips).map((c, i) => (
             <span key={i} className="flex items-center gap-1">
               {i > 0 && <span className="text-[11px] text-[#9AA0A8]">→</span>}
               <span
@@ -76,6 +76,7 @@ function Tile({ t }: { t: WorkflowTile }) {
               </span>
             </span>
           ))}
+          {t.chips.length > 5 && <span className="text-[12px] font-semibold text-muted">→ +{t.chips.length - 4} more</span>}
         </span>
         {t.current ? (
           <>
@@ -91,7 +92,7 @@ function Tile({ t }: { t: WorkflowTile }) {
           </>
         ) : (
           <>
-            <p className="clamp-3 text-[15px] font-semibold leading-snug">{t.sentence}</p>
+            <p className="clamp-3 text-[15px] font-semibold leading-snug" title={t.sentence}>{t.sentence}</p>
             {t.note && <p className={`clamp-2 text-[14px] leading-snug ${t.status === "needs" ? "font-semibold text-[#8A4600]" : "text-muted"}`}>{t.note}</p>}
           </>
         )}

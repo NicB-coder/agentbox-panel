@@ -28,7 +28,16 @@ function currentContext(path: string): HelperContext {
     wfRunId: run > 0 ? run : undefined,
     ...helperExtra(),
     errors: screenErrors(),
+    screen: screenText(),
   };
+}
+
+// The page's visible words, squeezed (the Helper reads statuses like "Connected" from it).
+function screenText(): string | undefined {
+  const main = document.querySelector("main");
+  if (!main) return undefined;
+  const t = (main as HTMLElement).innerText.replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+  return t ? t.slice(0, 3000) : undefined;
 }
 
 const isPhone = () => window.matchMedia("(max-width: 1023px)").matches;
@@ -98,7 +107,7 @@ export default function HelperBubble() {
   const load = useCallback(
     async (chat?: number | null) => {
       const ctx = currentContext(path);
-      const q = new URLSearchParams({ ctx: JSON.stringify({ ...ctx, title: undefined }) });
+      const q = new URLSearchParams({ ctx: JSON.stringify({ ...ctx, title: undefined, screen: undefined }) });
       if (chat) q.set("chat", String(chat));
       try {
         const r = await fetch(`/api/helper?${q}`, { cache: "no-store" });
@@ -171,7 +180,7 @@ export default function HelperBubble() {
       return;
     }
     const t = setTimeout(async () => {
-      const q = new URLSearchParams({ only: "suggestions", ctx: JSON.stringify({ ...currentContext(path), title: undefined }) });
+      const q = new URLSearchParams({ only: "suggestions", ctx: JSON.stringify({ ...currentContext(path), title: undefined, screen: undefined }) });
       try {
         const r = await fetch(`/api/helper?${q}`, { cache: "no-store" });
         if (r.ok) {
@@ -505,9 +514,9 @@ export default function HelperBubble() {
               <button
                 type="button"
                 onClick={() => toEnd(true)}
-                className="absolute -top-14 left-1/2 z-10 inline-flex min-h-11 -translate-x-1/2 items-center gap-1.5 rounded-full bg-ink px-4 text-[14px] font-semibold text-white shadow-[0_6px_18px_rgba(21,23,27,0.25)] hover:bg-black"
+                className="mb-2 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[14px] bg-[#EEF1FD] px-4 text-[14px] font-semibold text-[#2A3F9E] hover:bg-[#E2E7FB]"
               >
-                <span aria-hidden="true">↓</span> New text
+                <span aria-hidden="true">↓</span> More of the answer below
               </button>
             )}
             {out && (
@@ -558,9 +567,9 @@ export default function HelperBubble() {
                 </svg>
               </button>
             </form>
-            {!out && suggestions.length > 0 && (
+            {!out && suggestions.length > 0 && !input.trim() && (
               <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Suggested questions" role="group">
-                {suggestions.map((s) => (
+                {(messages.length ? suggestions.slice(0, 2) : suggestions).map((s) => (
                   <button key={s} type="button" disabled={busy} onClick={() => pickSuggestion(s)} className="min-h-11 rounded-full border border-[#C9CDD4] bg-white px-3 text-[14px] font-medium hover:bg-soft disabled:opacity-50">
                     {s}
                   </button>

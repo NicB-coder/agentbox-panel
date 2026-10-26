@@ -10,8 +10,8 @@ import { field } from "./ui";
 // The shared controls of the "Start a task" panel, the job settings and workflow steps.
 // Short labels only; every explanation lives in an ⓘ bubble.
 
-export const FREEDOM_TIP = "How much it may do on its own. Look only: it reads and reports, never changes anything. Check with me first: it shows you a short plan and waits for your OK. On its own: it works by itself and you get the result as a pull request to look at.";
-export const CAREFUL_TIP = "Careful: after it builds, a second AI (a different model) reviews the work, it fixes what's found (up to 2 rounds), polishes it, and it's checked once more before it reaches your Inbox. Quick: just does it. Good for tiny tasks.";
+export const FREEDOM_TIP = "How much it may do on its own. Look only: it reads and reports, never changes anything. Check with me first: it shows you a short plan and waits for your OK. On its own: it works by itself, and you look at the finished change before it goes into your project.";
+export const CAREFUL_TIP = "Careful: after it builds, a second AI reviews the work, it fixes what's found (up to 2 rounds), polishes it, and it's checked once more before it reaches your Inbox. Quick: just does it, with one fast check by a second AI at the end. Good for tiny tasks.";
 
 export function FreedomPicker({ value, onChange, legend = "Freedom", tip = FREEDOM_TIP }: { value: Freedom; onChange: (v: Freedom) => void; legend?: string; tip?: string }) {
   return <Segmented<Freedom> legend={legend} tip={tip} value={value} onChange={onChange} options={FREEDOM_ORDER.map((f) => ({ value: f, label: FREEDOM_WORDS[f].label }))} />;
@@ -36,7 +36,7 @@ export function ModelPicker({ value, onChange }: { value: Model; onChange: (v: M
   return (
     <Segmented<Model>
       legend="Model"
-      tip="Fast (Sonnet) is good for most jobs. Smartest (Opus) thinks harder but takes longer and uses more of your Claude usage."
+      tip="Fast is good for most jobs. Smartest thinks harder, but takes longer and uses more of your Claude usage."
       value={value}
       onChange={onChange}
       options={[
@@ -87,7 +87,7 @@ export function NotifyPicker({ value, onChange }: { value: NotifyOn[]; onChange:
   };
   return (
     <fieldset>
-      <Label as="legend" tip="agentbox can send you a message on Discord (a chat app) when these things happen. Tick as many as you like, or Never for no messages.">
+      <Label as="legend" tip="agentbox can send you a message on Discord (a chat app) when these things happen, if messages are set up in Settings. Tick as many as you like, or Never for no messages.">
         Tell me when
       </Label>
       <div className="flex flex-wrap gap-2">

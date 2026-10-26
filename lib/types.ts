@@ -350,7 +350,7 @@ export type InboxItem =
   | { key: string; kind: "plan"; at: number; title: string; who: string; color: string; icon: string; runId: number; text: string; link: string }
   | { key: string; kind: "pr"; at: number; title: string; who: string; color: string; icon: string; runId: number; prUrl: string; text: string; link: string; careful: string | null; reviewedHere: boolean; review: RunExtra["review"] | null; quick: boolean }
   | { key: string; kind: "failed"; at: number; title: string; who: string; color: string; icon: string; runId: number; agentId: number; text: string; link: string; canRetry: boolean; canContinue: boolean; stopKind: "time" | "budget" | "signin" | "error"; signIn?: "claude" | "github" }
-  | { key: string; kind: "wf_ask" | "wf_ship"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string | null; link: string; test: boolean }
+  | { key: string; kind: "wf_ask" | "wf_ship"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string | null; link: string; test: boolean; ships: boolean; project: string }
   | { key: string; kind: "wf_done"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string; link: string; test: boolean }
   | { key: string; kind: "wf_failed"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; workflowId: number; text: string; link: string }
   | { key: string; kind: "file_pr"; at: number; title: string; who: string; color: string; icon: string; fileId: number; project: string; file: string; prUrl: string; text: string; link: string }

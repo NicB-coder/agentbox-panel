@@ -1,4 +1,4 @@
-// The welcome tour, clicked through for real at laptop and phone width: Next, Back, Skip, Let's go, replay from
+// The welcome tour, clicked through for real at laptop and phone width: Next, Back, Skip, Just look around, replay from
 // Help, and the Helper bubble on top of it (clickable, covering none of its buttons). Dev copy only.
 // Usage: BASE_URL=http://127.0.0.1:3253 node scripts/qa/tour.mjs [shotsDir]
 import { chromium } from "playwright";
@@ -52,8 +52,8 @@ for (const [size, viewport] of [["laptop", { width: 1366, height: 900 }], ["phon
   await d.getByRole("button", { name: "Back" }).click();
   check(await d.getByText("Workflows chain steps together").isVisible(), `${size}: Back goes back one`);
   await d.getByRole("button", { name: "Next" }).click();
-  await d.getByRole("button", { name: "Let's go" }).click();
-  check(!(await d.isVisible()) && (await tourDone(page)), `${size}: Let's go closes it and it's remembered`);
+  await d.getByRole("button", { name: "Just look around" }).click();
+  check(!(await d.isVisible()) && (await tourDone(page)), `${size}: Just look around closes it and it's remembered`);
   await page.reload();
   await page.waitForTimeout(1000);
   check((await page.locator("dialog[open]").count()) === 0, `${size}: it doesn't come back on the next visit`);
