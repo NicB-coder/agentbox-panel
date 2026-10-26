@@ -317,10 +317,10 @@ function UsageMeter({ u }: { u: UsageView }) {
         aria-controls={panelId}
         aria-label={`${long}. Show usage details`}
         onClick={() => setOpen(!open)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full border px-3 text-[14px] font-semibold whitespace-nowrap"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full border px-2.5 text-[14px] font-semibold whitespace-nowrap sm:px-3"
         style={{ background: tone.bg, color: tone.fg, borderColor: tone.border }}
       >
-        <span className="relative h-1.5 w-8 overflow-hidden rounded-full bg-[#D5D9DF] sm:w-10" aria-hidden="true">
+        <span className="relative hidden h-1.5 w-10 overflow-hidden rounded-full bg-[#D5D9DF] sm:block" aria-hidden="true">
           <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${s.limited ? 100 : Math.min(100, pct ?? 0)}%`, background: tone.bar }} />
         </span>
         <span className="hidden 2xl:inline">{long}</span>
