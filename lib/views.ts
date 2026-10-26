@@ -44,7 +44,8 @@ function heartbeatView(a: Agent, hb: HeartbeatInfo): AgentView {
       ? `Last check-in at ${clockOf(last.at)}${last.reply ? `: “${last.reply}”` : "."}`
       : "No check-ins yet.";
   // It just shows agentbox is alive; say so, so nobody thinks they have to look after it.
-  const calm = status === "stopped" ? summary : `Shows this Mac is awake and answering. Nothing for you to do. ${summary}`;
+  const out = hb.todayRuns.filter((r) => r.outOfUsage).length;
+  const calm = status === "stopped" ? summary : `Shows this Mac is awake and answering. Nothing for you to do.${out ? ` (${out} of today's check-ins came while Claude was out of usage.)` : ` ${summary}`}`;
   return {
     agent: a,
     status,

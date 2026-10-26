@@ -88,7 +88,7 @@ export default function MachineClient({ initial }: { initial: MachineInfo }) {
         </h2>
         <ul className="mt-3 divide-y divide-line">
           <Account name="Claude" ok={m.claude.signedIn} text={m.claude.text} cmd={SIGN_IN.claude} how="Opens a sign-in link. Open it, sign in with your Claude account, and paste the code back if it asks." />
-          <Account name="GitHub (the bot)" ok={m.github.signedIn} text={m.github.text} cmd={SIGN_IN.github} how="Shows a one-time code. Open github.com/login/device signed in as the bot, and type the code." />
+          <Account name="GitHub (agentbox's own account)" ok={m.github.signedIn} text={m.github.text} cmd={SIGN_IN.github} how="Shows a one-time code. Open github.com/login/device signed in as the bot, and type the code." />
           <li className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-[15px] font-semibold">Discord messages</span>
             <span className="text-[15px] text-muted">
@@ -96,7 +96,7 @@ export default function MachineClient({ initial }: { initial: MachineInfo }) {
             </span>
           </li>
           <li className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-[15px] font-semibold">People logged in to this Mac</span>
+            <span className="text-[15px] font-semibold">Accounts signed in at this Mac's screen</span>
             <span className="text-[15px] text-muted">{m.macUsers.length ? m.macUsers.join(", ") : "Nobody at the screen"}</span>
           </li>
         </ul>

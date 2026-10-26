@@ -485,7 +485,7 @@ export default function HelperBubble() {
                     <li>tell you what your agents are doing, and why something stopped,</li>
                     <li>help you make a new agent or workflow.</li>
                   </ul>
-                  <p className="text-[14px] text-muted">I only look and suggest. Nothing happens unless you click.</p>
+                  <p className="text-[14px] text-muted">I only look and suggest. Nothing happens unless you click. Each answer uses a little of your Claude usage.</p>
                 </div>
               ) : (
                 <ol className="flex flex-col gap-4" aria-label="Conversation">

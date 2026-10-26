@@ -28,8 +28,8 @@ export default function DiscordBox() {
         Discord messages
         <InfoTip text="Agents and workflows message you on Discord when you ticked Tell me. Each job has its own Tell me when, in its settings." label="Discord messages" />
       </h2>
-      <Switch label="Ping me when something ships" tip="Adds @here so your phone makes a sound, instead of the message arriving quietly." checked={ping.shipped} onChange={(v) => save({ shipped: v })} />
-      <Switch label="Ping me when something needs my OK" tip="Adds @here to messages about plans and approvals waiting for you." checked={ping.needs_ok} onChange={(v) => save({ needs_ok: v })} />
+      <Switch label="Ping me when something ships" tip="Makes your phone buzz for it, instead of the message arriving quietly." checked={ping.shipped} onChange={(v) => save({ shipped: v })} />
+      <Switch label="Ping me when something needs my OK" tip="Makes your phone buzz when a plan or a question is waiting for you." checked={ping.needs_ok} onChange={(v) => save({ needs_ok: v })} />
       <div>
         <button
           className={btn.secondary}

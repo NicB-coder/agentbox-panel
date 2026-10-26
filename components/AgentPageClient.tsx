@@ -740,7 +740,7 @@ function HeartbeatHistory({ data }: { data: AgentPageState }) {
               <p className="text-[15px] font-semibold">
                 {new Date(r.at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}, {clockOf(r.at)}
               </p>
-              {r.reply && <p className="text-[14px] text-muted">{r.reply}</p>}
+              {r.reply && <p className="text-[14px] text-muted">{r.outOfUsage ? "Claude was out of usage, so it could only say that." : r.reply}</p>}
             </div>
             <div>
               <StatusPill status={r.outOfUsage ? "needs" : r.onTime ? "done" : "needs"} label={r.outOfUsage ? "Out of usage" : r.onTime ? "On time" : "Late"} />

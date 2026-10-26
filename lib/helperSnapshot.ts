@@ -70,6 +70,9 @@ export function runLine(r: Run): string {
   ];
   if (r.status === "working" && r.activity) parts.push(`right now: ${cut(r.activity, 160)}`);
   if (r.status === "queued" && r.activity) parts.push(cut(r.activity, 120));
+  // The real reason it waits (never guess one): usage, a restart, or a sign-in.
+  if (r.status === "queued" && r.extra.resume)
+    parts.push(`why it's waiting: ${r.extra.resume.why === "usage" ? "Claude said the usage limit was reached (this can differ from the meter, which updates every few minutes)" : r.extra.resume.why === "restart" ? "the panel restarted while it worked" : "a sign-in is needed"}; it carries on by itself at ${clockOf(r.extra.resume.until)}`);
   if (r.stopReason) parts.push(`why it stopped: ${cut(r.stopReason, 300)}`);
   if (r.prUrl) parts.push(`pull request: ${r.prUrl}`);
   if (r.steps.length) parts.push(`steps: ${stepsLine(r.steps)}`);

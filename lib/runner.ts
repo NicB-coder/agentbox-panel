@@ -1008,7 +1008,7 @@ async function next(runId: number, phase: Phase, text: string, session: string |
     const nextIndex = big.index + 1;
     patchFlow(runId, { big: { ...big, milestones, handoff: handoff.slice(0, 6000) || big.handoff, index: nextIndex }, subSteps: [] });
     await commitAll(getRun(runId)!, `Milestone ${big.index + 1}: ${big.milestones[big.index].title}`);
-    await checkpoint(runId, `finished milestone ${big.index + 1} of ${big.milestones.length}: ${big.milestones[big.index].title}. ${summary}`);
+    await checkpoint(runId, `finished part ${big.index + 1} of ${big.milestones.length}: ${big.milestones[big.index].title}. ${summary}`);
     if (nextIndex < big.milestones.length) return startMilestone(runId);
     patchFlow(runId, { workSession: session });
     updateRun(runId, { result: `Finished all ${big.milestones.length} milestones: ${big.milestones.map((m) => m.title).join(", ")}.` });

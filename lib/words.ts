@@ -135,7 +135,7 @@ export function agentSentence(a: Pick<AgentInput, "name" | "project" | "schedule
   if (!a.enabled) return `${name} is switched off, so it won't run until you turn it back on.`;
 
   let when: string;
-  if (a.scheduleKind === "manual") when = "When you start it";
+  if (a.scheduleKind === "manual") when = "Each time you start it";
   else if (a.scheduleKind === "hourly") when = "Every hour";
   else if (a.scheduleKind === "daily") when = `Every ${partOfDay(a.scheduleTime)} at ${clock(a.scheduleTime)}`;
   else {
