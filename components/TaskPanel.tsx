@@ -100,6 +100,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
   const draft = useRef("");
   const started = useRef(false);
   const [restored, setRestored] = useState(false);
+  const [goalHint, setGoalHint] = useState("");
   const [simple, setSimple] = useState(false);
   // While it's open, the Helper sees exactly what's in it and can fill the goal box (on Nic's click).
   useHelperContext(
@@ -156,6 +157,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
       setMissing(null);
       setSaveReport(false);
       setError("");
+      setGoalHint("");
       // Follow-ups and ideas Nic already picked don't need coaching.
       setCoached(!!f || !!d.ideaId);
       setCoach(!!d.coach && !f && !!(d.task ?? "").trim());
@@ -180,8 +182,16 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
   // Start: the prompt coach checks the task first (once), then it starts.
   function next(e?: React.FormEvent) {
     e?.preventDefault();
-    if (task.trim().length < 3 && !brief) return setError(kind === "research" ? "Write your question first." : "Write what it should do first.");
-    if (!project && kind !== "research") return setError("Pick a project first.");
+    // A box left empty isn't an error: say so right under the box and put the cursor there.
+    if (task.trim().length < 3 && !brief) {
+      setGoalHint(kind === "research" ? "Write your question here first." : "Write what it should do here first. One sentence is enough.");
+      const el = document.getElementById(taskId);
+      el?.focus();
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    if (!project && kind !== "research") return setGoalHint("Pick a project below first.");
+    setGoalHint("");
     if (coached) return start();
     setError("");
     setIdeas(false);
@@ -189,11 +199,19 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
     setCoach(true);
   }
 
+  // Started from the coach: wait one render, so settings it just turned on (like Smartest) are used.
+  const [startWith, setStartWith] = useState<string | null>(null);
+  useEffect(() => {
+    if (startWith === null) return;
+    setStartWith(null);
+    start(startWith);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startWith]);
   function coachDone(t: string) {
     setCoach(false);
     setCoached(true);
     if (t !== task) setTask(t);
-    start(t);
+    setStartWith(t);
   }
 
   function applyTweak(k: SuggestionKey) {
@@ -304,6 +322,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
               value={task}
               onChange={(e) => {
                 setTask(e.target.value);
+                setGoalHint("");
                 if (coach) setCoach(false);
               }}
               rows={6}
@@ -318,6 +337,11 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
               }
               className="rounded-[14px] border border-[#C9CDD4] p-4 text-[16px] leading-relaxed"
             />
+            {goalHint && (
+              <p role="alert" className="text-[15px] font-semibold text-[#8A4600]">
+                {goalHint}
+              </p>
+            )}
             {restored && task && (
               <p className="text-[14px] text-muted">
                 This is what you typed last time.{" "}
@@ -467,7 +491,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
               {busy ? "Starting…" : scheduled ? "Save" : "Start"}
             </button>
           ) : (
-            <p className="text-[14px] font-medium text-[#2A3F9E]">Answer the quick questions above first ↑</p>
+            <p className="text-[14px] font-medium text-[#2A3F9E]">Pick an option in the box above ↑</p>
           )}
         </div>
       </form>

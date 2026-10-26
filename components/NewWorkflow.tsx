@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { BriefRef, WfLimits, WfStep } from "@/lib/types";
 import { STEP_INFO, TEMPLATES, defaultWorkflow, nameFromGoal, stepIconOf, stepTitle, templateWorkflow, type AgentRef, type TemplateKey } from "@/lib/wf";
 import { BackLink, ErrorBox, InfoTip, Label, post } from "./bits";
@@ -93,11 +93,19 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
     }
   }
 
+  // Made from the coach: wait one render, so settings it just turned on are in the steps.
+  const [makeWith, setMakeWith] = useState<string | null>(null);
+  useEffect(() => {
+    if (makeWith === null) return;
+    setMakeWith(null);
+    make(makeWith);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [makeWith]);
   function coachDone(g: string) {
     setCoach(false);
     setCoached(true);
     if (g !== goal) setGoal(g);
-    make(g);
+    setMakeWith(g);
   }
 
   function applyTweak(k: SuggestionKey) {

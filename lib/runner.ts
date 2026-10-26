@@ -760,11 +760,14 @@ function onEvent(runId: number, line: string, state: StreamState, phase: Phase) 
         const input = c.input ?? {};
         log(runId, `Tool ${c.name}: ${JSON.stringify(input).slice(0, 1500)}`);
         let activity = PLAIN_TOOL[c.name] ?? "Working on it";
-        if (c.name === "Bash") activity = typeof input.description === "string" && input.description ? plainActivity(input.description) : "Running a check";
+        if (c.name === "Bash") activity = typeof input.description === "string" && input.description ? plainActivity(input.description) : "Working on it";
         if (c.name.startsWith("mcp__")) activity = "Using a connected app";
         // While planning it only reads: say so, so nobody thinks it's already building.
         if (phase === "plan") activity = "Reading your project to write its plan";
-        updateRun(runId, { activity: `${phase === "review" || phase === "final" ? "Reviewing: " : ""}${activity}…` });
+        // Its own plain sentence from the last minute and a half says more than a generic tool label.
+        const generic = /^(Running a check|Working on it|Reading the code|Searching the code|Looking through the files|Planning its next steps)$/.test(activity);
+        if (!(generic && state.proseAt && Date.now() - state.proseAt < 90_000))
+          updateRun(runId, { activity: `${phase === "review" || phase === "final" ? "Reviewing: " : ""}${activity}…` });
         if (!builder) continue;
         // No progress lines from the agent? Move the default steps along by what it's doing.
         if (!state.sawStepMarker && /^(Edit|MultiEdit|Write|NotebookEdit)$/.test(c.name) && !state.edited) {
@@ -857,7 +860,12 @@ function readMarkers(runId: number, text: string, state: StreamState) {
   if (summary) updateRun(runId, { result: summary[1].trim() });
   // Use its latest plain sentence as the "what it's doing" line, if it's short and not a marker.
   const prose = text.split("\n").map((l) => l.trim()).filter((l) => l && !/^(PLAN|STEP|SUMMARY|HANDOFF|MILESTONES):/.test(l) && !l.startsWith("```") && l.length < 160);
-  if (prose.length && !summary) updateRun(runId, { activity: prose[prose.length - 1].replace(/[*_`#]/g, "") });
+  // Only plain sentences (no file names or code), so the line stays readable for Nic.
+  const plain = prose.filter((l) => !/[\/`{}<>=]|\.\w{1,4}\b|\b(commit|branch|npm|git|repo|diff|PR)\b/i.test(l));
+  if (plain.length && !summary) {
+    updateRun(runId, { activity: plain[plain.length - 1].replace(/[*_`#]/g, "").replace(/:$/, "") });
+    state.proseAt = Date.now();
+  }
 }
 
 function setStep(runId: number, index: number) {

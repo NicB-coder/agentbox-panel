@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { AgentPageState } from "@/lib/views";
 import type { Agent, Approval, PillStatus, Run, Step } from "@/lib/types";
-import { ago, clockOf, duration, agentSentence, plainText, planText, userStop } from "@/lib/words";
+import { ago, clockOf, duration, agentSentence, plainSummary, plainText, planText, userStop } from "@/lib/words";
 import { FREEDOM_WORDS, freedomOf } from "@/lib/job";
 import { AgentIcon, StatusPill, btn } from "./ui";
 import { usePoll } from "./usePoll";
@@ -356,7 +356,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
     <>
       <p className="clamp-3 mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
       <Changed run={run} />
-      <p className="mt-1 text-[15px] text-muted">{run.result ? plainText(run.result) : "It finished and opened a pull request for you."}</p>
+      <p className="mt-1 text-[15px] text-muted">{run.result ? plainSummary(run.result) : "It finished. It's ready for you to look at."}</p>
       {careful && <p className="mt-3 text-[15px] font-semibold text-[#1E6B34]">{careful}</p>}
       {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A second AI is double-checking this change. Its notes appear here in a few minutes.</p>}
       {!careful && r?.status === "done" && (

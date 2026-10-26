@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { InboxState } from "@/lib/inbox";
 import type { InboxItem } from "@/lib/types";
-import { ago, plainText, planText } from "@/lib/words";
+import { ago, plainText, planText, plainSummary } from "@/lib/words";
 import { Confirm, EmptyState, ErrorBox, InfoTip, PageTitle, post } from "./bits";
 import { refreshHeader } from "./Header";
 import { openNewTask } from "./TaskPanel";
@@ -219,7 +219,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
           {it.kind === "pr" && it.careful && <p className="mt-2 text-[15px] font-semibold text-[#1E6B34]">{it.careful}</p>}
           {it.kind === "pr" && !it.careful && it.review && <ReviewFindings review={it.review} />}
           {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed" || it.kind === "wf_done" || it.kind === "file_pr") && (
-            <p className="mt-2 text-[15px] leading-relaxed text-muted">{plainText(it.text)}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted">{plainSummary(it.text)}</p>
           )}
           {it.kind === "pr" && it.quick && <p className="mt-2 text-[15px] text-muted">It finished in under 2 minutes. That's fine for a small job. For a bigger one, look at it first to check it did everything.</p>}
           {it.kind === "quiet" && (
@@ -449,7 +449,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               )}
               {it.kind !== "pr" && (
                 <Link href={it.link} className={btn.link}>
-                  {it.kind === "quiet" || it.kind === "failed" || it.kind === "wf_failed" ? "See what happened" : "Open"}
+                  {it.kind === "quiet" || it.kind === "failed" || it.kind === "wf_failed" ? "See what happened" : it.kind === "wf_ask" || it.kind === "wf_ship" ? "See the steps" : "Open"}
                 </Link>
               )}
             </div>

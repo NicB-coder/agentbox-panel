@@ -175,6 +175,7 @@ export function CoachBox(props: {
   useEffect(() => {
     if (phase.at === "questions" || phase.at === "improved" || phase.at === "good") box.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [phase.at]);
+  const all = phase.at === "improved" ? [...(phase.check?.suggestions ?? []), ...phase.result.suggestions.filter((sg) => !phase.check?.suggestions.some((x) => x.key === sg.key))] : [];
   const answered = phase.at === "questions" && Object.values(answers).some((v) => v.picked.length || (v.otherOn && v.other.trim()));
 
   return (
@@ -234,16 +235,24 @@ export function CoachBox(props: {
               <p className="max-h-[320px] overflow-auto whitespace-pre-wrap rounded-[14px] border border-ink bg-white p-4 text-[15px] leading-relaxed">{phase.result.improved}</p>
             </div>
           </div>
-          <Suggestions list={[...(phase.check?.suggestions ?? []), ...phase.result.suggestions.filter((s) => !phase.check?.suggestions.some((x) => x.key === s.key))]} applied={applied} onApply={apply} />
+          <Suggestions list={all} applied={applied} onApply={apply} />
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className={btn.primary} onClick={() => onDone(phase.result.improved)}>
-              Use this and {doneLabel.toLowerCase()}
+            <button
+              type="button"
+              className={btn.primary}
+              onClick={() => {
+                // "Use this" takes the whole suggestion: the better goal and the settings next to it.
+                for (const sg of all) if (!applied.includes(sg.key)) apply(sg.key);
+                onDone(phase.result.improved);
+              }}
+            >
+              {all.some((sg) => !applied.includes(sg.key)) ? `Use all of this and ${doneLabel.toLowerCase()}` : `Use this and ${doneLabel.toLowerCase()}`}
             </button>
             <button type="button" className={btn.secondary} onClick={() => onEdit(phase.result.improved)}>
               Edit it
             </button>
-            <button type="button" className={btn.secondary} onClick={skip}>
-              Keep mine
+            <button type="button" className={btn.link} onClick={skip}>
+              Keep what I wrote
             </button>
           </div>
         </>

@@ -1,13 +1,13 @@
 import { shipsOnOk } from "./wf";
 import {
   getAgent, getRun, getWfRun, getWorkflow, listIdeas, pendingApprovals, recentQuietRuns, recentQuietWfRuns, recentStoppedRuns, recentStoppedWfRuns, runsWithStatus,
-  wfRunsWithPrWaiting, wfRunsWithStatus,
+  wfRunsWithPrWaiting, wfRunsWithStatus, db,
 } from "./db";
 import type { Agent, Idea, InboxItem, Run } from "./types";
 import { listNotices, unopenedNotices, type Notice } from "./notices";
 import { listOpenFilePrs } from "./projectFiles";
 import { OUT_OF_TIME, OVER_BUDGET, PAUSED_ALL, canContinue, carefulLine, firstLine } from "./runner";
-import { plainText, userStop } from "./words";
+import { plainText, userStop, plainSummary } from "./words";
 
 // Everything that needs Nic, newest first.
 
@@ -29,6 +29,12 @@ function getWorkflowFromRun(run: Run) {
 
 const userStopped = (reason: string | null) => userStop(reason) || reason === PAUSED_ALL;
 
+
+// What a workflow's build step said it did, for its Inbox card (like a task's card shows).
+function builtSummary(wrId: number): string {
+  const r = db().prepare("SELECT result FROM runs WHERE workflow_run_id = ? AND result IS NOT NULL AND extra NOT LIKE '%\"role\":\"review\"%' ORDER BY id DESC LIMIT 1").get(wrId) as { result: string } | undefined;
+  return r?.result ? plainSummary(r.result).slice(0, 400) : "";
+}
 
 export function inboxItems(): InboxItem[] {
   const items: InboxItem[] = [];
@@ -72,7 +78,7 @@ export function inboxItems(): InboxItem[] {
     if (!wf || !wr.waiting || (wr.waiting.kind !== "ask" && wr.waiting.kind !== "ship")) continue;
     items.push({
       key: `wf${wr.id}`, kind: wr.waiting.kind === "ask" ? "wf_ask" : "wf_ship", at: wr.stepRuns[wr.steps[wr.current]?.id]?.startedAt ?? wr.startedAt,
-      title: wr.input || wf.name, who: wf.name, color: "#7048C8", icon: "flow", wfRunId: wr.id, text: wr.waiting.text, prUrl: wr.prUrl,
+      title: wr.input || wf.name, who: wf.name, color: "#7048C8", icon: "flow", wfRunId: wr.id, text: builtSummary(wr.id) ? `${builtSummary(wr.id)} ${wr.waiting.text}` : wr.waiting.text, prUrl: wr.prUrl,
       link: `/workflows/${wf.id}?run=${wr.id}`, test: wr.test, ships: shipsOnOk(wr), project: wf.project,
     });
   }

@@ -170,6 +170,13 @@ export function agentAsInput(a: Agent): AgentInput {
 }
 
 // Agents write a little markdown. In the main UI we show plain words.
+// An agent's summary for Nic: sentences about files, commits or branches are left out (when something else is left).
+export function plainSummary(s: string): string {
+  const parts = plainText(s).split(/(?<=[.!?])\s+/);
+  const keep = parts.filter((p) => !/\b(commit(ted)?|branch|pull request|PR|CLAUDE\.md|BRIEF\.md|git|diff|merge[sd]?|worktree|repo)\b/i.test(p));
+  return (keep.length ? keep : parts).join(" ");
+}
+
 export function plainText(s: string): string {
   return s
     .replace(/\*\*([^*]+)\*\*/g, "$1")

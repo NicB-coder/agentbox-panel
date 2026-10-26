@@ -147,7 +147,7 @@ export type Flow = {
   big?: { milestones: Milestone[]; index: number; handoff: string; weekCarry: number; weekStart: number | null; lastWeek: number | null; budgetPct: number };
 };
 
-export type StreamState = { result: null | { text: string; isError: boolean; subtype: string }; sawStepMarker: boolean; edited: boolean; limited: boolean; authError: boolean };
+export type StreamState = { result: null | { text: string; isError: boolean; subtype: string }; sawStepMarker: boolean; edited: boolean; limited: boolean; authError: boolean; proseAt?: number };
 
 export type ProcState = {
   key: string; label: string; out: string; err: string; exit: string; pidFile: string; plist: string | null; startedAt: number;

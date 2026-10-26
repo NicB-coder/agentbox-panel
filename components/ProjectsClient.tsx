@@ -111,7 +111,11 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
 
   return (
     <div>
-      <PageTitle title="Projects" sub="A project is one app, game or website. Agents build inside it. Each one is also saved on GitHub, a website that keeps your code safe." />
+      <PageTitle title="Projects" sub="A project is one app, game or website. Agents build inside it. Each one is also saved on GitHub, a website that keeps your code safe.">
+        <a href="#add-h" className={btn.primary} onClick={() => setTimeout(() => document.querySelector<HTMLInputElement>('input[placeholder="my-game"]')?.focus(), 300)}>
+          + New project
+        </a>
+      </PageTitle>
 
       <section aria-labelledby="have-h">
         <h2 id="have-h" className="text-[22px] font-bold">

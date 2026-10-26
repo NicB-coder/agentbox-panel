@@ -230,7 +230,7 @@ export async function advance(wrId: number): Promise<void> {
             return;
           }
           if (sr.state === "waiting") return;
-          const text = step.shipMode === "auto" ? "Not every check passed, so it needs your OK to ship." : "It's ready. Shipping puts these changes into the real version of your project.";
+          const text = step.shipMode === "auto" ? "Not every check passed, so it needs your OK to ship." : "It's ready for you to look at. Putting it in adds these changes to the real version of your project.";
           setStep(wrId, step.id, { state: "waiting", startedAt: Date.now(), note: "Ready to look at: waiting for your OK to put it in" });
           updateWfRun(wrId, { status: "needs", waiting: { kind: "ship", text, until: Date.now() } });
           ping(wr, `is ready to ship and waiting for your OK. ${wr.prUrl}`);

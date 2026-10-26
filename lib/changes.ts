@@ -8,7 +8,7 @@ import { canPreview, previewDir, refToken } from "./preview";
 import { listProjects, projectPath } from "./projects";
 import { carefulLine, sh } from "./runner";
 import type { Run } from "./types";
-import { plainText } from "./words";
+import { plainSummary, plainText } from "./words";
 
 // "See what changed" for any pull request: a plain-English summary, before/after pictures when it's a page or game,
 // and the code changes behind a toggle.
@@ -74,7 +74,7 @@ export async function changesView(prUrl: string): Promise<ChangesView | null> {
   // A workflow's change: what its build step said it did (not the goal again).
   const built = wr ? (db().prepare("SELECT id FROM runs WHERE workflow_run_id = ? AND result IS NOT NULL AND extra NOT LIKE '%\"role\":\"review\"%' ORDER BY id DESC LIMIT 1").get(wr.id) as { id: number } | undefined) : undefined;
   const builtRun = built ? getRun(built.id) : null;
-  let summary = run?.result ? plainText(run.result) : builtRun?.result ? plainText(builtRun.result) : "";
+  let summary = run?.result ? plainSummary(run.result) : builtRun?.result ? plainSummary(builtRun.result) : "";
   if (!summary) {
     const what = pr.body.match(/\*\*What it did:\*\*\s*(.+)/)?.[1];
     summary = plainText(what ?? pr.body.split(/\n\s*\n/).find((p) => p.trim() && !p.startsWith("<")) ?? pr.title).slice(0, 1200);

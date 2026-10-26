@@ -1,4 +1,5 @@
 import { agentRunsText } from "./helperSnapshot";
+import { canContinue } from "./runner";
 import { shipsOnOk } from "./wf";
 import { cutWords } from "./words";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -521,7 +522,7 @@ export function actionFor(kind: string, ref: string): HelperAction | null {
     case "retry_run": {
       const r = id ? getRun(n) : null;
       const ag = r && getAgent(r.agentId);
-      return r && r.status === "stopped" && !r.workflowRunId && ag?.kind === "claude" && ag.enabled ? a("Try again") : null;
+      return r && r.status === "stopped" && !r.workflowRunId && ag?.kind === "claude" && ag.enabled ? a(canContinue(r) ? "Pick up where it stopped" : "Try again") : null;
     }
     case "approve_plan": {
       const r = id ? getRun(n) : null;
