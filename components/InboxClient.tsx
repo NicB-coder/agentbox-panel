@@ -417,7 +417,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               {it.kind === "file_pr" && (
                 <>
                   <button className={btn.primary} disabled={b} onClick={() => act(it.key, `/api/file-prs/${it.fileId}/merge`)}>
-                    {busy === it.key ? "Merging…" : "Merge it"}
+                    {busy === it.key ? "Adding it…" : "Add it to my project"}
                   </button>
                   <button className={btn.secondary} disabled={b} onClick={() => act(it.key, `/api/file-prs/${it.fileId}/close`)}>
                     Don't add it

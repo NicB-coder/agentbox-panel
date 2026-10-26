@@ -58,7 +58,7 @@ async function followUpOf(id: number): Promise<TaskPanelOpen["followUp"] | null>
 export const TASK_FEATURES = { research: true, big: true, connectors: true };
 
 
-export default function TaskPanel({ projects, connectors = [], defaultProject }: { projects: string[]; connectors?: Connector[]; defaultProject?: string }) {
+export default function TaskPanel({ projects, connectors = [], defaultProject, usagePct = null }: { projects: string[]; connectors?: Connector[]; defaultProject?: string; usagePct?: number | null }) {
   const ref = useRef<HTMLDialogElement>(null);
   const router = useRouter();
   const titleId = useId();
@@ -430,7 +430,12 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
           {error && <ErrorBox compact message={error} onRetry={() => start()} where="the Start a task panel" />}
         </div>
 
-        <div className="sticky bottom-0 flex justify-end gap-3 border-t border-line bg-white px-5 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:px-8 sm:py-4">
+        <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-line bg-white px-5 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:px-8 sm:py-4">
+          {usagePct !== null && (
+            <p className={`mr-auto text-[13px] leading-tight ${usagePct >= 80 ? "font-semibold text-[#8A4600]" : "text-muted"}`}>
+              {usagePct >= 80 ? `Usage is high (${usagePct}% of this session). It may wait for the reset.` : `${usagePct}% of this session's usage used so far.`}
+            </p>
+          )}
           <button type="button" className={btn.secondary} onClick={() => ref.current?.close()}>
             Cancel
           </button>

@@ -64,7 +64,7 @@ export default function DiscordBox() {
                   {e.ok ? "✓" : "✕"}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate">{e.text}</span>
+                  <span className="block truncate">{e.text.replace(/https?:\/\/\S+/g, "").replace(/\s*(Pull request|Ready to look at):\s*$/i, "").replace(/^agentbox · /, "").trim()}</span>
                   <span className="text-muted">
                     {ago(e.at)}
                     {e.why ? ` · ${e.why}` : ""}

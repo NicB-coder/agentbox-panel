@@ -383,7 +383,7 @@ export default function HelperBubble() {
         aria-label={open ? "Close the Helper" : dot ? (errorsOnScreen ? "Helper: I can explain the error on this page" : "Helper: I have an answer for you") : "Open the Helper. Ask anything about agentbox"}
         onClick={() => setOpen(!open)}
         style={bubbleStyle}
-        className={`fixed right-4 z-[60] h-14 w-14 items-center justify-center rounded-full bg-ink text-white shadow-[0_8px_24px_rgba(21,23,27,0.28)] hover:bg-black bottom-[calc(72px+env(safe-area-inset-bottom))] lg:right-6 lg:bottom-6 ${open ? "hidden lg:inline-flex" : "inline-flex"}`}
+        className={`fixed right-4 z-[60] h-14 w-14 items-center justify-center rounded-full bg-ink text-white ring-2 ring-white shadow-[0_8px_24px_rgba(21,23,27,0.28)] hover:bg-black bottom-[calc(72px+env(safe-area-inset-bottom))] lg:right-6 lg:bottom-6 ${open ? "hidden lg:inline-flex" : "inline-flex"}`}
       >
         {open ? (
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

@@ -59,7 +59,10 @@ function Tile({ t }: { t: WorkflowTile }) {
             <Icon name="flow" color="#7048C8" size={20} />
           </span>
         </span>
-        <div className="min-w-0 truncate text-[17px] font-semibold leading-tight">{t.name}</div>
+        <div className="min-w-0">
+          <div className="truncate text-[17px] font-semibold leading-tight">{t.name}</div>
+          {t.project && <div className="truncate text-[13px] text-muted">{t.project}</div>}
+        </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col justify-center gap-2 py-4">
         <span className="flex flex-wrap items-center gap-x-1 gap-y-1.5" aria-hidden="true">
@@ -92,7 +95,7 @@ function Tile({ t }: { t: WorkflowTile }) {
           </>
         ) : (
           <>
-            <p className="clamp-3 text-[15px] font-semibold leading-snug" title={t.sentence}>{t.sentence}</p>
+            <p className="clamp-2 text-[15px] font-semibold leading-snug" title={t.sentence}>{t.sentence}</p>
             {t.note && <p className={`clamp-2 text-[14px] leading-snug ${t.status === "needs" ? "font-semibold text-[#8A4600]" : "text-muted"}`}>{t.note}</p>}
           </>
         )}

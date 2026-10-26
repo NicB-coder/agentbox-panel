@@ -146,6 +146,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
                     </a>
                   </div>
                 )}
+                {!p.playable && <p className="text-[14px] text-muted">Nothing to play here yet. A Play button shows up once the project has a web page or game.</p>}
                 <p className="text-[14px] text-muted">
                   {p.lastActivity ? `Last change ${ago(p.lastActivity)}${p.lastMessage && !/^initial commit$/i.test(p.lastMessage.trim()) ? `: “${p.lastMessage.slice(0, 80)}”` : ""}` : "No changes yet"}
                 </p>
@@ -220,7 +221,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
           >
             <h3 className="flex items-center text-[17px] font-semibold">
               Already on GitHub?
-              <InfoTip text="If the project is already saved on GitHub, paste its address and agentbox copies it onto this Mac. The agentbox GitHub account (NicB-coder-bot) needs to be allowed to see it." label="Already on GitHub?" />
+              <InfoTip text="If the project is already saved on GitHub, paste its address and agentbox copies it onto this Mac. If it's private, its owner adds NicB-coder-bot to it on GitHub first (Settings → Collaborators)." label="Already on GitHub?" />
             </h3>
             <label className="flex flex-col gap-2">
               <span className="text-[14px] font-semibold">Its GitHub address</span>
@@ -319,7 +320,7 @@ function AddFile({ project, want }: { project: string; want: string }) {
         <button type="button" className={want && !sent ? btn.primary : btn.secondary} onClick={() => input.current?.click()} disabled={busy}>
           {busy ? "Adding it…" : "Add a file"}
         </button>
-        <InfoTip label="Add a file" text="Puts a file from your computer (like a list of instructions for agents) into this project. It shows up in your Inbox first: press Merge it there to finish adding it." />
+        <InfoTip label="Add a file" text="Puts a file from your computer (like a list of instructions for agents) into this project. It shows up in your Inbox first: press Add it to my project there to finish." />
       </div>
       <input
         ref={input}
@@ -334,7 +335,7 @@ function AddFile({ project, want }: { project: string; want: string }) {
       />
       {sent && (
         <p role="status" className="text-[15px] text-[#1E6B34]">
-          <span className="font-semibold">{sent} is ready to add.</span> Merge it from the{" "}
+          <span className="font-semibold">{sent} is ready to add.</span> Press Add it to my project in the{" "}
           <Link href="/inbox" className="font-semibold underline">
             Inbox
           </Link>{" "}

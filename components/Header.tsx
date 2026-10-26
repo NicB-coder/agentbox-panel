@@ -191,7 +191,7 @@ export default function Header({ initial, projects, connectors }: { initial: Hea
         onClose={() => setConfirm(false)}
       />
       <Tour done={data.tourDone} />
-      <TaskPanel projects={projects} connectors={connectors} />
+      <TaskPanel projects={projects} connectors={connectors} usagePct={data.usage.state.session?.pct ?? null} />
     </>
   );
 }

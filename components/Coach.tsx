@@ -12,8 +12,8 @@ import { btn } from "./ui";
 export const SUGGESTION_LABEL: Record<SuggestionKey, string> = {
   research_first: "Research first",
   more_time: "Give the build 2 hours",
-  smartest: "Use the Smartest model",
-  big_job: "Make it a Big job",
+  smartest: "Use the Smartest AI (uses more usage)",
+  big_job: "Make it a Big job (for jobs that take hours)",
   research_kind: "Make it a research question",
   look_only: "Look only",
   careful: "Careful mode",

@@ -52,7 +52,7 @@ export default function ProjectSelect({
       >
         {!known && <option value="__pick__">Pick a project…</option>}
         {optional && <option value="">No project</option>}
-        {projects.map((p) => (
+        {[...projects.filter((p) => p !== "agentbox-panel"), ...projects.filter((p) => p === "agentbox-panel")].map((p) => (
           <option key={p} value={p}>
             {p === "agentbox-panel" ? "agentbox-panel (this app itself)" : p}
           </option>

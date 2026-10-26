@@ -149,7 +149,7 @@ export default function BriefPicker({
           </button>
           {project && (
             <>
-              <span aria-hidden="true">·</span>
+              <span aria-hidden="true" className="max-sm:hidden">·</span>
               <button type="button" className={btn.link} onClick={listFiles} disabled={disabled || busy} aria-expanded={!!pick}>
                 Pick a file from the project
               </button>
