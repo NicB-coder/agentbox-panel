@@ -11,7 +11,19 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 - [x] 7. Helper everywhere, replay bug fixed, personal and precise
 - [x] 8. Full check of every button, page and real run
 - [x] 9. Three or more fresh beginner review rounds as Sam (6 rounds: 58 → 64 → 58 → 50 → 50 → 37 questions; core 41 → 16)
-- [ ] 10. Test migration on database copy, update notes, open PR
+- [x] 10. Test migration on database copy, update notes, open PR
+
+## Handoff (after milestone 10, the last one)
+
+- The upgrade was tested on a read-only copy of the real database with the new `scripts/migration-check.ts`: every
+  old row kept unchanged, new columns `workflow_runs.quiet` / `pr_waiting` and table `file_prs` added, everything reads
+  back, a second start changes nothing.
+- The Update flow ran for real in a sandbox panel on the live version (647ed85) with that database copy, as its own
+  test LaunchAgent on port 3263: good update done; unhealthy version refused; broken-after-switch rolled back by
+  itself; the Update button in the page worked. The test LaunchAgent was removed afterwards.
+- The live panel was not touched. Installing is Nic's one click after merging: Settings → Update agentbox.
+- NOTES.md starts with the v3.1 summary (click first, done, milestone 10, decisions, not done, Needs Nic). README has
+  a v3.1 section and the new check scripts. Screenshots: `docs/screenshots/v3.1-*.png`.
 
 ## Handoff (after milestone 9)
 

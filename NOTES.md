@@ -2,7 +2,100 @@
 
 # v3.1: ask once, help me write good workflows, easy to edit, beginner-proof
 
-Being built milestone by milestone on an agent branch (not `build/v3.1`). Progress and handoff are in `PROGRESS.md`.
+Built milestone by milestone on an agent branch (not `build/v3.1`). Progress and handoffs are in `PROGRESS.md`.
+All 10 milestones are done.
+
+## v3.1 — What Nic should click first
+
+1. **Merge the pull request, then press Settings → Update agentbox → Update it.** The panel builds the new version on
+   the side, tries it, switches over and checks it came back. If it doesn't, it goes back to the old one by itself.
+   Your agents, workflows, history and settings stay (tested on a copy of your real database, see below).
+2. **Workflows → New workflow.** Type one line ("A tiny game where you dodge falling stars"), pick a project, press
+   Next. If the goal is vague, the coach asks a few tap-to-answer questions and shows a better version next to yours.
+3. **Run now** on any workflow starts straight away with the saved goal (no pop-up). Try **Change it in your own
+   words** on the same page: you see the steps before and after, and nothing changes until you press Apply.
+4. Open the **Helper** (round button, bottom right) on any page or pop-up and ask "What's running?" or "Why did
+   Lookout stop?".
+
+![New workflow](docs/screenshots/v3.1-start-screen.png)
+
+## v3.1 — Done
+
+1. **Lookout "did nothing"**: the line typed in Run now replaced the saved goal, and long goals were cut at 8,000
+   characters. Both fixed; any run that finishes without really doing anything now gets an Inbox card.
+2. **Ask once**: the start screen asks for the goal once, the editor opens with it filled in, Run now and Test run
+   start straight away (with an optional "different goal" link).
+3. **Briefs**: attach a file, pick one from the project, view or remove it. It's copied into every run, nothing starts
+   if a file the goal mentions is missing, and Projects has **Add a file**.
+4. **Prompt coach** with quick questions, an improved goal (Use this / Edit it / Keep mine), suggested settings and
+   **Help me think of ideas**.
+5. **Easy editing**: change it in your own words with a before → after preview, Undo, Version history, Make a copy,
+   and Edit while it runs.
+6. **Limits** explain exactly what they count; Big jobs grey out the time limit and start at about 75%; waiting for
+   usage no longer counts against a workflow's time limit.
+7. **Helper** follows you into every pop-up and panel, never replays old replies, answers from your real data
+   (35 of 35 test questions pass).
+8. **Full check-over**: every control clicked for real (`QA-CHECKLIST.md`), 8 real runs, 8 problems fixed.
+9. **Six beginner review rounds as Sam**: core-task questions went from 41 to 16 (table under Milestone 9 below).
+10. **Upgrade tested on a copy of the real database and installed through the Update flow** in a sandbox (below).
+
+### Milestone 10: upgrade test on a copy of the real database
+
+- **The database copy:** a read-only SQLite backup of the live database (never opened for writing), taken Oct 26.
+  It had 7 agents, 51 runs, 4 workflows, 7 workflow versions, 2 workflow runs (the Lookout ones), 2 Helper chats with
+  22 messages and 6 settings.
+- **New check `scripts/migration-check.ts`** (`node --import ./tests/register.mjs scripts/migration-check.ts <copy.db>`):
+  copies the database again, runs the same migration the panel runs when it starts, and compares every row of every
+  table. Result: **every old row kept and unchanged**; new columns `workflow_runs.quiet` and
+  `workflow_runs.pr_waiting`; new table `file_prs`; every agent, run (all 51, including the hidden workflow-step
+  agent's), workflow, version, workflow run and Inbox item reads back; starting a second time changes nothing;
+  integrity check ok.
+- **The app on that copy:** my own dev copy (port 3253) started on the old-format database, upgraded it, and
+  `scripts/qa/sweep.mjs` found every page clean at 1366, 768 and 390px (no console errors, no failed requests, no
+  sideways scrolling). Both Lookout runs, every agent page (archived ones too) and the Inbox open fine.
+- **The Update flow, for real, in a sandbox:** a separate copy of the panel on the version the live panel runs now
+  (`647ed85`), with the same database copy, running as its own test LaunchAgent (`com.agentbox.panel-m10test`,
+  port 3263, schedules, Discord and background checks off). Four updates:
+  1. Old version → this branch: **done** ("Updated and restarted. You're on the new version."), the database
+     upgraded, all rows still there, pages load.
+  2. A version that never says it's healthy: **refused at "Test the new version"**, old version kept running.
+  3. A version that's healthy on the side but broken after the switch: **rolled back by itself** ("it went back to
+     the old one by itself").
+  4. Pressing **Update agentbox → Update it** in the page (Playwright): went through all 7 steps and ended on the new
+     version, with no page errors.
+  The test LaunchAgent and its leftover update job were removed afterwards.
+- `npm test`: 85 pass. `tsc --noEmit`: clean.
+
+### Milestone 10 — Decisions I made
+
+- **I didn't install it on the live panel.** My rules say never to touch the live panel, its folder or its database,
+  and the Update flow only installs what's on main. So I tested the exact same Update flow (same script, same steps,
+  same health check and rollback) on a sandbox copy instead. Installing for real is one button after the merge (see
+  Needs Nic).
+- `git push` is blocked for agents, even to a local test copy, so the sandbox's "GitHub" was a local folder the
+  updater fetched from (the updater only fetches, it never pushes).
+- The pull request is opened by the agentbox panel from this branch (not `build/v3.1`), as for the other milestones.
+
+## v3.1 — Not done / known limits
+
+- No beginner review round reached zero questions in the core tasks (16 in round 6, down from 41). The open ones are
+  marked "Kept" or "Not done" in `REVIEW-ROUND-6.md`. The biggest: a drafted "Change it in your own words" is lost if
+  you leave the page before Apply, and the Helper bubble can sit near a link on a phone.
+- The Help page glossary still says "Test run … stops before shipping" and the safety list mentions the "Ship step",
+  while buttons now say "Put it in my project". It's understandable, but not fully matched.
+- `scripts/dev-copy.sh fresh` can't find the live database from an agent's working copy; agents make a read-only
+  copy with `sqlite3 ".backup"` instead (written in each milestone's notes).
+- Merge it, Put it in, Install and Add a project from GitHub change real repos, so the click-through only checked
+  they send the right request (their code ran for real in earlier milestones).
+
+## v3.1 — Needs Nic
+
+- **Install this version:** merge the pull request, then **Settings → Update agentbox → Update it**. Nothing else is
+  needed (no new packages, no admin password, the database upgrades itself on start).
+- From review round 1: a public empty repo **NicB-coder-bot/sam-hello-test** and a folder `~/projects/sam-hello-test`
+  were made by a test reviewer. Delete both if you don't want them.
+- From review round 2: **arcade#13** added one line ("Made with agentbox by Sam") to the end of arcade's README.
+  Remove it if you like (a one-line task on arcade does it).
 
 ## v3.1 — Why Lookout "did nothing" (milestone 1)
 
