@@ -91,7 +91,7 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
   const timeSlider = (
     <label className="flex flex-col gap-2">
       <span className="flex items-baseline justify-between">
-        <Label tip="The longest this step may work. It stops if it runs over, so it can't run forever.">Time limit</Label>
+        <Label tip="The longest this one step may work. The whole workflow also has its own limit (Longest run, under Limits), and whichever comes first stops it. Its work is kept either way.">Time limit for this step</Label>
         <span className="text-[15px] font-semibold">{s.maxMinutes ?? 30} minutes</span>
       </span>
       <input type="range" aria-label="Time limit" aria-valuetext={`${s.maxMinutes ?? 30} minutes`} min={5} max={120} step={5} value={s.maxMinutes ?? 30} onChange={(e) => onChange({ maxMinutes: Number(e.target.value) }, "maxMinutes")} className="h-11 w-full accent-[#15171B]" />

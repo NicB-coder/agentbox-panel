@@ -422,7 +422,11 @@ export async function onStepRunEnded(runId: number) {
     }
     if (run.stopReason === PAUSED_ALL || userStop(run.stopReason)) return stopWorkflow(wr.id, run.stopReason, { byUser: true });
     setStep(wr.id, step.id, { state: "failed", endedAt: Date.now(), note: run.stopReason ?? "It stopped." });
-    return stopWorkflow(wr.id, `${stepTitle(step, agentRefs())} stopped: ${run.stopReason ?? "it ran into a problem"}`, { keepStep: true });
+    const who = stepTitle(step, agentRefs());
+    const why = run.extra.outOfTime
+      ? `${who} reached its ${run.extra.maxMinutes ?? step.maxMinutes ?? 30}-minute limit. Its work so far is kept: press Pick up where it stopped to carry on.`
+      : `${who} stopped: ${run.stopReason ?? "it ran into a problem"}`;
+    return stopWorkflow(wr.id, why, { keepStep: true });
   }
   if (run.status !== "done") return;
 
@@ -495,11 +499,27 @@ function goBackTo(wrId: number, target: number, feedback: string, countLoop: boo
 
 // ---------- checks ----------
 
+async function changedPage(dir: string): Promise<string> {
+  try {
+    const base = await baseRef(dir);
+    const d = await sh("git", ["diff", "--name-only", `${base}...HEAD`], dir, 20_000);
+    const w = await sh("git", ["status", "--porcelain"], dir, 20_000);
+    const files = [...(d.ok ? d.out.split("\n") : []), ...(w.ok ? w.out.split("\n").map((l) => l.slice(3)) : [])].map((f) => f.trim()).filter(Boolean);
+    const html = files.find((f) => /\.html?$/i.test(f) && !/(^|\/)(tests?|node_modules)\//.test(f));
+    if (!html) return "/";
+    return `/${html.replace(/^(public|dist|build|out|docs|site|www)\//, "").replace(/(^|\/)index\.html$/, "$1")}`;
+  } catch {
+    return "/";
+  }
+}
+
 function runCheckStep(wrId: number, step: WfStep) {
   const wr = getWfRun(wrId)!;
   checking.add(wrId);
-  setStep(wrId, step.id, { state: "now", startedAt: Date.now(), endedAt: null, note: "Running the checks…" });
-  runChecks(wr.worktree!, step.checks ?? ["tests"], step.pagePath ?? "/")
+  setStep(wrId, step.id, { state: "now", startedAt: Date.now(), endedAt: null, note: "Trying it out…" });
+  // No page named in the step: open the page this run changed (a new game page, say), else the home page.
+  (step.pagePath ? Promise.resolve(step.pagePath) : changedPage(wr.worktree!))
+    .then((page) => runChecks(wr.worktree!, step.checks ?? ["tests"], page))
     .then(async (results) => {
       checking.delete(wrId);
       const now = getWfRun(wrId);

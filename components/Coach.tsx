@@ -265,7 +265,7 @@ export function CoachBox(props: {
 const INTERESTS = ["Games", "Music", "Sports", "School", "Friends", "Saving time", "Money", "Animals"];
 
 // "Help me think of ideas": a couple of taps about what Nic likes, then 4 ideas sized for one overnight run.
-export function IdeaHelp({ where, onPick, onClose }: { where: CoachWhere; onPick: (goal: string) => void; onClose: () => void }) {
+export function IdeaHelp({ where, onPick, onClose }: { where: CoachWhere; onPick: (goal: string, title: string) => void; onClose: () => void }) {
   const [into, setInto] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [ideas, setIdeas] = useState<CoachIdea[] | null>(null);
@@ -332,7 +332,7 @@ export function IdeaHelp({ where, onPick, onClose }: { where: CoachWhere; onPick
           <ul className="grid gap-3 sm:grid-cols-2">
             {ideas.map((i) => (
               <li key={i.title}>
-                <button type="button" onClick={() => onPick(i.goal)} className="flex h-full min-h-11 w-full flex-col gap-1.5 rounded-[18px] border border-line bg-white p-4 text-left hover:border-ink">
+                <button type="button" onClick={() => onPick(i.goal, i.title)} className="flex h-full min-h-11 w-full flex-col gap-1.5 rounded-[18px] border border-line bg-white p-4 text-left hover:border-ink">
                   <span className="text-[15px] font-semibold">{i.title}</span>
                   <span className="text-[14px] leading-snug text-muted">{i.why}</span>
                 </button>

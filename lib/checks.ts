@@ -169,7 +169,7 @@ export async function pageChecks(dir: string, pagePath: string, kinds: CheckKind
       if (want.includes("page"))
         out.push(
           loaded
-            ? { kind: "page", result: "passed", note: `The page loaded${title ? ` (“${title.slice(0, 60)}”)` : ""}.`, detail: url }
+            ? { kind: "page", result: "passed", note: `${pagePath && pagePath !== "/" && !/^https?:/.test(pagePath) ? `The page ${pagePath}` : "The page"} loaded${title ? ` (“${title.slice(0, 60)}”)` : ""}.`, detail: url }
             : { kind: "page", result: "failed", note: loadErr ? "The page didn't load in the browser." : `The page answered with an error (${status}).`, detail: `${url}\n${loadErr}` },
         );
       if (want.includes("console"))

@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DATA_DIR, db, getAgent, getRun, getSetting } from "./db";
+import { DATA_DIR, db, getAgent, getRun, getSetting, getWfRun } from "./db";
+import { shipsOnOk } from "./wf";
 import { canPreview, previewDir, refToken } from "./preview";
 import { listProjects, projectPath } from "./projects";
 import { carefulLine, sh } from "./runner";
@@ -27,6 +28,7 @@ export type ChangesView = {
   additions: number;
   deletions: number;
   clash: boolean; // a newer change touched the same lines: it can't go in as it is
+  ship: { wfRunId: number; label: string } | null; // a workflow waiting at Ship (or at the OK just before it) for this change
   run: { id: number; agentId: number; agentName: string; task: string } | null;
   playable: boolean;
   before: string | null; // preview tokens
@@ -65,7 +67,13 @@ export async function changesView(prUrl: string): Promise<ChangesView | null> {
   const run = runForPr(prUrl);
   const agent = run && getAgent(run.agentId);
   const first = runForPrFirst(prUrl);
-  let summary = run?.result ? plainText(run.result) : "";
+  const wfRow = db().prepare("SELECT id FROM workflow_runs WHERE pr_url = ? ORDER BY id DESC LIMIT 1").get(prUrl) as { id: number } | undefined;
+  const wr = wfRow ? getWfRun(wfRow.id) : null;
+  const ship = wr && wr.status === "needs" && shipsOnOk(wr) ? { wfRunId: wr.id, label: wr.waiting?.kind === "ship" ? "Ship it" : "Approve and ship" } : null;
+  // A workflow's change: what its build step said it did (not the goal again).
+  const built = wr ? (db().prepare("SELECT id FROM runs WHERE workflow_run_id = ? AND result IS NOT NULL AND extra NOT LIKE '%\"role\":\"review\"%' ORDER BY id DESC LIMIT 1").get(wr.id) as { id: number } | undefined) : undefined;
+  const builtRun = built ? getRun(built.id) : null;
+  let summary = run?.result ? plainText(run.result) : builtRun?.result ? plainText(builtRun.result) : "";
   if (!summary) {
     const what = pr.body.match(/\*\*What it did:\*\*\s*(.+)/)?.[1];
     summary = plainText(what ?? pr.body.split(/\n\s*\n/).find((p) => p.trim() && !p.startsWith("<")) ?? pr.title).slice(0, 1200);
@@ -91,7 +99,7 @@ export async function changesView(prUrl: string): Promise<ChangesView | null> {
     careful: carefulLine(run?.extra.flow) ?? carefulLine(first?.extra.flow), review: review ? { status: review.status, verdict: review.verdict, text: review.text } : null,
     files: pr.files.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })), additions: pr.additions, deletions: pr.deletions,
     run: run && agent ? { id: run.id, agentId: agent.id, agentName: agent.name, task: run.task } : null,
-    playable, before, after, page, clash: pr.state === "OPEN" && pr.mergeable === "CONFLICTING",
+    playable, before, after, page, clash: pr.state === "OPEN" && pr.mergeable === "CONFLICTING", ship,
   };
 }
 

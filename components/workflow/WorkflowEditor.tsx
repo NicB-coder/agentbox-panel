@@ -336,10 +336,10 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       <BackLink href="/workflows">All workflows</BackLink>
 
       {/* Top: name, project, On/Off, Test run, Save */}
-      <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-end">
-          <label className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-[14px] font-semibold text-muted">Name (click it to change it)</span>
+      <div className="mt-4 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 md:flex-row md:items-end">
+          <label className="flex min-w-[240px] flex-1 flex-col gap-1">
+            <span className="whitespace-nowrap text-[14px] font-semibold text-muted">Name (click it to change it)</span>
             <input
               value={def.name}
               onChange={(e) => update({ ...def, name: e.target.value }, "name")}
@@ -348,7 +348,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
               disabled={live}
             />
           </label>
-          <div className="sm:w-[240px]">
+          <div className="md:w-[240px] md:shrink-0">
             <ProjectSelect value={def.project} onChange={(p) => update({ ...def, project: p })} projects={data.projects} tip="The code this workflow works on. All its steps share one copy of it and one pull request." />
           </div>
         </div>

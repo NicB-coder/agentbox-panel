@@ -79,7 +79,7 @@ export function stepSubtitle(s: WfStep, steps: WfStep[], agents: AgentRef[]): st
       if (s.trigger === "issue_label") return `Issue labeled “${s.label || "agent"}”`;
       return TRIGGER_WORDS[s.trigger ?? "manual"];
     case "agent":
-      return s.agentId == null ? short(s.prompt) || "Write what it should do" : short(s.prompt) || "Does its usual job";
+      return s.agentId == null ? short(s.prompt) || "Write what it should do" : short(s.prompt) || "Builds what your goal says";
     case "research":
       return short(s.prompt) || "Looks things up";
     case "review":

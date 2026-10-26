@@ -67,7 +67,8 @@ function readRun(file: string): HeartbeatRun | null {
   if (at === null) return null;
   const d = new Date(at);
   const intoHour = d.getMinutes() * 60000 + d.getSeconds() * 1000;
-  return { at, onTime: intoHour <= ON_TIME_MS, reply: reply ? reply.slice(0, 200) : null };
+  const outOfUsage = !!reply && /hit your (session |weekly |usage )?limit|usage limit|out of (extra )?usage/i.test(reply);
+  return { at, onTime: intoHour <= ON_TIME_MS, reply: reply ? reply.slice(0, 200) : null, outOfUsage };
 }
 
 export function readHeartbeat(): HeartbeatInfo {

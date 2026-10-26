@@ -35,7 +35,7 @@ export function CarefulPicker({ value, onChange, tip = CAREFUL_TIP }: { value: b
 export function ModelPicker({ value, onChange }: { value: Model; onChange: (v: Model) => void }) {
   return (
     <Segmented<Model>
-      legend="Model"
+      legend="Which AI?"
       tip="Fast is good for most jobs. Smartest thinks harder, but takes longer and uses more of your Claude usage."
       value={value}
       onChange={onChange}
@@ -47,7 +47,7 @@ export function ModelPicker({ value, onChange }: { value: Model; onChange: (v: M
   );
 }
 
-export function MinutesSlider({ value, onChange, min = 5, max = 180, label = "Time limit", tip = "The longest one run may take. It's a safety cap: if it runs out, you can press Keep going. Waiting for you or for usage doesn't count.", off }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string; tip?: string; off?: string }) {
+export function MinutesSlider({ value, onChange, min = 5, max = 180, label = "Time limit", tip = "The longest one run may take. It's a safety cap: if it runs out, its work is kept and you can press Keep going or Pick up where it stopped. Waiting for you or for usage doesn't count.", off }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string; tip?: string; off?: string }) {
   const words = value >= 60 ? `${Math.floor(value / 60)} h${value % 60 ? ` ${value % 60} min` : ""}` : `${value} min`;
   return <Slider value={value} onChange={onChange} min={min} max={max} label={label} tip={tip} words={off ? "Doesn't apply" : words} off={off} />;
 }

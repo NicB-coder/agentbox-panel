@@ -1,4 +1,4 @@
-import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent, runsWithStatus } from "./db";
+import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent, runsWithStatus, wfRunsWithStatus } from "./db";
 import { readHeartbeat } from "./heartbeat";
 import { lowDisk } from "./machine";
 import { listReports } from "./reports";
@@ -216,8 +216,10 @@ export function homeState(): HomeState {
   const needs = inboxCount();
   const h = new Date().getHours();
   const greeting = `Good ${h < 5 ? "evening" : h < 12 ? "morning" : h < 18 ? "afternoon" : "evening"}, Nic`;
+  const flows = wfRunsWithStatus("running", "queued").length;
   const parts = [
     `${working} agent${working === 1 ? "" : "s"} working`,
+    ...(flows ? [`${flows} workflow${flows === 1 ? "" : "s"} running`] : []),
     needs ? `${needs} thing${needs === 1 ? "" : "s"} need${needs === 1 ? "s" : ""} you` : "nothing needs you",
   ];
   const u = usageState();

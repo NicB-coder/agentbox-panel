@@ -132,7 +132,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
 
         {/* Settings */}
         <section className="panel flex flex-col gap-8 p-6 sm:p-8">
-          <ProjectSelect value={a.project} onChange={(p) => set("project", p)} projects={projects} optional={job.kind === "research"} tip="The code this job works on. It always works in its own copy, never straight in main." />
+          <ProjectSelect value={a.project} onChange={(p) => set("project", p)} projects={projects} optional={job.kind === "research"} tip="Which app, game or site it works on. It always works on its own copy, never straight in your real project." />
           <WhenPicker value={{ scheduleKind: a.scheduleKind, scheduleDays: a.scheduleDays, scheduleTime: a.scheduleTime }} onChange={(w) => setA((x) => ({ ...x, ...w }))} nowLabel="When I start it" />
           <FreedomPicker value={freedom} onChange={(f) => setFreedom(f, job.askEachStep)} />
           <CarefulPicker value={job.careful} onChange={(c) => setJob({ careful: c })} />

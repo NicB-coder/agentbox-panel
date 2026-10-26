@@ -24,7 +24,8 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
   const [choice, setChoice] = useState<Steps>({ from: "default" });
   const [changing, setChanging] = useState(false);
   const [words, setWords] = useState("");
-  const [autoGoal, setAutoGoal] = useState(""); // a goal a template filled in, not typed by Nic
+  const [autoGoal, setAutoGoal] = useState("");
+  const [idea, setIdea] = useState<{ goal: string; title: string } | null>(null); // a picked idea is named after its title // a goal a template filled in, not typed by Nic
   const [busy, setBusy] = useState<"" | "make" | "words">("");
   const [error, setError] = useState<{ msg: string; retry?: () => void } | null>(null);
   const [coach, setCoach] = useState(false); // the prompt coach is open
@@ -81,7 +82,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
       const briefWords = brief ? brief.name.replace(/\.(md|markdown|txt)$/i, "").replace(/[-_]+/g, " ") : "";
       const fromBrief = briefWords && !/^(claude|brief|readme|agents|spec|plan)$/i.test(briefWords) && !typed.trim() && !(plan.steps[0]?.task ?? "").trim() ? nameFromGoal(briefWords) : "";
       // Named from Nic's own words when he typed some (shorter than the coach's version).
-      const name = fromBrief || (!typed.trim() || (autoGoal && typed === autoGoal) ? plan.name : nameFromGoal(goal.trim() || g));
+      const name = fromBrief || (!typed.trim() || (autoGoal && typed === autoGoal) ? plan.name : idea && [goal, typed].some((x) => x.startsWith(idea.goal.slice(0, 40))) ? idea.title.slice(0, 60) : nameFromGoal(goal.trim() || g));
       const w = await post<{ id: number }>("/api/workflows", { name, project, steps, limits: planned.limits });
       rememberProject(project);
       router.push(`/workflows/${w.id}?new=1`);
@@ -161,8 +162,9 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
             <IdeaHelp
               where="workflow"
               onClose={() => setIdeas(false)}
-              onPick={(g) => {
+              onPick={(g, title) => {
                 setGoal(g);
+                setIdea({ goal: g, title });
                 setAutoGoal("");
                 setIdeas(false);
                 setTimeout(() => document.getElementById("nw-goal")?.focus(), 30);

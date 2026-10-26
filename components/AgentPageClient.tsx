@@ -704,6 +704,11 @@ function HeartbeatNow({ data }: { data: AgentPageState }) {
       <p className="mt-3 text-[20px] font-semibold leading-snug">
         {hb.onTimeToday} of {hb.expectedToday} check-ins on time today
       </p>
+      {hb.todayRuns.some((r) => r.outOfUsage) && (
+        <p className="mt-1 text-[15px] font-medium text-[#8A4600]">
+          {hb.todayRuns.filter((r) => r.outOfUsage).length} of them came in while Claude was out of usage, so they couldn't say more than that. That's not a problem with this Mac.
+        </p>
+      )}
       <p className="mt-1 text-[15px] text-muted">
         {hb.running ? "Checking in right now." : last ? `Last check-in ${ago(last.at)} at ${clockOf(last.at)}.` : "No check-ins yet."}
         {last?.reply ? ` It said: “${last.reply}”` : ""}
@@ -730,7 +735,7 @@ function HeartbeatHistory({ data }: { data: AgentPageState }) {
               {r.reply && <p className="text-[14px] text-muted">{r.reply}</p>}
             </div>
             <div>
-              <StatusPill status={r.onTime ? "done" : "needs"} label={r.onTime ? "On time" : "Late"} />
+              <StatusPill status={r.outOfUsage ? "needs" : r.onTime ? "done" : "needs"} label={r.outOfUsage ? "Out of usage" : r.onTime ? "On time" : "Late"} />
             </div>
           </li>
         ))}

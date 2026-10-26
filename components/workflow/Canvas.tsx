@@ -184,7 +184,7 @@ export default function Canvas({ steps, agents, selected, onSelect, onInsert, on
             const subtitle = live && isNow ? plainText(live.nowText[s.id] ?? sr?.note ?? "") : live && sr?.note && state !== "todo" ? plainText(sr.note) : stepSubtitle(s, order, agents);
             return (
               <li key={s.id} className={vertical ? "flex flex-col items-start" : "flex items-center"}>
-                {i > 0 && <Connector vertical={vertical} label={hasFailPath(order[i - 1]) ? "passed" : null} onAdd={live ? null : () => onInsert(i)} />}
+                {i > 0 && <Connector vertical={vertical} label={hasFailPath(order[i - 1]) ? "if it passes" : null} onAdd={live ? null : () => onInsert(i)} />}
                 <div
                   ref={(el) => {
                     if (el) tileRefs.current.set(s.id, el);
@@ -285,7 +285,7 @@ export default function Canvas({ steps, agents, selected, onSelect, onInsert, on
           const b = target ? rects[target] : null;
           if (!a) return null;
           const d = 40 + level * 30;
-          const text = b ? "needs work" : "needs work: stop and tell me";
+          const text = b ? "if it needs work" : "if it needs work: stop and tell me";
           const style: React.CSSProperties = vertical
             ? b
               ? { left: a.x + a.w + d * 0.9, top: (a.y + b.y + b.h) / 2, transform: "translate(-50%,-50%) rotate(-90deg)" }

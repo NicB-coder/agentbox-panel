@@ -19,7 +19,12 @@ export default function RunStepPanel({ step, run, info, agents, onClose }: { ste
     <Sheet title={stepTitle(step, agents)} icon={stepIcon(step, agents)} color={stepColor(step, agents)} onClose={onClose} ask="What did this step do?">
       <div>
         <p className="text-[14px] font-semibold text-muted">{WORD[sr?.state ?? "todo"]}</p>
-        {sr?.note && <p className="mt-1 text-[16px] font-semibold leading-snug">{plainText(sr.note)}</p>}
+        {(() => {
+          // While it works, say what it's doing right now (not the note from when it started).
+          const now = sr?.state === "now" ? runs.at(-1)?.activity : null;
+          const line = now || sr?.note;
+          return line ? <p className="mt-1 text-[16px] font-semibold leading-snug">{plainText(line)}</p> : null;
+        })()}
         {sr?.startedAt && (
           <p className="mt-1 text-[14px] text-muted">
             Started {clockOf(sr.startedAt)}
@@ -36,7 +41,11 @@ export default function RunStepPanel({ step, run, info, agents, onClose }: { ste
           </Link>
         </p>
       )}
-      {runs.length === 0 && <p className="text-[15px] text-muted">{sr?.state === "todo" ? "This step hasn't started yet." : "agentbox did this step itself."}</p>}
+      {runs.length === 0 && (
+        <p className="text-[15px] text-muted">
+          {sr?.state === "todo" ? "This step hasn't started yet." : sr?.state === "waiting" ? "It's waiting for you. Answer with the box above the steps, or in the Inbox." : "agentbox did this step itself."}
+        </p>
+      )}
       {runs
         .slice()
         .reverse()
@@ -44,9 +53,9 @@ export default function RunStepPanel({ step, run, info, agents, onClose }: { ste
           <StepRun key={r.id} r={r} label={runs.length > 1 ? `Try ${runs.length - i}` : null} />
         ))}
       {run.prUrl && (
-        <a href={run.prUrl} target="_blank" rel="noreferrer" className={btn.secondary}>
-          See the pull request
-        </a>
+        <Link href={`/changes?pr=${encodeURIComponent(run.prUrl)}`} className={btn.secondary}>
+          See what changed
+        </Link>
       )}
     </Sheet>
   );

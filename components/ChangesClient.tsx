@@ -237,6 +237,7 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [confirm, setConfirm] = useState(false);
+  const [shipAsk, setShipAsk] = useState(false);
   async function go(fn: () => Promise<unknown>, done: string) {
     setBusy(true);
     setErr("");
@@ -276,6 +277,11 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
       {open && v.run && !v.clash && (
         <button className={btn.primary} disabled={busy} onClick={() => setConfirm(true)}>
           Merge it
+        </button>
+      )}
+      {open && v.ship && !v.clash && (
+        <button className={btn.primary} disabled={busy} onClick={() => setShipAsk(true)}>
+          {v.ship.label}
         </button>
       )}
       {open && needsFix && (
@@ -333,6 +339,17 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
           if (v.run) go(() => post(`/api/runs/${v.run!.id}/merge`), "Done. It's in your project now.");
         }}
         onClose={() => setConfirm(false)}
+      />
+      <Confirm
+        open={shipAsk}
+        title="Ship it: put these changes into your project?"
+        text="Shipping adds the changes to the real version of your project (this is also called merging). If you change your mind later, start a task that says what to undo."
+        yes="Ship it"
+        onYes={() => {
+          setShipAsk(false);
+          if (v.ship) go(() => post(`/api/workflow-runs/${v.ship!.wfRunId}/answer`, { action: "approve" }), "Shipping it now. It'll be in your project in a moment.");
+        }}
+        onClose={() => setShipAsk(false)}
       />
     </section>
   );

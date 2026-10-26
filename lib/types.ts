@@ -188,6 +188,7 @@ export type HeartbeatRun = {
   at: number; // ms
   onTime: boolean;
   reply: string | null;
+  outOfUsage?: boolean; // it checked in, but Claude answered "you've hit your limit"
 };
 
 export type HeartbeatInfo = {
