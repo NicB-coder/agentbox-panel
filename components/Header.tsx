@@ -326,7 +326,7 @@ function UsageMeter({ u }: { u: UsageView }) {
         <span className="hidden 2xl:inline">{long}</span>
         <span className="2xl:hidden">
           {short}
-          {pct !== null && !s.limited && <span className="max-sm:hidden"> used</span>}
+          {pct !== null && !s.limited && <span> used</span>}
         </span>
       </button>
       {open && (

@@ -99,13 +99,13 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
   );
   const modelPick = (tip: string) => (
     <Segmented
-      legend="Which model?"
+      legend="Which AI?"
       tip={tip}
       value={s.model ?? "sonnet"}
       onChange={(v) => onChange({ model: v })}
       options={[
-        { value: "sonnet", label: "Fast (Sonnet)" },
-        { value: "opus", label: "Smartest (Opus)" },
+        { value: "sonnet", label: "Fast" },
+        { value: "opus", label: "Smartest" },
       ]}
     />
   );
@@ -235,7 +235,7 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
             <Label tip="Optional. Extra things the reviewer should check, like 'works on phones' or 'no new packages'.">Anything else to check? (optional)</Label>
             <textarea value={s.prompt ?? ""} onChange={(e) => onChange({ prompt: e.target.value }, "prompt")} rows={3} className="rounded-[14px] border border-[#C9CDD4] p-3 text-[15px]" aria-label="Anything else to check?" />
           </label>
-          {modelPick("A different model from the one that built it catches more. Smartest (Opus) reviewing Fast (Sonnet) work is a good pair.")}
+          {modelPick("A different AI from the one that built it catches more. Smartest checking Fast's work is a good pair.")}
           {timeSlider}
           {failSelect}
         </>

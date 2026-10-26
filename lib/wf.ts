@@ -161,7 +161,7 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
         {
           const a = agents.find((x) => x.id === s.agentId);
           const look = (s.freedom ?? (s.mode === "look" ? "look" : null)) === "look" || a?.allowed === "look";
-          const how = s.careful ? " carefully" : "";
+          const how = s.careful ? " carefully (with its own check by a second AI)" : "";
           parts.push(s.agentId == null ? (look ? "it takes a look" : `it builds it${how}`) : look ? `${stepTitle(s, agents)} takes a look` : `${stepTitle(s, agents)} works on it${how}`);
         }
         break;

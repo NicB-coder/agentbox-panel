@@ -268,7 +268,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
               <ProgressBar p={view.progress} color={view.agent.color} />
             </div>
           )}
-          <Steps run={run} />
+          {!(run.status === "waiting" && run.plan) && <Steps run={run} />}
           {run.extra.flow?.big && <BigJob run={run} used={data.bigUsed} held={data.held} act={act} busy={busy} />}
           {pending && pending.kind === "tool" && <AskBox approval={pending} act={act} busy={busy} />}
           {run.plan && run.status === "waiting" && !pending && <PlanBox run={run} act={act} busy={busy} />}

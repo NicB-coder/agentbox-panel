@@ -52,6 +52,7 @@ export default function HomeClient({ initial }: { initial: HomeState }) {
         ))}
       </div>
       <section aria-label={show === "active" ? "Your agents" : "Archived agents"}>
+        {show === "archived" && list.length > 0 && <p className="-mt-4 mb-6 text-[15px] text-muted">Put away, not deleted. Open one and press Unarchive to bring it back.</p>}
         {show === "archived" && list.length === 0 ? (
           <EmptyState icon="folder" title="Nothing archived" text="When a job is finished, press Archive on its page to tidy it away. It shows up here with all its history." />
         ) : (

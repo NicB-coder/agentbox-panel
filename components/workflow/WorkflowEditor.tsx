@@ -287,6 +287,13 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       setBusy("");
     }
   }
+  // Leaving with unsaved changes asks first (the browser's own "Leave site?").
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   // Apply and Restore save straight away (each becomes a version), and Undo still brings the old steps back.
   function applyChange(d: ChangeDraft, text: string) {
     const next = { ...def, steps: normalize(d.steps), limits: d.limits };
@@ -431,7 +438,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
                 update({ ...def, steps: def.steps.map((x, i) => (i === 0 ? { ...x, brief: b ?? undefined } : x)) });
               }}
               openRef={openBrief}
-              tip="A longer file that says exactly what to make, like a CLAUDE.md. It's copied into the workflow's copy of the project at the start of every run, so every step sees it. Remember to Save."
+              tip="Optional. A text file with longer instructions. Every step reads it before it starts. Remember to save after attaching it."
             />
           </div>
         </div>

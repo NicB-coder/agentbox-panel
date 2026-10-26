@@ -185,7 +185,7 @@ export const WAITING_FOR_USAGE = "Waiting for usage to reset";
 export async function startRun(agentId: number, opts: StartOpts): Promise<Run> {
   const agent = getAgent(agentId);
   if (!agent || (agent.kind !== "claude" && agent.kind !== "helper")) throw new Error("This agent can't run tasks.");
-  if (!agent.enabled) throw new Error("This agent is switched off. Turn it on in Settings first.");
+  if (!agent.enabled) throw new Error("This agent is switched off. Press Change this agent and turn it On first.");
   if (pausedAll()) throw new Error("Everything is paused. Press Resume everything at the top first.");
   if (agent.kind === "claude" && activeRun(agentId)) throw new Error("It's already working on something.");
   const project = opts.project ?? agent.project;

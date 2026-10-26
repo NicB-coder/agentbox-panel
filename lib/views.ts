@@ -43,11 +43,13 @@ function heartbeatView(a: Agent, hb: HeartbeatInfo): AgentView {
     : last
       ? `Last check-in at ${clockOf(last.at)}${last.reply ? `: “${last.reply}”` : "."}`
       : "No check-ins yet.";
+  // It just shows agentbox is alive; say so, so nobody thinks they have to look after it.
+  const calm = status === "stopped" ? summary : `Shows this Mac is awake and answering. Nothing for you to do. ${summary}`;
   return {
     agent: a,
     status,
     task: status === "stopped" && overdue ? "Missed its last check-in" : "Hourly check-in",
-    summary,
+    summary: calm,
     waitingForOk: false,
     timeLabel: `${hb.onTimeToday} of ${hb.expectedToday} on time`,
     activeRun: null,
@@ -84,6 +86,7 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
     return {
       ...base,
       status: "needs",
+      pillLabel: "Needs your OK",
       task: run.task,
       summary: pending?.kind === "plan" || run.plan ? "Waiting for your OK on its plan." : `Waiting for your OK: ${pending?.summary ?? "it has a question"}`,
       waitingForOk: true,
@@ -107,8 +110,9 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
     return {
       ...base,
       status: "needs",
+      pillLabel: "Ready to look at",
       task: review.task,
-      summary: careful ? `Ready to merge. ${careful}.` : "Its pull request is ready for you to look at.",
+      summary: careful ? `Finished and ready for you to look at. ${careful}.` : "Finished and ready for you to look at.",
       timeLabel: ago(review.endedAt ?? review.startedAt, now),
     };
   }

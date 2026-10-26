@@ -139,8 +139,8 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
           <MinutesSlider value={a.maxMinutes} onChange={(v) => set("maxMinutes", v)} />
           <ModelPicker value={a.model} onChange={(v) => set("model", v)} />
           <NotifyPicker value={a.notify} onChange={(v) => set("notify", v)} />
-          {freedom !== "look" && <Switch label="Ask me each step" tip="It stops before every command or change and waits for your Allow or Deny." checked={job.askEachStep} onChange={(v) => setFreedom(freedom, v)} />}
-          <Switch label="On" tip="Turn it off to keep it but stop it from running, even on its schedule." checked={a.enabled} onChange={(v) => set("enabled", v)} />
+          {freedom !== "look" && <Switch label="Ask me each step" tip="Even stricter than Check with me first: it stops before every single change and waits for you to press Allow or Deny." checked={job.askEachStep} onChange={(v) => setFreedom(freedom, v)} />}
+          <Switch label={a.enabled ? "On" : "Off"} tip="Off keeps the agent but stops it from running at all: no schedule, and Run now and follow-ups won't start it either. Leave it On unless you want it to rest." checked={a.enabled} onChange={(v) => set("enabled", v)} />
         </section>
 
         <div className="sticky bottom-[calc(56px+env(safe-area-inset-bottom))] -mx-4 border-t border-line bg-white/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">

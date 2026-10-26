@@ -54,7 +54,9 @@ export function computeSpot(open: boolean): Spot {
     }
 
   const right0 = phone ? 16 : 24;
-  const bottom0 = host ? 16 : phone ? 72 : 24;
+  // A small pop-up on a phone leaves the bottom tabs showing under the dim: stay above them there too.
+  const fullHeight = !!host && host.getBoundingClientRect().bottom >= vh - 1;
+  const bottom0 = host ? (phone && !fullHeight ? 72 : 16) : phone ? 72 : 24;
   // The corner first, then beside side panels, then anywhere along the row (a crowded pop-up on a phone).
   const across: number[] = [];
   for (let x = vw - right0 - SIZE - 64; x > 16; x -= 64) across.push(x);
