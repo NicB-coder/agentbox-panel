@@ -13,7 +13,7 @@ import { field } from "./ui";
 export const FREEDOM_TIP = "How much it may do on its own. Look only: it reads and reports, never changes anything. Check with me first: it shows you a short plan and waits for your OK. On its own: it works by itself, and you look at the finished change before it goes into your project.";
 export const CAREFUL_TIP = "Careful: after it builds, a second AI reviews the work, it fixes what's found (up to 2 rounds), polishes it, and it's checked once more before it reaches your Inbox. Quick: just does it, with one fast check by a second AI at the end. Good for tiny tasks.";
 
-export function FreedomPicker({ value, onChange, legend = "Freedom", tip = FREEDOM_TIP }: { value: Freedom; onChange: (v: Freedom) => void; legend?: string; tip?: string }) {
+export function FreedomPicker({ value, onChange, legend = "How much can it do on its own?", tip = FREEDOM_TIP }: { value: Freedom; onChange: (v: Freedom) => void; legend?: string; tip?: string }) {
   return <Segmented<Freedom> legend={legend} tip={tip} value={value} onChange={onChange} options={FREEDOM_ORDER.map((f) => ({ value: f, label: FREEDOM_WORDS[f].label }))} />;
 }
 

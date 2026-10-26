@@ -71,8 +71,8 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
                   {a.paused ? "Resume" : "Pause"}
                 </button>
               </>
-            ) : (
-              <button className={btn.primary} disabled={working || !!busy} onClick={() => openFollowUp(a)}>
+            ) : working ? null : (
+              <button className={btn.primary} disabled={!!busy} onClick={() => openFollowUp(a)}>
                 Add a follow-up
               </button>
             )}
@@ -258,7 +258,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
           <Changed run={run} />
           {run.status === "queued" ? (
             <p className="mt-2 rounded-[14px] bg-soft px-4 py-3 text-[15px] font-medium">
-              {run.activity ?? "Waiting"}. {run.extra.resume ? "It carries on by itself, right where it left off." : "It starts by itself."}
+              {run.extra.resume && run.extra.resume.until < Date.now() ? "Trying again now…" : `${run.activity ?? "Waiting"}.`} {run.extra.resume ? "It carries on by itself, right where it left off. (Claude's own limit can kick in a little before the meter at the top shows 100%.)" : "It starts by itself."}
             </p>
           ) : (
             <p className="mt-1 text-[15px] text-muted">
@@ -288,7 +288,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
           <p className="mt-3 text-[20px] font-semibold leading-snug">{last.task}</p>
           <div className="mt-4 rounded-[18px] bg-[#FDF0DC] p-5 text-[#8A4600]">
             <p className="text-[16px] font-semibold">{last.extra.overBudget ? "It used its usage budget." : `It ran out of time after ${duration(last.extra.activeMs ?? 0)} of work.`}</p>
-            <p className="mt-1 text-[15px]">Its work so far is kept. It carries on right where it stopped.</p>
+            <p className="mt-1 text-[15px]">Its work so far is kept. {data.canContinue[last.id] ? "Press the button below to give it more and it carries on right where it stopped." : "Press Try again to start it again."}</p>
             <div className="mt-4 flex flex-wrap gap-3">
               {data.canContinue[last.id] ? (
                 last.extra.overBudget ? (
@@ -386,7 +386,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
           </button>
         )}
         <button className={btn.secondary} disabled={!!busy} onClick={() => setNoting(!noting)} aria-expanded={noting}>
-          Send back with a note
+          Ask it to change something
         </button>
       </div>
       {noting && (
@@ -408,7 +408,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
           </div>
         </form>
       )}
-      <p className="mt-3 text-[14px] text-muted">When it's merged, this turns to Done by itself.</p>
+      <p className="mt-3 text-[14px] text-muted">{r?.status === "running" ? "You can put it in now, or wait a few minutes for the second AI's notes. " : ""}Once it's in your project, this turns to Done by itself.</p>
       <Confirm
         open={install}
         title="Install it?"
@@ -423,7 +423,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
       <Confirm
         open={confirm}
         title="Put these changes into your project?"
-        text="This adds the changes to the real version of your project (this is called merging). If you change your mind later, start a task that says what to undo."
+        text="This adds the changes to the real version of your project (this is called merging, or shipping). Changed your mind later? It's easy to undo: start a task that says what to take out, and an agent does it."
         yes="Put it in"
         onYes={() => {
           setConfirm(false);
@@ -606,7 +606,7 @@ function FollowUp({ agent, disabled, waiting }: { agent: Agent; disabled: boolea
         </label>
         <div className="flex flex-wrap items-center gap-3">
           <button type="submit" className={btn.primary} disabled={disabled}>
-            Next
+            Check and start
           </button>
           {disabled && <span className="text-[14px] text-muted">{waiting ? "It's waiting for your answer above. You can add a follow-up when it's done." : "It's working right now. You can add a follow-up when it's done."}</span>}
         </div>

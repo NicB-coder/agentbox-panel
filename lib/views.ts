@@ -77,7 +77,7 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
       status: "queued",
       pillLabel: "Waiting",
       task: run.task,
-      summary: run.activity ?? "Waiting for usage to reset",
+      summary: run.extra.resume && run.extra.resume.until < now ? "Trying again now…" : run.activity ?? "Waiting for usage to reset",
       timeLabel: run.extra.resume ? `back at ${clockOf(run.extra.resume.until)}` : `asked ${ago(run.startedAt, now)}`,
       progress: progressOf(run),
       elapsedMs: run.extra.activeMs ?? 0,
@@ -216,7 +216,7 @@ export function homeState(): HomeState {
   const working = views.filter((v) => v.status === "working").length;
   const needs = inboxCount();
   const h = new Date().getHours();
-  const greeting = `Good ${h < 5 ? "evening" : h < 12 ? "morning" : h < 18 ? "afternoon" : "evening"}, Nic`;
+  const greeting = h < 5 ? "Hi, Nic" : `Good ${h < 12 ? "morning" : h < 18 ? "afternoon" : "evening"}, Nic`;
   const flows = wfRunsWithStatus("running", "queued").length;
   const parts = [
     `${working} agent${working === 1 ? "" : "s"} working`,
@@ -231,7 +231,7 @@ export function homeState(): HomeState {
     : u.limited
     ? `You're out of Claude usage${u.limitedUntil ? ` until ${clockOf(u.limitedUntil)}` : " for now"}. New runs wait and start by themselves after that.`
     : queued
-      ? `${queued} ${queued === 1 ? "run is" : "runs are"} waiting for usage to reset.`
+      ? `${queued} ${queued === 1 ? "run is" : "runs are"} waiting for Claude's usage to free up. ${queued === 1 ? "It carries" : "They carry"} on by themselves. Nothing is broken.`
       : null;
   return { greeting, summary: parts.join(" · "), needs, usageNote, views, archived };
 }

@@ -12,7 +12,7 @@ export const STEP_INFO: Record<StepType, { title: string; icon: string; color: s
   review: { title: "Review", icon: "eye", color: "#0F7B6C", help: "A second AI checks the work against what you asked for. It either passes it, or sends it back to be fixed." },
   check: { title: "Check", icon: "check", color: "#0E7490", help: "Hard tests, not opinions: tests pass, the page loads, no errors." },
   ask: { title: "Ask me", icon: "hand", color: "#B45309", help: "Waits for you in the Inbox: Approve, Send back or Stop." },
-  ship: { title: "Ship", icon: "rocket", color: "#BE185D", help: "Merges the pull request into main." },
+  ship: { title: "Put it in", icon: "rocket", color: "#BE185D", help: "Puts the finished change into your real project (this is also called shipping). It asks you first, unless you set it to automatic." },
   tell: { title: "Tell me", icon: "bell", color: "#2F4FD8", help: "Sends you a Discord message with a summary and links." },
 };
 
@@ -182,7 +182,7 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
         parts.push("it asks for your OK");
         break;
       case "ship":
-        parts.push(s.shipMode === "auto" ? "it ships automatically if every check passed" : "it ships after you say yes");
+        parts.push(s.shipMode === "auto" ? "it puts it in your project by itself if every check passed" : "it puts it in your project after you say yes");
         break;
       case "tell":
         parts.push(s.tellWhen === "problems" ? "it sends you a message if something's wrong" : "it sends you a message");
@@ -212,7 +212,7 @@ function joinAnd(xs: string[]) {
 export type TemplateKey = "build-review-ship" | "nightly-site-check" | "research-report" | "issues-to-prs";
 
 export const TEMPLATES: { key: TemplateKey; name: string; blurb: string }[] = [
-  { key: "build-review-ship", name: "Build → Review → Ship", blurb: "Look things up first, build it, have it checked and tested, then put it in after you say yes." },
+  { key: "build-review-ship", name: "Build → Review → Put it in", blurb: "Look things up first, build it, have it checked and tested, then put it in after you say yes." },
   { key: "nightly-site-check", name: "Nightly site check", blurb: "Every night it opens your site in a real browser and tells you if something's broken." },
   { key: "research-report", name: "Research report", blurb: "Look a topic up and write you a short report, saved in your project." },
   { key: "issues-to-prs", name: "Ideas to pull requests", blurb: "For people who use GitHub: when an idea there gets the “agent” label, it gets built, checked, then it asks you." },
@@ -240,7 +240,7 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
           b,
           review(b.id),
           { id: newId(), type: "check", checks: ["tests"], pagePath: "/", onFail: b.id },
-          { id: newId(), type: "ask", question: "It's built, reviewed and tested. Ship it?" },
+          { id: newId(), type: "ask", question: "It's built, reviewed and tested. Put it in your project?" },
           { id: newId(), type: "ship", shipMode: "ask" },
           { id: newId(), type: "tell", tellWhen: "always", openIssue: false },
         ],
@@ -317,7 +317,7 @@ export function nameFromGoal(goal: string): string {
     .filter(Boolean)
     .slice(0, 5);
   // Don't end on a little joining word: "Snake game with" → "Snake game".
-  while (words.length > 1 && /^(a|an|the|and|or|with|for|to|of|in|on|that|which|so|it|my)$/i.test(words[words.length - 1].replace(/[.,:;!?]+$/, ""))) words.pop();
+  while (words.length > 1 && /^(a|an|the|and|or|with|for|to|of|in|on|at|by|from|into|that|which|so|it|my|its|your)$/i.test(words[words.length - 1].replace(/[.,:;!?]+$/, ""))) words.pop();
   const name = words.join(" ").replace(/[.,:;!?]+$/, "");
   if (!name) return "New workflow";
   return (name.charAt(0).toUpperCase() + name.slice(1)).slice(0, 60);

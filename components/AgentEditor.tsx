@@ -140,7 +140,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
           <ModelPicker value={a.model} onChange={(v) => set("model", v)} />
           <NotifyPicker value={a.notify} onChange={(v) => set("notify", v)} />
           {freedom !== "look" && <Switch label="Ask me each step" tip="Even stricter than Check with me first: it stops before every single change and waits for you to press Allow or Deny." checked={job.askEachStep} onChange={(v) => setFreedom(freedom, v)} />}
-          <Switch label={a.enabled ? "On" : "Off"} tip="Off keeps the agent but stops it from running at all: no schedule, and Run now and follow-ups won't start it either. Leave it On unless you want it to rest." checked={a.enabled} onChange={(v) => set("enabled", v)} />
+          <Switch label={a.enabled ? "On (it can run)" : "Off (it won't run)"} tip="Off keeps the agent but stops it from running at all: no schedule, and Run now and follow-ups won't start it either. Leave it On unless you want it to rest." checked={a.enabled} onChange={(v) => set("enabled", v)} />
         </section>
 
         <div data-helper-avoid="" className="sticky bottom-[calc(56px+env(safe-area-inset-bottom))] -mx-4 border-t border-line bg-white/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
@@ -164,7 +164,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
                 Delete agent
               </button>
             )}
-            <Confirm open={confirmDelete} title={`Delete ${initial.name}?`} text="Its history goes too. This can't be undone." yes="Delete it" danger onYes={remove} onClose={() => setConfirmDelete(false)} />
+            <Confirm open={confirmDelete} title={`Delete ${initial.name}?`} text="Its history goes too. A change it finished that's waiting for you stays on GitHub but leaves your Inbox. This can't be undone." yes="Delete it" danger onYes={remove} onClose={() => setConfirmDelete(false)} />
           </div>
         </div>
       </div>

@@ -172,7 +172,7 @@ const KIND_WORD: Record<InboxItem["kind"], string> = {
   pr: "Ready to look at",
   failed: "Stopped",
   wf_ask: "Waiting for you",
-  wf_ship: "Ready to go in",
+  wf_ship: "Ready to look at",
   wf_failed: "Workflow stopped",
   wf_done: "Finished",
   quiet: "Didn't do anything",
@@ -221,7 +221,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
           {(it.kind === "pr" || it.kind === "failed" || it.kind === "wf_ask" || it.kind === "wf_ship" || it.kind === "wf_failed" || it.kind === "wf_done" || it.kind === "file_pr") && (
             <p className="mt-2 text-[15px] leading-relaxed text-muted">{plainText(it.text)}</p>
           )}
-          {it.kind === "pr" && it.quick && <p className="mt-2 text-[15px] text-muted">It finished in under 2 minutes. That's fine for a small job. For a bigger one, look before you merge to check it did everything.</p>}
+          {it.kind === "pr" && it.quick && <p className="mt-2 text-[15px] text-muted">It finished in under 2 minutes. That's fine for a small job. For a bigger one, look at it first to check it did everything.</p>}
           {it.kind === "quiet" && (
             <>
               <p className="mt-2 text-[16px] leading-relaxed">{it.text}</p>
@@ -322,7 +322,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                   <Confirm
                     open={confirm}
                     title="Put these changes into your project?"
-                    text="This adds the changes to the real version of your project (this is called merging). If you change your mind later, start a task that says what to undo."
+                    text="This adds the changes to the real version of your project (this is called merging, or shipping). Changed your mind later? It's easy to undo: start a task that says what to take out, and an agent does it."
                     yes="Put it in"
                     onYes={() => {
                       setConfirm(false);
@@ -361,13 +361,18 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
               )}
               {(it.kind === "wf_ask" || it.kind === "wf_ship") && (
                 <>
-                  <button className={btn.primary} disabled={b} onClick={() => (it.ships ? setConfirm(true) : act(it.key, `/api/workflow-runs/${it.wfRunId}/answer`, { action: "approve" }))}>
+                  {it.prUrl && (
+                    <Link href={`/changes?pr=${encodeURIComponent(it.prUrl)}`} className={btn.primary}>
+                      Look at it
+                    </Link>
+                  )}
+                  <button className={it.prUrl ? btn.secondary : btn.primary} disabled={b} onClick={() => (it.ships ? setConfirm(true) : act(it.key, `/api/workflow-runs/${it.wfRunId}/answer`, { action: "approve" }))}>
                     {it.kind === "wf_ship" ? "Put it in my project" : it.ships ? "Approve and put it in" : "Approve"}
                   </button>
                   <Confirm
                     open={confirm}
                     title="Put these changes into your project?"
-                    text="Shipping adds the changes to the real version of your project (this is called merging, or shipping). If you change your mind later, start a task that says what to undo."
+                    text="This adds the changes to the real version of your project (this is called merging, or shipping). Changed your mind later? It's easy to undo: start a task that says what to take out, and an agent does it."
                     yes="Put it in"
                     onYes={() => {
                       setConfirm(false);
@@ -379,11 +384,6 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                     <button className={btn.secondary} disabled={b} onClick={() => setNoting(true)}>
                       Send back
                     </button>
-                  )}
-                  {it.prUrl && (
-                    <Link href={`/changes?pr=${encodeURIComponent(it.prUrl)}`} className={btn.secondary}>
-                      Look at it
-                    </Link>
                   )}
                   <button className={btn.link} disabled={b} onClick={() => act(it.key, `/api/workflow-runs/${it.wfRunId}/answer`, { action: "stop" })}>
                     {it.ships ? "Don't put it in" : "Stop"}

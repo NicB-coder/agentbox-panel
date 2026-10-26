@@ -55,7 +55,7 @@ function Suggestions({ list, applied, onApply }: { list: Suggestion[]; applied: 
                 <span className="text-muted"> · {s.why}</span>
               </span>
               <button type="button" className={`${btn.secondary} !min-h-11 !px-4 !text-[14px]`} disabled={on} onClick={() => onApply(s.key)}>
-                {on ? "✓ Turned on" : "Turn it on"}
+                {on ? "✓ Using it" : "Use this setting"}
               </button>
             </li>
           );
@@ -171,10 +171,14 @@ export function CoachBox(props: {
   }
 
   const skip = () => onDone(goal);
+  // Each new part (questions, the improved version) scrolls into view: it's what Nic needs to answer next.
+  useEffect(() => {
+    if (phase.at === "questions" || phase.at === "improved" || phase.at === "good") box.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [phase.at]);
   const answered = phase.at === "questions" && Object.values(answers).some((v) => v.picked.length || (v.otherOn && v.other.trim()));
 
   return (
-    <section ref={box} className="flex flex-col gap-5 rounded-[24px] border border-[#C9D3F5] bg-[#F6F8FE] p-5 sm:p-6" aria-labelledby="coach-h" aria-live="polite">
+    <section ref={box} className="flex scroll-mt-20 flex-col gap-5 rounded-[24px] border border-[#C9D3F5] bg-[#F6F8FE] p-5 sm:p-6" aria-labelledby="coach-h" aria-live="polite">
       <h2 id="coach-h" className="text-[18px] font-bold">
         {phase.at === "good" ? (/^looks good/i.test(phase.check.verdict) ? "Looks good ✓" : "One thing to check") : phase.at === "improved" ? "Here's an improved version" : phase.at === "questions" ? "A few quick questions" : "Checking your goal"}
       </h2>
@@ -188,7 +192,7 @@ export function CoachBox(props: {
             <Question key={i} index={i} q={q} value={answers[i] ?? { picked: [], other: "", otherOn: false }} onChange={(v) => setAnswers({ ...answers, [i]: v })} />
           ))}
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className={btn.primary} onClick={() => improve(phase.check, true)} disabled={!answered}>
+            <button type="button" className={btn.primary} onClick={() => improve(phase.check, answered)}>
               Improve my goal
             </button>
             <button type="button" className={btn.secondary} onClick={skip}>

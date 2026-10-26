@@ -270,20 +270,20 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
       {s.type === "ask" && (
         <label className="flex flex-col gap-2">
           <Label tip="What you'll see in the Inbox. You can Approve, Send it back with a note, or Stop.">What should it ask you? (optional)</Label>
-          <input value={s.question ?? ""} onChange={(e) => onChange({ question: e.target.value }, "question")} placeholder="For example: Look it over. Ship it?" className={`${field} min-h-11`} aria-label="What should it ask you?" maxLength={300} />
+          <input value={s.question ?? ""} onChange={(e) => onChange({ question: e.target.value }, "question")} placeholder="For example: Look it over. Put it in?" className={`${field} min-h-11`} aria-label="What should it ask you?" maxLength={300} />
         </label>
       )}
 
       {s.type === "ship" && (
         <>
           <Segmented
-            legend="How should it ship?"
-            tip="Shipping merges the pull request into main, the real version of your project. If your project deploys from GitHub (like Vercel), that starts the deploy."
+            legend="How should it go in?"
+            tip="This puts the finished change into the real version of your project. If your site goes live from GitHub, this also updates the live site."
             value={s.shipMode ?? "ask"}
             onChange={(v) => onChange({ shipMode: v })}
             options={[
               { value: "ask", label: "Ask me first" },
-              { value: "auto", label: "Ship automatically" },
+              { value: "auto", label: "Put it in by itself" },
             ]}
           />
           {s.shipMode === "auto" && (

@@ -291,11 +291,11 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
       )}
       {open && (
         <button className={btn.secondary} disabled={busy} aria-expanded={mode === "back"} onClick={() => setMode(mode === "back" ? "" : "back")}>
-          Send back with a note
+          Ask it to change something
         </button>
       )}
       <button className={btn.secondary} disabled={busy} aria-expanded={mode === "comment"} onClick={() => setMode(mode === "comment" ? "" : "comment")}>
-        Leave a note (no changes)
+        Just write myself a note
       </button>
       {mode && (
         <form
@@ -332,7 +332,7 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
       <Confirm
         open={confirm}
         title="Put these changes into your project?"
-        text="This adds the changes to the real version of your project (this is called merging). If you change your mind later, start a task that says what to undo."
+        text="This adds the changes to the real version of your project (this is called merging, or shipping). Changed your mind later? It's easy to undo: start a task that says what to take out, and an agent does it."
         yes="Put it in"
         onYes={() => {
           setConfirm(false);
@@ -343,7 +343,7 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
       <Confirm
         open={shipAsk}
         title="Put these changes into your project?"
-        text="Shipping adds the changes to the real version of your project (this is called merging, or shipping). If you change your mind later, start a task that says what to undo."
+        text="This adds the changes to the real version of your project (this is called merging, or shipping). Changed your mind later? It's easy to undo: start a task that says what to take out, and an agent does it."
         yes="Put it in"
         onYes={() => {
           setShipAsk(false);

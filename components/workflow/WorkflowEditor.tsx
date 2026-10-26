@@ -335,11 +335,17 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
     <div className="pt-8 sm:pt-10">
       <BackLink href="/workflows">All workflows</BackLink>
 
+      {/* It needs Nic: say so at the very top (on a phone the box itself is far down the page). */}
+      {live && viewing?.status === "needs" && viewing.waiting && (
+        <a href="#waiting-box" className="mt-4 flex min-h-11 items-center justify-between gap-3 rounded-[14px] bg-[#FDF0DC] px-4 py-2 text-[15px] font-semibold text-[#8A4600] lg:hidden">
+          It's waiting for you <span aria-hidden="true">Jump to it ↓</span>
+        </a>
+      )}
       {/* Top: name, project, On/Off, Test run, Save */}
       <div className="mt-4 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div className="flex min-w-0 flex-1 flex-col gap-4 md:flex-row md:items-end">
           <label className="flex min-w-[240px] flex-1 flex-col gap-1">
-            <span className="whitespace-nowrap text-[14px] font-semibold text-muted">Name (click it to change it)</span>
+            <span className="whitespace-nowrap text-[14px] font-semibold text-muted">{live ? "Name (to change it, press Back to editing)" : "Name (click it to change it)"}</span>
             <input
               value={def.name}
               onChange={(e) => update({ ...def, name: e.target.value }, "name")}
@@ -547,12 +553,14 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
         )}
         {live && <WhatItWasTold run={viewing!} savedGoal={data.workflow.steps[0]?.task ?? ""} />}
         {live && viewing!.status === "needs" && viewing!.waiting && (
-          <WaitingBox run={viewing!} onDone={refresh} />
+          <div id="waiting-box" className="scroll-mt-20">
+            <WaitingBox run={viewing!} onDone={refresh} />
+          </div>
         )}
       </section>
 
       {/* Limits */}
-      {!live && <Limits limits={def.limits} onChange={(l, key) => update({ ...def, limits: l }, key)} />}
+      {!live && <Limits limits={def.limits} loops={def.steps.some(hasFailPath)} onChange={(l, key) => update({ ...def, limits: l }, key)} />}
 
       {/* History */}
       <History runs={data.runs} viewingId={viewing?.id ?? null} onView={viewRun} />
@@ -692,7 +700,7 @@ function WaitingBox({ run, onDone }: { run: WorkflowRun; onDone: () => Promise<v
   };
   return (
     <div className="mx-4 mb-4 rounded-[18px] bg-[#FDF0DC] p-5 sm:mx-6">
-      <p className="text-[14px] font-semibold text-[#8A4600]">{run.waiting!.kind === "ship" ? "Ready to go into your project" : "It's waiting for you"}</p>
+      <p className="text-[14px] font-semibold text-[#8A4600]">{run.waiting!.kind === "ship" ? "Ready to look at" : "It's waiting for you"}</p>
       <p className="mt-1 text-[17px] font-semibold">{run.waiting!.text}</p>
       {sending ? (
         <div className="mt-3 flex flex-col gap-3">
@@ -722,13 +730,14 @@ function WaitingBox({ run, onDone }: { run: WorkflowRun; onDone: () => Promise<v
           <button className={btn.secondary} onClick={() => act("stop")} title="Ends this run here. Nothing goes into your project. You can still find it in the workflow's Run history.">
             {ships ? "Don't put it in" : "Stop"}
           </button>
+          {ships && <p className="w-full text-[14px] text-[#8A4600]">Don't put it in ends this run: nothing goes into your project, and the change stays in Run history.</p>}
         </div>
       )}
       {err && <p className="mt-2 text-[14px] font-medium text-[#A11B12]">{err}</p>}
       <Confirm
         open={sure}
         title="Put these changes into your project?"
-        text="Shipping adds the changes to the real version of your project (this is called merging, or shipping). If you change your mind later, start a task that says what to undo."
+        text="This adds the changes to the real version of your project (this is called merging, or shipping). Changed your mind later? It's easy to undo: start a task that says what to take out, and an agent does it."
         yes="Put it in"
         onYes={() => act("approve")}
         onClose={() => setSure(false)}
@@ -737,14 +746,15 @@ function WaitingBox({ run, onDone }: { run: WorkflowRun; onDone: () => Promise<v
   );
 }
 
-function Limits({ limits, onChange }: { limits: WfLimits; onChange: (l: WfLimits, key: string) => void }) {
+function Limits({ limits, loops, onChange }: { limits: WfLimits; loops: boolean; onChange: (l: WfLimits, key: string) => void }) {
   return (
     <section className="panel mt-6 p-6 sm:p-8" aria-labelledby="limits-h">
       <h2 id="limits-h" className="flex items-center text-[18px] font-semibold">
         Limits
         <InfoTip text="Safety limits for every run of this workflow, so it can't loop or run forever." label="Limits" />
       </h2>
-      <div className="mt-4 grid gap-6 md:grid-cols-3">
+      <div className={`mt-4 grid gap-6 ${loops ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+        {loops && (
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
             <Label tip="How many times a Review or Check can send the work back to be fixed before the workflow stops and tells you.">Send back to fix, at most</Label>
@@ -752,6 +762,7 @@ function Limits({ limits, onChange }: { limits: WfLimits; onChange: (l: WfLimits
           </span>
           <input type="range" aria-label="Send back to fix, at most" min={0} max={5} value={limits.maxLoops} onChange={(e) => onChange({ ...limits, maxLoops: Number(e.target.value) }, "loops")} className="h-11 accent-[#15171B]" />
         </label>
+        )}
         <label className="flex flex-col gap-2">
           <span className="flex items-baseline justify-between">
             <Label tip={WF_TIME_TIP}>Longest run</Label>

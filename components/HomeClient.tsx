@@ -36,7 +36,7 @@ export default function HomeClient({ initial }: { initial: HomeState }) {
             data.summary
           )}
         </p>
-        {data.usageNote && <p className="mt-3 inline-block rounded-[14px] bg-[#FDE8E6] px-4 py-2 text-[15px] font-medium text-[#A11B12]">{data.usageNote}</p>}
+        {data.usageNote && <p className="mt-3 inline-block rounded-[14px] bg-[#FDF0DC] px-4 py-2 text-[15px] font-medium text-[#8A4600]">{data.usageNote}</p>}
       </section>
       <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Which agents">
         {(["active", "archived"] as const).map((k) => (

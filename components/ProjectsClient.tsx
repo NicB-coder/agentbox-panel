@@ -289,7 +289,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
       <Confirm
         open={confirmNew}
         title={`Make “${slug}”?`}
-        text="Its code is saved on GitHub as a public project, like most school and hobby projects: other people could read the code. Your game isn't put on the web for anyone to play. Just never put passwords or private info in it."
+        text="Its code is saved on GitHub as a public project, like most school and hobby projects: other people could read the code. Your game isn't put on the web for anyone to play, and it's free. Just never put passwords or private info in it."
         yes="Make it"
         onYes={create}
         onClose={() => setConfirmNew(false)}

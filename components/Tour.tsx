@@ -18,12 +18,12 @@ const STEPS = [
   {
     icon: "flow",
     title: "Workflows chain steps together",
-    text: "A workflow is a bigger job done in steps, one after another: build it, have it checked, then ask you. Say what you want to make and agentbox sets up the steps for you.",
+    text: "A workflow is a bigger job done in steps, one after another: build it, have it checked, then ask you. Say what you want to make and agentbox sets up the steps for you. One job, once? Use New task. The same careful steps every time? Use a workflow.",
   },
   {
     icon: "inbox",
     title: "The Inbox and the usage meter",
-    text: "Anything that needs you (a finished change to look at, a question, something that went wrong) shows up in the Inbox. Pause everything is an emergency stop for every agent. The meter at the top shows how much of your Claude usage (Claude is the AI that does the work) you've used so far and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
+    text: "Anything that needs you (a finished change to look at, a question, something that went wrong) shows up in the Inbox. Pause everything (at the top, or in the ☰ menu on a phone) is an emergency stop for every agent. The meter at the top shows how much of your Claude usage (Claude is the AI that does the work) you've used so far and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
   },
 ];
 

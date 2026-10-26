@@ -197,7 +197,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
         <div className="flex flex-col gap-3" aria-labelledby="nw-steps-h">
           <p id="nw-steps-h" className="flex items-center text-[15px] font-semibold">
             The steps: {planName}
-            <InfoTip text="What happens, in order, each time it runs. Build in Careful mode builds it, checks its own work and polishes it. Ship always asks you first." label="The steps" />
+            <InfoTip text="What happens, in order, each time it runs. Build in Careful mode builds it, checks its own work and polishes it. Put it in always asks you first." label="The steps" />
           </p>
           <StepRow steps={planned.steps} agents={agents} />
           {!changing && (
@@ -259,9 +259,9 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
   );
 }
 
-const DEFAULT_NAME = "Build carefully → Review → Ship (recommended)";
+const DEFAULT_NAME = "Build carefully → Review → Put it in (recommended)";
 // The ready-made sets, named by what they do so no two look alike.
-const setName = (key: TemplateKey) => (key === "build-review-ship" ? "Research → Build → Review → Ship" : TEMPLATES.find((t) => t.key === key)!.name);
+const setName = (key: TemplateKey) => (key === "build-review-ship" ? "Research → Build → Review → Put it in" : TEMPLATES.find((t) => t.key === key)!.name);
 
 function StepRow({ steps, agents }: { steps: WfStep[]; agents: AgentRef[] }) {
   return (

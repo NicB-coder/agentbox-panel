@@ -466,7 +466,9 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
             <button type="submit" className={btn.primary} disabled={busy}>
               {busy ? "Starting…" : scheduled ? "Save" : "Start"}
             </button>
-          ) : null}
+          ) : (
+            <p className="text-[14px] font-medium text-[#2A3F9E]">Answer the quick questions above first ↑</p>
+          )}
         </div>
       </form>
     </dialog>
