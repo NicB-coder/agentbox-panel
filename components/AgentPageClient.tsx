@@ -126,7 +126,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-6">
           {isHeartbeat ? <HeartbeatNow data={data} /> : <RightNow data={data} act={act} busy={busy} />}
-          {!isHeartbeat && !working && <FollowUp agent={a} disabled={false} />}
+          {!isHeartbeat && !working && !(runs[0]?.status === "stopped" && data.canContinue[runs[0].id]) && <FollowUp agent={a} disabled={false} />}
           {isHeartbeat ? <HeartbeatHistory data={data} /> : <History runs={runs} reports={data.reports} />}
         </div>
         <aside className="flex flex-col gap-6">
@@ -258,7 +258,13 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
           <Changed run={run} />
           {run.status === "queued" ? (
             <p className="mt-2 rounded-[14px] bg-soft px-4 py-3 text-[15px] font-medium">
-              {run.extra.resume && run.extra.resume.until < Date.now() ? "Trying again now…" : `${run.activity ?? "Waiting"}.`} {run.extra.resume ? "It carries on by itself, right where it left off. (Claude's own limit can kick in a little before the meter at the top shows 100%.)" : "It starts by itself."}
+              {run.extra.resume?.why === "usage"
+                ? run.extra.resume.until < Date.now()
+                  ? "Claude's usage is back: trying again now…"
+                  : `Claude's usage ran out for now, so it's waiting. It carries on by itself at ${clockOf(run.extra.resume.until)}, right where it left off. Nothing for you to do. (Claude's own limit can kick in a little before the meter at the top shows 100%.)`
+                : run.extra.resume
+                  ? `${run.activity ?? "Waiting"}. It carries on by itself, right where it left off.`
+                  : `${run.activity ?? "Waiting"}. It starts by itself.`}
             </p>
           ) : (
             <p className="mt-1 text-[15px] text-muted">

@@ -171,7 +171,7 @@ function Pictures({ v }: { v: ChangesView }) {
           <Icon name="play" color="#fff" size={16} /> {v.state === "MERGED" ? "Play it" : "Try the new version"}
         </a>
         <a href={`/preview/${v.project}/${v.before}/${v.page}`} target="_blank" rel="noreferrer" className={btn.secondary}>
-          Open it as it is now
+          Open the version before this change
         </a>
       </div>
     </section>

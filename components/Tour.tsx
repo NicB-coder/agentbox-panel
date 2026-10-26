@@ -12,7 +12,7 @@ const STEPS = [
   },
   {
     icon: "hammer",
-    title: "Every task gets its own agent",
+    title: "Each job gets its own helper",
     text: "Your work lives in a project (a folder for one app or game). Make one on the Projects page, or use one you have. Then press New task, say what you want, and press Start. It gets its own tile: click it to see what it's doing right now. Nothing changes in your real project until you say so.",
   },
   {
@@ -23,7 +23,7 @@ const STEPS = [
   {
     icon: "inbox",
     title: "The Inbox and the usage meter",
-    text: "Anything that needs you (a finished change to look at, a question, something that went wrong) shows up in the Inbox. Pause everything (at the top, or in the ☰ menu on a phone) is an emergency stop for every agent. The meter at the top shows how much of your Claude usage (Claude is the AI that does the work) you've used so far and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
+    text: "The Inbox shows anything that needs you, like a finished change to look at. The meter at the top shows how much of your Claude usage (the AI that does the work) you've used. Pause everything stops all agents at once. Stuck? Tap the round chat bubble and ask the Helper.",
   },
 ];
 

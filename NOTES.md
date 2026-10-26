@@ -284,8 +284,9 @@ I then fixed what it found and wrote the fix next to every question in `REVIEW-R
 | 3 | 58 | 39 | No critical bug. Four names for a finished change; the step drafter made double build/ask steps; Check opened the wrong page |
 | 4 | 50 | 43 | No critical bug. "Merge it" vs "Ship it"; Escape lost the typed goal; the questions showed off-screen |
 | 5 | 50 | 29 | No critical bug. Helper misread the open form; "Ship" step name; usage-wait wording |
+| 6 | 37 | 16 | No critical bug. Empty Start showed its message off-screen; "Use this and start" didn't use the suggested settings; generic "Running a check…" |
 
-Round 2 went up because that reviewer got much further (it ran a workflow to the end and pressed Ship). From round 3
+Totals fell from 58 to 37, and core-task questions from 41 to 16. Round 2 went up because that reviewer got much further (it ran a workflow to the end and pressed Ship). From round 3
 on, every button that puts a change into the real project asked first.
 
 **The main things that changed for beginners**
@@ -308,6 +309,9 @@ on, every button that puts a change into the real project asked first.
 - Helper: docks beside the page on a laptop (covers nothing); new answers stay in view; starts a fresh chat after 3
   hours; knows the open pop-up, the drafted change, the visible page text (as data) and the open agent's history;
   old action buttons show "no longer needed"; plain words, short answers, real waiting reasons.
+- Round 6: an empty Start puts the cursor in the goal box with a hint right under it; "Use all of this and start"
+  takes the better goal and the suggested settings; "Right now" shows the agent's own plain sentence; summaries drop
+  sentences about files and commits; workflow Inbox cards say what was built; Projects has "+ New project".
 
 **v3.1 — Decisions I made (milestone 9)**
 - New projects stay **public** (the original brief asks for that); the pop-up now explains it plainly and says it's
@@ -323,10 +327,10 @@ on, every button that puts a change into the real project asked first.
   `~/projects/sam-hello-test`. Delete both if you don't want them (I didn't delete anything).
 - In round 2, before Ship asked first, a reviewer shipped **arcade#13**, which added one line ("Made with agentbox by
   Sam") to the end of arcade's README. Remove it if you like (a one-line task on arcade does it).
-- All other test pull requests (arcade#9–12 and #14–21) were closed with a comment and their branches deleted.
+- All other test pull requests (arcade#9–12 and #14–23) were closed with a comment and their branches deleted.
 
 **Not done / known limits (milestone 9)**
-- No round reached zero questions in the core tasks (29 in round 5). The remaining ones are listed with "Kept" or
+- No round reached zero questions in the core tasks (16 in round 6, down from 41). The remaining ones are listed with "Kept" or
   "Not done" in the round files; the biggest open ones: a drafted "Change it in your own words" is lost if you leave
   the page before Apply, and the Helper bubble still sometimes sits near a link on a phone.
 

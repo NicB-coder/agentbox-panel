@@ -329,6 +329,8 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
   const viewRun = (rid: number | null) => {
     setSelected(null);
     router.replace(rid === null ? `/workflows/${id}?run=0` : `/workflows/${id}?run=${rid}`, { scroll: false });
+    // Watch / See its steps: bring the live steps into view (also when that run is already showing).
+    if (rid !== null) setTimeout(() => document.getElementById("canvas-h")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
   return (
@@ -380,7 +382,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
             onOther={() => setRunDialog("test")}
             other={manualStart ? "Test with a different goal…" : ""}
             disabled={!!busy || !!data.active}
-            tip={`A safe try: it does every step for real${def.steps.some((x) => x.type === "ship") ? ", but stops before Ship" : ""} and won't message you. It still uses some Claude usage, and may leave a practice change in your Inbox that you can throw away.`}
+            tip={`A safe try: it does every step for real${def.steps.some((x) => x.type === "ship") ? ", but stops before Put it in" : ""} and won't message you. It still uses some Claude usage, and may leave a practice change in your Inbox that you can throw away.`}
           />
           {dirty || busy === "save" ? (
             <button type="button" className={btn.primary} onClick={() => save()} disabled={!!busy}>

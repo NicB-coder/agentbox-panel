@@ -10,8 +10,19 @@ Plan: ONE-QUESTION.md. Built on the agent branch (not `build/v3.1`). Test on you
 - [x] 6. Clearer usage limit wording and Big job defaults
 - [x] 7. Helper everywhere, replay bug fixed, personal and precise
 - [x] 8. Full check of every button, page and real run
-- [ ] 9. Three or more fresh beginner review rounds as Sam
+- [x] 9. Three or more fresh beginner review rounds as Sam (6 rounds: 58 → 64 → 58 → 50 → 50 → 37 questions; core 41 → 16)
 - [ ] 10. Test migration on database copy, update notes, open PR
+
+## Handoff (after milestone 9)
+
+- Six fresh Sam review rounds are in `REVIEW-ROUND-1.md` … `REVIEW-ROUND-6.md`, each question with its fix (or why it
+  was kept). Counts and decisions are in NOTES.md under "Milestone 9". No round reached zero core questions (16 left).
+- Big renames: every button that puts a change in is "Put it in my project"; the workflow Ship step is now titled
+  "Put it in" (the step type is still `ship` in data and code); a finished change is "Ready to look at".
+- Needs Nic: delete NicB-coder-bot/sam-hello-test and `~/projects/sam-hello-test` if unwanted; arcade#13 added one
+  README line ("Made with agentbox by Sam") in round 2, before Ship asked first.
+- Each review used a test copy on port 3253 (`.agentbox/dev`), refreshed from the live database read-only before
+  each round. dev-copy.sh fresh now also clears old test logs.
 
 ## Handoff (after milestone 8)
 

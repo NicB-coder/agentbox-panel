@@ -25,6 +25,7 @@ function instructions(agents: AgentRef[]): string {
     "Rules for changing:",
     "- Keep every step Nic didn't ask to change exactly as it is, with the same id and the same settings. Copy them through.",
     "- A changed step keeps its id. A new step gets a new short id like \"n1\". A removed step is simply left out.",
+    "- If he asks for several things in one go (\"skip the review and do it the quick way\"), do every one of them. The summary names each change, and says plainly if one couldn't be done.",
     "- Change only what he asked for. Don't tidy up, rename or reorder anything else, and don't add limits or settings (like a time limit) he didn't ask for.",
     "- Don't put the goal into any step: the app keeps the goal separately and gives it to every step.",
     "- If he asks for something a workflow can't do, change nothing and say so in the summary in plain words.",

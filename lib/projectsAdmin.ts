@@ -1,3 +1,4 @@
+import { db } from "./db";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -61,7 +62,7 @@ async function readInfos(): Promise<ProjectInfo[]> {
       return {
         name, repo: r?.nameWithOwner ?? null, url: r?.url ?? null, playable,
         lastActivity: ts ? Number(ts) * 1000 : null, lastMessage: msg ?? null,
-        prs: prs.ok ? (JSON.parse(prs.out || "[]") as { number: number; title: string; url: string; isDraft: boolean }[]).map((p) => ({ number: p.number, title: p.title, url: p.url, draft: p.isDraft })) : [],
+        prs: prs.ok ? (JSON.parse(prs.out || "[]") as { number: number; title: string; url: string; isDraft: boolean }[]).map((p) => ({ number: p.number, title: p.title, url: p.url, draft: p.isDraft && !finishedHere(p.url) })) : [],
       };
     }),
   );
@@ -107,4 +108,15 @@ export async function createRepo(rawName: string, description: string): Promise<
   if (!r.ok) throw new Error(/already exists/i.test(r.err) ? "There's already a project with that name on GitHub. Pick another name, or add it from the list." : "GitHub wouldn't make the project. Try again in a moment.");
   g.__projCache = undefined;
   return name;
+}
+
+// GitHub keeps a workflow's change as a draft until it's put in, but once the workflow is waiting for Nic (or done)
+// it isn't "still being built" any more.
+function finishedHere(prUrl: string): boolean {
+  try {
+    const r = db().prepare("SELECT 1 FROM workflow_runs WHERE pr_url = ? AND status IN ('needs', 'done') LIMIT 1").get(prUrl);
+    return !!r;
+  } catch {
+    return false;
+  }
 }

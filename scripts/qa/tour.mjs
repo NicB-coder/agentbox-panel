@@ -44,7 +44,7 @@ for (const [size, viewport] of [["laptop", { width: 1366, height: 900 }], ["phon
   check(true, `${size}: the tour opens on a first visit`);
   await page.screenshot({ path: `${shots}/${size}-tour-1.png` });
   await bubbleClear(page, size);
-  for (const [n, title] of [[2, "Every task gets its own agent"], [3, "Workflows chain steps together"], [4, "The Inbox and the usage meter"]]) {
+  for (const [n, title] of [[2, "Each job gets its own helper"], [3, "Workflows chain steps together"], [4, "The Inbox and the usage meter"]]) {
     await d.getByRole("button", { name: "Next" }).click();
     check(await d.getByText(title).isVisible(), `${size}: Next shows ${n} of 4: ${title}`);
   }
