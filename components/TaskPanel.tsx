@@ -438,11 +438,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
             <button type="submit" className={btn.primary} disabled={busy}>
               {busy ? "Starting…" : scheduled ? "Save" : "Start"}
             </button>
-          ) : (
-            <button type="button" className={btn.secondary} disabled={busy} onClick={() => coachDone(task)}>
-              {busy ? "Starting…" : `Skip this and ${scheduled ? "save" : "start"}`}
-            </button>
-          )}
+          ) : null}
         </div>
       </form>
     </dialog>

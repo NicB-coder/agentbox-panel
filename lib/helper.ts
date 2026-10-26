@@ -1,5 +1,6 @@
 import { agentRunsText } from "./helperSnapshot";
 import { shipsOnOk } from "./wf";
+import { cutWords } from "./words";
 import { spawn, type ChildProcess } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -562,7 +563,7 @@ export function actionFor(kind: string, ref: string): HelperAction | null {
       const pr = prNumber(r.prUrl);
       return a(
         `Merge change #${pr}`,
-        `This puts "${r.task.slice(0, 80)}" (change #${pr}) into the real version of ${repoOf(r.prUrl).split("/").pop()}. If you change your mind later, start a task that says what to undo.`,
+        `This puts "${cutWords(r.task, 80)}" (change #${pr}) into the real version of ${repoOf(r.prUrl).split("/").pop()}. If you change your mind later, start a task that says what to undo.`,
       );
     }
     case "pause_all": {

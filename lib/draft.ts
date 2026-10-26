@@ -65,7 +65,7 @@ export function stepRules(agents: AgentRef[]): string[] {
     "- ship: merges the pull request. shipMode \"ask\" unless Nic clearly says to ship automatically.",
     "- tell: Discord message to Nic. tellWhen always|problems. openIssue true to also open a GitHub issue about problems.",
     "",
-    "Leave the start step's task empty: the goal is stored separately. Give every step a short unique id like \"s1\", \"s2\" so onFail can point at one. Use only the steps the description needs (usually 3 to 8). If they mention building or coding, use an agent step with the builder agent. Prefer \"ask\" before \"ship\". maxLoops is how many times needs-work may loop (default 2).",
+    "Leave the start step's task empty: the goal is stored separately. Give every step a short unique id like \"s1\", \"s2\" so onFail can point at one. Use only the steps the description needs (usually 3 to 8). If they mention building or coding, use ONE agent step that builds (never two build steps in a row). Ship already asks Nic first, so don't put an ask step right before ship. To try it on a phone or in a browser, add a check step with checks [\"page\"]. maxLoops is how many times needs-work may loop (default 2).",
     "",
     "Nic's agents:",
     ...agents.map((a) => `- id ${a.id}: ${a.name}${a.allowed === "look" ? " (look only, reports)" : ""}`),
@@ -87,7 +87,29 @@ export async function draftWorkflow(text: string, agents: AgentRef[], goal = "")
   const fail = "Claude couldn't draft it this time. Try again, or start from a template.";
   const result = await claudeJson({ prompt: draftPrompt(text, goal), system: instructions(agents), schema: SCHEMA, failMessage: fail });
   if (!Array.isArray(result.steps)) throw new Error(fail);
-  const steps = cleanSteps(result.steps, agents.map((a) => a.id));
+  const steps = tidySteps(cleanSteps(result.steps, agents.map((a) => a.id)));
   if (steps.length < 2) throw new Error("Claude couldn't find any steps in that. Try saying what should happen, one thing after another.");
   return { name: String(result.name ?? "").slice(0, 60) || "New workflow", steps, limits: cleanLimits({ maxLoops: result.maxLoops }) };
+}
+
+// Beginners asked for "build, try it on a phone, ask me" and got two build steps and two OKs: never.
+// Two build steps in a row become one, and an Ask right before a Ship that asks anyway is dropped.
+export function tidySteps(steps: WfStep[]): WfStep[] {
+  const out: WfStep[] = [];
+  const renamed = new Map<string, string>();
+  steps.forEach((s, i) => {
+    const prev = out.at(-1);
+    const next = steps[i + 1];
+    const builds = (x?: WfStep) => x?.type === "agent" && (x.freedom ?? (x.mode === "look" ? "look" : "auto")) !== "look";
+    if (builds(s) && builds(prev) && s.agentId === prev!.agentId) {
+      renamed.set(s.id, prev!.id);
+      return;
+    }
+    if (s.type === "ask" && next?.type === "ship" && (next.shipMode ?? "ask") === "ask") {
+      renamed.set(s.id, next.id);
+      return;
+    }
+    out.push(s);
+  });
+  return out.map((s) => (s.onFail && renamed.has(s.onFail) ? { ...s, onFail: renamed.get(s.onFail) } : s));
 }

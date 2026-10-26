@@ -115,3 +115,19 @@ describe("a workflow that finishes with a pull request lands in the Inbox", () =
     assert.equal(db.getWfRun(wr.id)!.status, "done");
   });
 });
+
+describe("drafted steps are tidied for beginners", () => {
+  test("two build steps in a row become one, and an Ask right before a Ship that asks is dropped", async () => {
+    const { tidySteps } = await import("../lib/draft");
+    const steps = tidySteps([
+      { id: "s0", type: "start", trigger: "manual", task: "" },
+      { id: "s1", type: "agent", agentId: null, prompt: "Build it" },
+      { id: "s2", type: "agent", agentId: null, prompt: "Build it again" },
+      { id: "s3", type: "check", checks: ["page"], onFail: "s2" },
+      { id: "s4", type: "ask", question: "Ship it?" },
+      { id: "s5", type: "ship", shipMode: "ask" },
+    ] as WfStep[]);
+    assert.deepEqual(steps.map((s) => s.id), ["s0", "s1", "s3", "s5"]);
+    assert.equal(steps[2].onFail, "s1");
+  });
+});

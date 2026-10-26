@@ -47,7 +47,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
   // The Helper sees what's typed and can fill the goal box (only when Nic presses Use this).
   useHelperContext(
     {
-      editing: `the New workflow screen. "What do you want to make?" box says: "${goal.slice(0, 1200)}" · Project: ${project || "none picked"} · Brief: ${brief ? brief.name : "none attached"} · steps: ${planned.steps.map((s) => stepTitle(s, agents)).join(" → ")}${coach ? " · the prompt coach is open" : ""}${ideas ? " · Help me think of ideas is open" : ""}`,
+      editing: `the New workflow screen. "What do you want to make?" box says: "${goal.slice(0, 1200)}" · Project: ${project || "none picked"} · Brief: ${brief ? brief.name : "none attached"} · steps: ${planned.steps.map((s) => stepTitle(s, agents)).join(" → ")} (${choice.from === "words" ? `drafted by "Make these steps" from his words: "${words.slice(0, 300)}"` : choice.from === "template" ? "a ready-made set he picked" : "the recommended default"})${coach ? " · the prompt coach is open" : ""}${ideas ? " · Help me think of ideas is open" : ""}`,
       fill: 'the "What do you want to make?" box',
     },
     (t) => {

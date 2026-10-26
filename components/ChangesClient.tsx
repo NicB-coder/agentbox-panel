@@ -49,7 +49,7 @@ export default function ChangesClient({ pr }: { pr: string }) {
     );
   if (!v) return <Loading text="Getting the pull request from GitHub…" />;
 
-  const state = v.state === "MERGED" ? { s: "done" as const, l: "Merged" } : v.state === "CLOSED" ? { s: "stopped" as const, l: "Closed" } : { s: "needs" as const, l: "Waiting for you" };
+  const state = v.state === "MERGED" ? { s: "done" as const, l: "In your project" } : v.state === "CLOSED" ? { s: "stopped" as const, l: "Closed" } : { s: "needs" as const, l: "Ready to look at" };
   return (
     <div className="pt-8">
       <BackLink href={v.run ? `/agents/${v.run.agentId}` : "/inbox"}>{v.run ? v.run.agentName : "Inbox"}</BackLink>
@@ -99,7 +99,7 @@ export default function ChangesClient({ pr }: { pr: string }) {
 function ReviewLine({ review }: { review: ChangesView["review"] }) {
   const [open, setOpen] = useState(false);
   if (!review) return null;
-  if (review.status === "running") return <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>;
+  if (review.status === "running") return <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A second AI is double-checking this change. Its notes appear here in a few minutes.</p>;
   if (!review.verdict) return null;
   return (
     <div className="mt-3">
@@ -107,7 +107,7 @@ function ReviewLine({ review }: { review: ChangesView["review"] }) {
       {review.text && (
         <>
           <button className={btn.link + " !text-[14px]"} aria-expanded={open} onClick={() => setOpen(!open)}>
-            {open ? "Hide what it found" : "What it found"}
+            {open ? "Hide the reviewer's notes" : "Read the reviewer's notes"}
           </button>
           {open && <div className="mt-1 max-h-96 overflow-auto rounded-[14px] bg-soft p-4 text-[14px] leading-relaxed whitespace-pre-wrap">{plainText(review.text)}</div>}
         </>

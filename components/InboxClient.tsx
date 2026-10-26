@@ -169,7 +169,7 @@ type Act = (key: string, url: string, body?: unknown, after?: (j: Record<string,
 const KIND_WORD: Record<InboxItem["kind"], string> = {
   approval: "Wants your OK",
   plan: "Has a plan for you",
-  pr: "Pull request ready",
+  pr: "Ready to look at",
   failed: "Stopped",
   wf_ask: "Waiting for you",
   wf_ship: "Ready to go in",
@@ -311,7 +311,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
                   </button>
                   {more && !done && it.review?.status !== "running" && (
                     <button className={btn.secondary} disabled={b} onClick={() => act(it.key, `/api/runs/${it.runId}/ask-review`, {}, () => setDone("A second reviewer is on it."))}>
-                      Get a second opinion
+                      Ask another AI to double-check it
                     </button>
                   )}
                   {more && (
@@ -462,7 +462,7 @@ function Row({ it, act, busy }: { it: InboxItem; act: Act; busy: string }) {
 
 function ReviewFindings({ review }: { review: NonNullable<Extract<InboxItem, { kind: "pr" }>["review"]> }) {
   const [open, setOpen] = useState(false);
-  if (review.status === "running") return <p className="mt-2 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>;
+  if (review.status === "running") return <p className="mt-2 text-[15px] font-medium text-[#2A3F9E]">A second AI is double-checking this change. Its notes appear here in a few minutes.</p>;
   if (review.status === "stopped" || !review.verdict) return null;
   const ok = review.verdict === "passed";
   return (
@@ -471,7 +471,7 @@ function ReviewFindings({ review }: { review: NonNullable<Extract<InboxItem, { k
       {review.text && (
         <>
           <button className={btn.link + " !text-[14px]"} aria-expanded={open} onClick={() => setOpen(!open)}>
-            {open ? "Hide what it found" : "What it found"}
+            {open ? "Hide the reviewer's notes" : "Read the reviewer's notes"}
           </button>
           {open && <div className="mt-1 max-h-80 overflow-auto rounded-[14px] bg-soft p-4 text-[14px] leading-relaxed whitespace-pre-wrap">{plainText(review.text)}</div>}
         </>

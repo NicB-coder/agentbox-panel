@@ -551,7 +551,8 @@ async function syncBranch(wrId: number) {
     ...(done.length ? ["", "**Done so far:**", ...done.map((s) => `- ${stepTitle(s, agents)}: ${wr.stepRuns[s.id]?.note ?? "done"}`)] : []),
     ...(wr.test ? ["", "_This is a test run. It stops before shipping._"] : []),
   ].join("\n");
-  const title = `${wf.name}: ${(about(wr).split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "") || (wr.test ? "test run" : "run")).slice(0, 90)}`;
+  const first = about(wr).split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "").replace(/^\s*(what to (make|build|do)|goal|task)\s*:\s*/i, "");
+  const title = `${wf.name}: ${cutWords(first || (wr.test ? "test run" : "run"), 90)}`;
   const pr = await sh("gh", ["pr", "create", "--draft", "--base", base.replace(/^origin\//, ""), "--head", wr.branch, "--title", title, "--body", body], dir);
   const url = pr.out.split("\n").filter((l) => l.startsWith("http")).pop();
   if (url) updateWfRun(wrId, { prUrl: url });

@@ -183,7 +183,7 @@ export function CoachBox(props: {
 
       {phase.at === "questions" && (
         <>
-          <p className="text-[15px] text-muted">Tap an answer for each. They help the agent build the right thing. You can skip any.</p>
+          <p className="text-[15px] text-muted">Tap an answer for each, then press Improve my goal. You can leave any blank.</p>
           {phase.check.questions.map((q, i) => (
             <Question key={i} index={i} q={q} value={answers[i] ?? { picked: [], other: "", otherOn: false }} onChange={(v) => setAnswers({ ...answers, [i]: v })} />
           ))}
@@ -191,11 +191,8 @@ export function CoachBox(props: {
             <button type="button" className={btn.primary} onClick={() => improve(phase.check, true)} disabled={!answered}>
               Improve my goal
             </button>
-            <button type="button" className={btn.secondary} onClick={() => improve(phase.check, false)}>
-              Skip the questions
-            </button>
-            <button type="button" className={btn.link} onClick={skip}>
-              Keep mine and {doneLabel.toLowerCase()}
+            <button type="button" className={btn.secondary} onClick={skip}>
+              Skip, keep mine and {doneLabel.toLowerCase()}
             </button>
           </div>
         </>

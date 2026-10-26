@@ -103,7 +103,7 @@ export function duration(ms: number): string {
 
 export const ALLOWED_WORDS: Record<Allowed, { label: string; hint: string }> = {
   look: { label: "Look only", hint: "Reads and reports. Never changes anything." },
-  suggest: { label: "Suggest changes", hint: "Makes changes on a copy and opens a pull request for you." },
+  suggest: { label: "Suggest changes", hint: "Makes changes on a copy and shows you the finished change to look at." },
   make: { label: "Make changes", hint: "Can save and send its work to its own branch. Never to main." },
 };
 
@@ -150,7 +150,7 @@ export function agentSentence(a: Pick<AgentInput, "name" | "project" | "schedule
   else if (lookOnly) verb = `look at ${project} without changing anything`;
   else if (a.mode === "plan") verb = `work on ${project} once you OK its plan`;
   else if (a.mode === "ask") verb = `work on ${project}, checking with you before each step`;
-  else verb = `work on ${project} on its own and send you a pull request`;
+  else verb = `work on ${project} on its own and show you the finished change`;
   const careful = a.job?.careful === false ? "" : research ? ", checked against its sources," : lookOnly ? "" : ", reviewed and fixed before you see it,";
 
   const n = new Set(a.notify);

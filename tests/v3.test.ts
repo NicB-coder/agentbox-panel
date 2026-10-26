@@ -52,7 +52,7 @@ describe("the Start a task panel's input", () => {
 describe("Careful mode", () => {
   test("the Inbox line", () => {
     const base = { careful: true, stage: "final" as const, round: 1, fixes: 2, polished: true, workSession: null };
-    assert.equal(carefulLine({ ...base, reviews: [{ kind: "final", verdict: "passed", text: "", at: 0, model: "opus" }] }), "Reviewed ✓ · 2 fixes made · optimized");
+    assert.equal(carefulLine({ ...base, reviews: [{ kind: "final", verdict: "passed", text: "", at: 0, model: "opus" }] }), "Reviewed ✓ · 2 fixes made · polished");
     assert.equal(carefulLine({ ...base, reviews: [] }), null);
     assert.equal(carefulLine(undefined), null);
   });

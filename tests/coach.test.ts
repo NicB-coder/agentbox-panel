@@ -28,6 +28,10 @@ describe("the prompt coach", () => {
     assert.equal(withBrief.detailed, true);
     assert.deepEqual(withBrief.questions, []);
     assert.match(withBrief.verdict, /^Looks good/);
+    // …unless the brief and the goal disagree: then the one question about it is asked, with answers to tap.
+    const clash = coach.cleanCheck({ detailed: false, verdict: "Your brief says 8 pads, but your goal says 4.", questions: [{ q: "Which one?", choices: ["8 pads", "4 pads"] }], suggestions: [] }, "workflow", "make a drum pad with 4 pads", true);
+    assert.equal(clash.detailed, false);
+    assert.equal(clash.questions.length, 1);
   });
 
   test("at most 4 questions, each with 2–5 short choices", () => {

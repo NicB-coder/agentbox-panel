@@ -133,7 +133,8 @@ export async function createTask(t: TaskInput, opts: { onBranch?: { branch: stri
     job: jobSettings(t),
   });
   if (t.brief) saveBrief(agent.id, t.brief.text);
-  betterName(agent.id, prompt, t.kind).catch(() => {});
+  // The nicer name comes before the page opens (at most a few seconds), so the job never renames itself mid-run.
+  await Promise.race([betterName(agent.id, prompt, t.kind, Date.now() + 9000).catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
   if (t.scheduleKind !== "manual") return { agent: getAgent(agent.id)!, runId: null };
   const run = await startRun(agent.id, { task: "", trigger: "manual", extra: opts.onBranch ? { onBranch: opts.onBranch } : undefined });
   return { agent: getAgent(agent.id)!, runId: run.id };
@@ -159,7 +160,7 @@ export async function followUp(agentId: number, t: TaskInput): Promise<{ agent: 
 }
 
 // A nicer 2–4 word name from Claude (Haiku, no tools). The quick guess above is used until then, or if this fails.
-async function betterName(agentId: number, task: string, kind: JobKind) {
+async function betterName(agentId: number, task: string, kind: JobKind, deadline = Infinity) {
   if (process.env.AGENTBOX_NO_AI_NAMES === "1") return;
   const before = getAgent(agentId)?.name;
   const prompt = `Give this ${kind === "research" ? "research question" : "task"} a short name of 2 to 4 words, like "Arcade site", "Helper fixes" or "Recipe research". Plain words, no quotes, no punctuation at the end. Reply with the name only.\n\nThe ${kind === "research" ? "question" : "task"}:\n${task.slice(0, 1500)}`;
@@ -175,6 +176,7 @@ async function betterName(agentId: number, task: string, kind: JobKind) {
   if (!name || name.length > 40 || name.split(/\s+/).length > 6) return;
   const now = getAgent(agentId);
   if (!now || now.name !== before) return; // Nic renamed it already
+  if (Date.now() > deadline) return; // too late: it has started under its first name, keep that
   const taken = listAgents().some((a) => a.id !== agentId && !a.archived && a.name.toLowerCase() === name.toLowerCase());
   if (!taken) renameAgent(agentId, name.charAt(0).toUpperCase() + name.slice(1));
 }

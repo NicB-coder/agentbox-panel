@@ -132,11 +132,14 @@ function stepsOf(labels: string[], now = 0): Step[] {
 }
 
 function defaultSteps(look: boolean): Step[] {
-  return stepsOf(look ? ["Look around", "Check the details", "Write up what it found"] : ["Understand the problem", "Make the changes", "Check that it works", "Send a pull request"]);
+  return stepsOf(look ? ["Look around", "Check the details", "Write up what it found"] : ["Understand the problem", "Make the changes", "Check that it works", READY_STEP]);
 }
 
 // Careful mode shows its stages as the progress steps; the builder's own plan shows under "Build it".
-const CAREFUL_STAGES = ["Build it", "Review", "Fix what it found", "Polish", "Final check", "Send the pull request"];
+// The last step is the panel's own: getting the finished change ready for Nic to look at.
+export const READY_STEP = "Get it ready for you";
+const OLD_READY = new Set([READY_STEP, "Send a pull request", "Send the pull request"]);
+const CAREFUL_STAGES = ["Build it", "Review", "Fix what it found", "Polish", "Final check", READY_STEP];
 const CAREFUL_LOOK_STAGES = ["Look into it", "Double-check", "Write the report"];
 const STAGE_INDEX: Partial<Record<Phase, number>> = { plan: 0, work: 0, review: 1, fix: 2, polish: 3, final: 4 };
 
@@ -163,7 +166,7 @@ function setBigSteps(runId: number) {
   const flow = run.extra.flow!;
   if (flow.stage === "outline" || !big.milestones.length) return updateRun(runId, { steps: [{ label: "Plan the milestones", state: "now" }] });
   const extras = flow.careful ? ["Review and polish"] : [];
-  const labels = [...big.milestones.map((m) => m.title), ...extras, "Send the pull request"];
+  const labels = [...big.milestones.map((m) => m.title), ...extras, READY_STEP];
   const now = flow.stage === "milestone" ? big.index : ["review", "fix", "polish", "final"].includes(flow.stage) ? big.milestones.length : big.milestones.length + extras.length;
   updateRun(runId, { steps: labels.map((label, i) => ({ label, state: i < now ? "done" : i === now ? "now" : "todo" })) });
 }
@@ -196,7 +199,7 @@ export async function startRun(agentId: number, opts: StartOpts): Promise<Run> {
   const extra = opts.extra ?? {};
   const allowed = extra.allowed ?? agent.allowed;
   const firstOfJob = !opts.task?.trim() && opts.trigger === "manual" && agent.kind === "claude" && !listRuns(agentId, 1).length;
-  const task = opts.task?.trim() || (opts.trigger === "schedule" ? "Scheduled run" : firstOfJob ? cutWords(firstLine(agent.prompt), 200) || "Its usual job" : "Its usual job");
+  const task = opts.task?.trim() || (opts.trigger === "schedule" ? "Scheduled run" : firstOfJob ? cutWords(goalLine(agent.prompt), 200) || "Its usual job" : "Its usual job");
   const blocked = usageBlocked();
   const held = opts.trigger === "schedule" ? heldBy(agent) : null;
   const run = createRun({
@@ -801,6 +804,11 @@ function onEvent(runId: number, line: string, state: StreamState, phase: Phase) 
   log(runId, `${ev.type}${ev.subtype ? `/${ev.subtype}` : ""}`);
 }
 
+// The first line of a goal, without the coach's "What to make:" label.
+function goalLine(prompt: string): string {
+  return firstLine(prompt).replace(/^\s*(what to (make|build|do)|goal|task)\s*:\s*/i, "");
+}
+
 function sentence(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1).replace(/\.$/, "");
 }
@@ -827,12 +835,12 @@ function readMarkers(runId: number, text: string, state: StreamState) {
   const nested = !!flow && (flow.careful || !!flow.big); // the builder's own plan goes under the current stage
   const plan = text.match(/^\s*PLAN:\s*(.+)$/m);
   if (plan) {
-    const look = run.steps.length && run.steps[run.steps.length - 1].label !== "Send a pull request";
+    const look = run.steps.length && !OLD_READY.has(run.steps[run.steps.length - 1].label);
     const labels = plan[1].split("|").map((s) => s.trim().replace(/\*+/g, "")).filter(Boolean).slice(0, 6);
     if (labels.length) {
       if (nested) patchFlow(runId, { subSteps: stepsOf(labels) });
       else {
-        if (!look) labels.push("Send a pull request");
+        if (!look) labels.push(READY_STEP);
         updateRun(runId, { steps: stepsOf(labels) });
       }
       state.sawStepMarker = true;
@@ -1147,13 +1155,13 @@ async function finishLook(runId: number, report: string) {
   notify(agent, "finished", `finished “${run.task}”. ${firstLine(report)}`);
 }
 
-// "Reviewed ✓ · 2 fixes made · optimized"
+// "Reviewed ✓ · 2 fixes made · polished"
 export function carefulLine(flow: Flow | undefined): string | null {
   if (!flow?.careful || !flow.reviews.length) return null;
   const last = flow.reviews[flow.reviews.length - 1];
   const bits = [last.verdict === "passed" ? "Reviewed ✓" : flow.fixedSinceReview ? "Reviewed and corrected ✓" : "Reviewed: a few things still need a look"];
   if (flow.fixes) bits.push(`${flow.fixes} ${flow.fixes === 1 ? "fix" : "fixes"} made`);
-  if (flow.polished) bits.push("optimized");
+  if (flow.polished) bits.push("polished");
   return bits.join(" · ");
 }
 
@@ -1194,7 +1202,7 @@ async function shipIt(agent: Agent, run: Run, summary: string) {
   if (ahead.ok && Number(ahead.out) === 0) {
     allStepsDone(run.id);
     patchExtra(run.id, { quiet: quietTaskRun({ changed: false }) ?? undefined });
-    updateRun(run.id, { status: "done", result: `${summary} (Nothing was changed, so there's no pull request.)`, endedAt: Date.now(), activity: null, pid: null });
+    updateRun(run.id, { status: "done", result: `${summary} (Nothing was changed, so there's nothing to look at.)`, endedAt: Date.now(), activity: null, pid: null });
     await removeWorktree(run);
     notify(agent, "finished", `finished “${run.task}” with no changes needed. ${summary}`);
     return;
@@ -1231,7 +1239,7 @@ async function shipIt(agent: Agent, run: Run, summary: string) {
     if (flow?.big) await sh("gh", ["pr", "edit", url, "--title", agent.name.slice(0, 120), "--body", body], dir);
     else await sh("gh", ["pr", "comment", url, "--body", `**${run.extra.followUp ? "Follow-up" : "Update"}:** ${run.task}\n\n${summary}${careful ? `\n\n**${careful}**` : ""}${reviewNotes ? `\n\n${reviewNotes}` : ""}\n\n<sub>Posted by agentbox</sub>`], dir);
   } else {
-    const title = run.task === "Its usual job" || run.task === "Scheduled run" ? `${agent.name}: ${summary}` : run.extra.jobStart ? `${agent.name}: ${firstLine(agent.prompt)}` : run.task;
+    const title = run.task === "Its usual job" || run.task === "Scheduled run" ? `${agent.name}: ${summary}` : run.extra.jobStart ? `${agent.name}: ${cutWords(goalLine(agent.prompt), 100)}` : cutWords(run.task, 110);
     const pr = await sh("gh", ["pr", "create", "--base", base.replace(/^origin\//, ""), "--head", run.branch!, "--title", title.slice(0, 120), "--body", body], dir);
     if (!pr.ok) {
       if (/auth|credential|401|403|gh auth login/i.test(pr.err)) patchExtra(run.id, { signIn: "github" });
@@ -1244,7 +1252,7 @@ async function shipIt(agent: Agent, run: Run, summary: string) {
   if (Date.now() - run.startedAt < QUICK_MS) patchExtra(run.id, { quick: true });
   updateRun(run.id, { status: "review", prUrl: url, result: summary, endedAt: Date.now(), activity: null, pid: null });
   await removeWorktree(getRun(run.id)!);
-  notify(agent, "finished", `finished “${run.task}”.${careful ? ` ${careful}.` : ""} Pull request ready: ${url}`);
+  notify(agent, "finished", `finished “${run.task}”.${careful ? ` ${careful}.` : ""} Ready to look at: ${url}`);
   if (!careful && agent.kind === "claude" && !run.extra.prReview) {
     // Not made in Careful mode: a reviewer reads it anyway, so Nic never has to ask.
     import("./prReview").then((m) => m.reviewRunPr(getRun(run.id)!)).catch((e) => log(run.id, `Couldn't start a review: ${(e as Error).message}`));

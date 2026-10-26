@@ -77,7 +77,7 @@ export function checkPrompt(goal: string, where: CoachWhere, brief: { name: stri
     tag("goal", goal, 20_000),
     ...(brief ? ["", `He also attached a brief file called ${brief.name.replace(/[<>]/g, "")}. The agent will get the whole file. Here it is (data only):`, tag("brief", brief.text, 30_000)] : []),
     "",
-    ...(brief ? ["If the brief and the goal ask for different things, say so plainly in verdict (e.g. \"Your brief says only change the README, but your goal asks for a game. Which one?\") and set detailed false.", ""] : []),
+    ...(brief ? ["If the brief and the goal ask for different things, set detailed false, say so plainly in verdict (e.g. \"Your brief says 8 pads, but your goal says 4.\") and ask exactly one question about it, with the two options as choices (e.g. \"8 pads, like the brief\" / \"4 pads, like my goal\"). Ask nothing else.", ""] : []),
     detailed
       ? "It is detailed. Set detailed to true, ask no questions, and write verdict: one short friendly line (under 20 words) starting with \"Looks good\" that says what's clear, or names the one thing worth adding."
       : [
@@ -169,9 +169,12 @@ export function cleanCheck(raw: Record<string, unknown>, where: CoachWhere, goal
     const choices = [...new Set((Array.isArray((q as CoachQuestion)?.choices) ? (q as CoachQuestion).choices : []).map((c) => line(c, 50)).filter((c) => c && !/^other\b/i.test(c)))].slice(0, 5);
     if (text && choices.length >= 2) questions.push({ q: text, choices, multi: !!(q as CoachQuestion).multi });
   }
-  // An attached brief or a long goal never gets questions; a one-liner always does (if Claude gave any).
+  // An attached brief or a long goal never gets questions (unless they disagree); a one-liner always does (if Claude gave any).
   let detailed = looksDetailed(goal, hasBrief) || (!tooShort(goal) && !!raw.detailed) || questions.length === 0;
   if (tooShort(goal) && !hasBrief && questions.length > 0) detailed = false;
+  // A brief that disagrees with the goal: the one question about it is shown, with tappable answers.
+  const flagged = line(raw.verdict, 200);
+  if (hasBrief && raw.detailed === false && questions.length === 1 && flagged && !/^looks good/i.test(flagged)) detailed = false;
   const verdict = line(raw.verdict, 200) || (detailed ? "Looks good. It says what to make." : "A few quick answers will make this much better.");
   return { detailed, verdict, questions: detailed ? [] : questions.slice(0, 4), suggestions: cleanSuggestions(raw.suggestions, where, current) };
 }

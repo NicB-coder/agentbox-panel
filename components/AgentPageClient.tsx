@@ -350,7 +350,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
       <Changed run={run} />
       <p className="mt-1 text-[15px] text-muted">{run.result ? plainText(run.result) : "It finished and opened a pull request for you."}</p>
       {careful && <p className="mt-3 text-[15px] font-semibold text-[#1E6B34]">{careful}</p>}
-      {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>}
+      {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A second AI is double-checking this change. Its notes appear here in a few minutes.</p>}
       {!careful && r?.status === "done" && (
         <div className="mt-3">
           <p className={`text-[15px] font-semibold ${r.verdict === "passed" ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{r.verdict === "passed" ? "Reviewed ✓ No problems found." : "The reviewer found things to fix:"}</p>
@@ -433,7 +433,7 @@ function carefulText(run: Run): string | null {
   const last = f.reviews[f.reviews.length - 1];
   const bits = [last.verdict === "passed" ? "Reviewed ✓" : f.fixedSinceReview ? "Reviewed and corrected ✓" : "Reviewed: a few things still need a look"];
   if (f.fixes) bits.push(`${f.fixes} ${f.fixes === 1 ? "fix" : "fixes"} made`);
-  if (f.polished) bits.push("optimized");
+  if (f.polished) bits.push("polished");
   return bits.join(" · ");
 }
 
@@ -610,8 +610,8 @@ function FollowUp({ agent, disabled, waiting }: { agent: Agent; disabled: boolea
 const RESULT: Record<Run["status"], { status: PillStatus; label: string }> = {
   queued: { status: "queued", label: "Waiting" },
   working: { status: "working", label: "Working" },
-  waiting: { status: "needs", label: "Needs you" },
-  review: { status: "needs", label: "Needs you" },
+  waiting: { status: "needs", label: "Needs your OK" },
+  review: { status: "needs", label: "Ready to look at" },
   done: { status: "done", label: "Done" },
   stopped: { status: "stopped", label: "Stopped" },
 };
