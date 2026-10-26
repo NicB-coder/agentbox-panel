@@ -276,7 +276,7 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
       )}
       {open && v.run && !v.clash && (
         <button className={btn.primary} disabled={busy} onClick={() => setConfirm(true)}>
-          Merge it
+          Put it in my project
         </button>
       )}
       {open && v.ship && !v.clash && (
@@ -333,7 +333,7 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
         open={confirm}
         title="Put these changes into your project?"
         text="This adds the changes to the real version of your project (this is called merging). If you change your mind later, start a task that says what to undo."
-        yes="Merge it"
+        yes="Put it in"
         onYes={() => {
           setConfirm(false);
           if (v.run) go(() => post(`/api/runs/${v.run!.id}/merge`), "Done. It's in your project now.");
@@ -342,9 +342,9 @@ function Actions({ v, onDone }: { v: ChangesView; onDone: (msg: string) => void 
       />
       <Confirm
         open={shipAsk}
-        title="Ship it: put these changes into your project?"
-        text="Shipping adds the changes to the real version of your project (this is also called merging). If you change your mind later, start a task that says what to undo."
-        yes="Ship it"
+        title="Put these changes into your project?"
+        text="Shipping adds the changes to the real version of your project (this is called merging, or shipping). If you change your mind later, start a task that says what to undo."
+        yes="Put it in"
         onYes={() => {
           setShipAsk(false);
           if (v.ship) go(() => post(`/api/workflow-runs/${v.ship!.wfRunId}/answer`, { action: "approve" }), "Shipping it now. It'll be in your project in a moment.");

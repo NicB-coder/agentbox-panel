@@ -23,7 +23,7 @@ const STEPS = [
   {
     icon: "inbox",
     title: "The Inbox and the usage meter",
-    text: "Anything that needs you (a finished change to look at, a question, something that went wrong) shows up in the Inbox. The meter at the top shows how much of your Claude usage (Claude is the AI that does the work) you've used so far and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
+    text: "Anything that needs you (a finished change to look at, a question, something that went wrong) shows up in the Inbox. Pause everything is an emergency stop for every agent. The meter at the top shows how much of your Claude usage (Claude is the AI that does the work) you've used so far and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
   },
 ];
 
@@ -76,7 +76,7 @@ export default function Tour({ done }: { done: boolean }) {
             onClick={() => {
               if (!last) return setI(i + 1);
               end();
-              setTimeout(() => openTaskPanel(), 50);
+              setTimeout(() => openTaskPanel({ simple: true }), 50);
             }}
             autoFocus
           >

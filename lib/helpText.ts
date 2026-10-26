@@ -37,9 +37,10 @@ export const HELP_WORDS: [string, string][] = [
   ["Careful / Quick", "Careful (the default): after it builds, a second AI reviews the work, it fixes what's found, polishes it and checks once more, before you see it. Quick: just does it, with one fast check at the end."],
   ["Freedom", "Look only: reads and reports. Check with me first: shows you a plan and waits. On its own: works by itself, then shows you the finished change."],
   ["Follow-up", "More work on the same job: same project, same change if you haven't put it in yet, and it knows what it did before."],
-  ["Pull request", "A finished change waiting for you (GitHub calls it a pull request). Press Look at it to see what changed (with before and after pictures), then Merge it if you like it. Nothing changes in your real project until then."],
+  ["Pull request", "A finished change waiting for you (GitHub calls it a pull request). Press Look at it to see what changed (with before and after pictures when the change shows on the page), then Put it in my project if you like it. Nothing changes in your real project until then."],
   ["Main", "The real, official version of your project. Agents never change it directly."],
-  ["Merge / Ship", "Putting a finished change into the real version of your project. It asks first, unless you set a workflow's Ship step to automatic. To undo it later, start a task that says what to take out."],
+  ["Merge / Ship (Put it in my project)", "Putting a finished change into the real version of your project. It asks first, unless you set a workflow's Ship step to automatic. To undo it later, start a task that says what to take out."],
   ["Project", "One app, game or website. It lives on this Mac and is saved on GitHub, a website that keeps code safe."],
+  ["Tailscale", "The private network that lets only your own phone and laptop open agentbox. Nobody else can reach it."],
   ["Test run", "Runs a workflow for real but stops before shipping and never messages you. Safe for trying things out."],
 ];

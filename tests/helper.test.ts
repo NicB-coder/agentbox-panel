@@ -37,7 +37,7 @@ describe("actionFor: buttons", () => {
     assert.equal(out.meta.actions!.length, 1);
     const a = out.meta.actions![0];
     assert.equal(a.kind, "merge_pr");
-    assert.equal(a.label, "Merge change #8");
+    assert.match(a.label, /^Put “.+” in your project \(#8\)$/);
     assert.equal(a.risky, true);
     assert.match(a.confirm!, /change #8/);
     assert.match(a.confirm!, /real version of portfolio/);
@@ -276,7 +276,7 @@ describe("the reply", () => {
     const done = await waitForReply(reply.id);
     assert.equal(done.status, "done");
     assert.equal(done.text, `It's ready. Look at [[agent:${builder.id}|Builder]].`);
-    assert.equal(done.meta.actions![0].label, "Merge change #8");
+    assert.match(done.meta.actions![0].label, /^Put “.+” in your project \(#8\)$/);
   });
 
   test("if Claude Code isn't installed, it says to check that", async () => {

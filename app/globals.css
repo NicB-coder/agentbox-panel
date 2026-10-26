@@ -145,6 +145,10 @@ button.tile:hover {
   html.helper-docked body {
     padding-right: 412px;
   }
+  /* A step's side panel moves over too, so the chat sits beside it instead of on top. */
+  html.helper-docked aside[data-helper-avoid] {
+    right: 424px;
+  }
   html.helper-docked dialog[open] {
     margin-left: auto;
     margin-right: clamp(16px, calc(100vw - 680px), 412px);

@@ -47,7 +47,7 @@ export function ModelPicker({ value, onChange }: { value: Model; onChange: (v: M
   );
 }
 
-export function MinutesSlider({ value, onChange, min = 5, max = 180, label = "Time limit", tip = "The longest one run may take. It's a safety cap: if it runs out, its work is kept and you can press Keep going or Pick up where it stopped. Waiting for you or for usage doesn't count.", off }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string; tip?: string; off?: string }) {
+export function MinutesSlider({ value, onChange, min = 5, max = 180, label = "Time limit", tip = "The longest one run may take. It's a safety cap: if it runs out, its work is kept and you can press Keep going or Pick up where it stopped. Waiting for you or for usage doesn't count. It starts at 30 minutes for Quick jobs and 1 hour for Careful ones.", off }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string; tip?: string; off?: string }) {
   const words = value >= 60 ? `${Math.floor(value / 60)} h${value % 60 ? ` ${value % 60} min` : ""}` : `${value} min`;
   return <Slider value={value} onChange={onChange} min={min} max={max} label={label} tip={tip} words={off ? "Doesn't apply" : words} off={off} />;
 }
@@ -125,7 +125,7 @@ export function WhenPicker({ value, onChange, nowLabel = "Now" }: { value: When;
     <div className="flex flex-col gap-3">
       <Segmented<ScheduleKind>
         legend="When does it run?"
-        tip={`${nowLabel === "Now" ? "Now starts it straight away, once." : `${nowLabel}: it only runs when you press Run now.`} The others start it by themselves on a timetable, until you pause or archive it.`}
+        tip={`${nowLabel === "Now" ? "Now starts it straight away, once." : `${nowLabel}: it only runs when you ask it to, never on a timetable.`} The others start it by themselves on a timetable, until you pause or archive it.`}
         value={value.scheduleKind}
         onChange={(k) => set({ scheduleKind: k, scheduleDays: k === "days" && !value.scheduleDays.length ? [1, 2, 3, 4, 5] : value.scheduleDays })}
         options={(["manual", "hourly", "daily", "days"] as ScheduleKind[]).map((k) => ({ value: k, label: k === "manual" ? nowLabel : SCHEDULE_WORDS[k] }))}

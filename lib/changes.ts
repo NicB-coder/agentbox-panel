@@ -28,7 +28,8 @@ export type ChangesView = {
   additions: number;
   deletions: number;
   clash: boolean; // a newer change touched the same lines: it can't go in as it is
-  ship: { wfRunId: number; label: string } | null; // a workflow waiting at Ship (or at the OK just before it) for this change
+  ship: { wfRunId: number; label: string } | null;
+  workflow: boolean; // made by a workflow (its own Review/Check steps did the checking) // a workflow waiting at Ship (or at the OK just before it) for this change
   run: { id: number; agentId: number; agentName: string; task: string } | null;
   playable: boolean;
   before: string | null; // preview tokens
@@ -69,7 +70,7 @@ export async function changesView(prUrl: string): Promise<ChangesView | null> {
   const first = runForPrFirst(prUrl);
   const wfRow = db().prepare("SELECT id FROM workflow_runs WHERE pr_url = ? ORDER BY id DESC LIMIT 1").get(prUrl) as { id: number } | undefined;
   const wr = wfRow ? getWfRun(wfRow.id) : null;
-  const ship = wr && wr.status === "needs" && shipsOnOk(wr) ? { wfRunId: wr.id, label: wr.waiting?.kind === "ship" ? "Ship it" : "Approve and ship" } : null;
+  const ship = wr && wr.status === "needs" && shipsOnOk(wr) ? { wfRunId: wr.id, label: wr.waiting?.kind === "ship" ? "Put it in my project" : "Approve and put it in" } : null;
   // A workflow's change: what its build step said it did (not the goal again).
   const built = wr ? (db().prepare("SELECT id FROM runs WHERE workflow_run_id = ? AND result IS NOT NULL AND extra NOT LIKE '%\"role\":\"review\"%' ORDER BY id DESC LIMIT 1").get(wr.id) as { id: number } | undefined) : undefined;
   const builtRun = built ? getRun(built.id) : null;
@@ -99,7 +100,7 @@ export async function changesView(prUrl: string): Promise<ChangesView | null> {
     careful: carefulLine(run?.extra.flow) ?? carefulLine(first?.extra.flow), review: review ? { status: review.status, verdict: review.verdict, text: review.text } : null,
     files: pr.files.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })), additions: pr.additions, deletions: pr.deletions,
     run: run && agent ? { id: run.id, agentId: agent.id, agentName: agent.name, task: run.task } : null,
-    playable, before, after, page, clash: pr.state === "OPEN" && pr.mergeable === "CONFLICTING", ship,
+    playable, before, after, page, clash: pr.state === "OPEN" && pr.mergeable === "CONFLICTING", ship, workflow: !!wr,
   };
 }
 

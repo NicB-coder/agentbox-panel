@@ -65,7 +65,7 @@ export function stepRules(agents: AgentRef[]): string[] {
     "- ship: merges the pull request. shipMode \"ask\" unless Nic clearly says to ship automatically.",
     "- tell: Discord message to Nic. tellWhen always|problems. openIssue true to also open a GitHub issue about problems.",
     "",
-    "Leave the start step's task empty: the goal is stored separately. Give every step a short unique id like \"s1\", \"s2\" so onFail can point at one. Use only the steps the description needs (usually 3 to 8). If they mention building or coding, use ONE agent step that builds (never two build steps in a row). Ship already asks Nic first, so don't put an ask step right before ship. To try it on a phone or in a browser, add a check step with checks [\"page\"]. maxLoops is how many times needs-work may loop (default 2).",
+    "Leave the start step's task empty: the goal is stored separately. Give every step a short unique id like \"s1\", \"s2\" so onFail can point at one. Use only the steps the description needs (usually 3 to 8). If they mention building or coding, use ONE agent step that builds (never two build steps in a row), with agentId null (a fresh agent) unless Nic names one of his agents. Ship already asks Nic first, so don't put an ask step right before ship. To try it on a phone or in a browser, add a check step with checks [\"page\"]. maxLoops is how many times needs-work may loop (default 2).",
     "",
     "Nic's agents:",
     ...agents.map((a) => `- id ${a.id}: ${a.name}${a.allowed === "look" ? " (look only, reports)" : ""}`),

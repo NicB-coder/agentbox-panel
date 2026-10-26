@@ -349,11 +349,10 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
             />
           </label>
           <div className="md:w-[240px] md:shrink-0">
-            <ProjectSelect value={def.project} onChange={(p) => update({ ...def, project: p })} projects={data.projects} tip="The code this workflow works on. All its steps share one copy of it and one pull request." />
+            <ProjectSelect value={def.project} onChange={(p) => update({ ...def, project: p })} projects={data.projects} tip="Which app, game or site it works on. All its steps work on one copy of it, and you see one finished change at the end." />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {manualStart && <span className="text-[14px] text-muted">Runs when you press Run now</span>}
           {!manualStart && (
             <div className="min-w-[150px]">
               <Switch label={enabled ? "On" : "Off"} checked={enabled} onChange={toggle} disabled={!!busy} tip="On: it starts by itself (on its schedule or from GitHub). Off: it only runs when you press Run now or Test run." />
@@ -375,7 +374,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
             onOther={() => setRunDialog("test")}
             other={manualStart ? "Test with a different goal…" : ""}
             disabled={!!busy || !!data.active}
-            tip={`A safe try: it does every step for real${def.steps.some((x) => x.type === "ship") ? ", but stops before Ship" : ""} and never sends Discord messages. It still uses some Claude usage and may open a draft pull request you can close.`}
+            tip={`A safe try: it does every step for real${def.steps.some((x) => x.type === "ship") ? ", but stops before Ship" : ""} and won't message you. It still uses some Claude usage, and may leave a practice change in your Inbox that you can throw away.`}
           />
           {dirty || busy === "save" ? (
             <button type="button" className={btn.primary} onClick={() => save()} disabled={!!busy}>
@@ -410,7 +409,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
       )}
       {!live && data.active && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-[#EEF1FD] px-4 py-2 text-[15px] font-medium text-[#2A3F9E]">
-          <span>It's running right now. You can still change it: changes apply to the next run, not the one that's going.</span>
+          <span>It's running right now, so Run now and Test run wait until it's done. You can still change it: changes apply to the next run, not the one that's going.</span>
           <button type="button" className={btn.link + " !text-[#2A3F9E]"} onClick={() => viewRun(data.active!.id)}>
             Watch the run
           </button>
@@ -438,7 +437,7 @@ export default function WorkflowEditor({ initial, id }: { initial: WorkflowPageS
                 update({ ...def, steps: def.steps.map((x, i) => (i === 0 ? { ...x, brief: b ?? undefined } : x)) });
               }}
               openRef={openBrief}
-              tip="Optional. A text file with longer instructions. Every step reads it before it starts. Remember to save after attaching it."
+              tip="Optional. A text file with longer instructions. Every step reads it before it starts."
             />
           </div>
         </div>
@@ -667,8 +666,8 @@ function LiveTitle({ run }: { run: WorkflowRun }) {
     <span className="flex flex-wrap items-center gap-2">
       <StatusPill status={RUN_PILL[run.status]} label={RUN_WORD[run.status]} />
       <span>
-        {active ? "Live" : "A past run"}
-        {run.test ? " · test run" : ""} · started {ago(run.startedAt)}
+        {run.status === "needs" ? "Waiting for you" : active ? "Running now" : "A past run"}
+        {run.test ? " · test run" : ""} · started {clockOf(run.startedAt)}
       </span>
     </span>
   );
@@ -713,24 +712,24 @@ function WaitingBox({ run, onDone }: { run: WorkflowRun; onDone: () => Promise<v
       ) : (
         <div className="mt-4 flex flex-wrap gap-2">
           <button className={btn.primary} onClick={() => (ships ? setSure(true) : act("approve"))}>
-            {run.waiting!.kind === "ship" ? "Ship it" : ships ? "Approve and ship" : "Approve"}
+            {run.waiting!.kind === "ship" ? "Put it in my project" : ships ? "Approve and put it in" : "Approve"}
           </button>
           {run.waiting!.kind === "ask" && (
             <button className={btn.secondary} onClick={() => setSending(true)}>
               Send back
             </button>
           )}
-          <button className={btn.secondary} onClick={() => act("stop")}>
-            Stop
+          <button className={btn.secondary} onClick={() => act("stop")} title="Ends this run here. Nothing goes into your project. You can still find it in the workflow's Run history.">
+            {ships ? "Don't put it in" : "Stop"}
           </button>
         </div>
       )}
       {err && <p className="mt-2 text-[14px] font-medium text-[#A11B12]">{err}</p>}
       <Confirm
         open={sure}
-        title="Ship it: put these changes into your project?"
-        text="Shipping adds the changes to the real version of your project (this is also called merging). If you change your mind later, start a task that says what to undo."
-        yes="Ship it"
+        title="Put these changes into your project?"
+        text="Shipping adds the changes to the real version of your project (this is called merging, or shipping). If you change your mind later, start a task that says what to undo."
+        yes="Put it in"
         onYes={() => act("approve")}
         onClose={() => setSure(false)}
       />

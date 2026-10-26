@@ -16,6 +16,7 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [confirmNew, setConfirmNew] = useState(false);
+  const [gh, setGh] = useState(false); // the two GitHub boxes, folded away for beginners
   const [busy, setBusy] = useState("");
   type Where = "clone" | "pick" | "create";
   const [error, setError] = useState<{ msg: string; retry?: () => void; where: Where; typo?: boolean } | null>(null);
@@ -148,18 +149,23 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
                 )}
                 {!p.playable && <p className="text-[14px] text-muted">Nothing to play here yet. A Play button shows up once the project has a web page or game.</p>}
                 <p className="text-[14px] text-muted">
-                  {p.lastActivity ? `Last change ${ago(p.lastActivity)}${p.lastMessage && !/^initial commit$/i.test(p.lastMessage.trim()) ? `: “${p.lastMessage.slice(0, 80)}”` : ""}` : "No changes yet"}
+                  {p.lastActivity ? `Last change ${ago(p.lastActivity)}${p.lastMessage && !/^initial commit$/i.test(p.lastMessage.trim()) ? `: “${p.lastMessage.replace(/\s*\(#\d+\)$/, "").slice(0, 80)}”` : ""}` : "No changes yet"}
                 </p>
                 <div>
                   <p className="text-[14px] font-semibold">
-                    {p.prs.length ? `${p.prs.length} ${p.prs.length === 1 ? "change" : "changes"} waiting for you to look at` : "No changes waiting for you"}
+                    {(() => {
+                      // Only finished changes wait for Nic; ones still being built (drafts) are just listed.
+                      const ready = p.prs.filter((x) => !x.draft).length;
+                      const building = p.prs.length - ready;
+                      return [ready ? `${ready} ${ready === 1 ? "change" : "changes"} ready to look at` : "", building ? `${building} still being built` : ""].filter(Boolean).join(" · ") || "No changes waiting for you";
+                    })()}
                   </p>
                   {p.prs.length > 0 && (
                     <ul className="mt-1 flex flex-col">
                       {p.prs.slice(0, 5).map((pr) => (
                         <li key={pr.number}>
                           <a href={`/changes?pr=${encodeURIComponent(pr.url)}`} className="flex min-h-11 items-center gap-2 text-[14px]">
-                            <span className="truncate underline">{pr.title}</span>
+                            <span className="truncate underline">{pr.title.replace(/\s*\(in progress\)/i, "")}</span>
                             {pr.draft && <span className="shrink-0 rounded-full bg-soft px-2 text-[12px] font-semibold text-[#4A4F57]">still being built</span>}
                           </a>
                         </li>
@@ -212,6 +218,17 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
             <Result where="create" />
           </form>
 
+          {!gh ? (
+            <div className="flex flex-col justify-center gap-2 rounded-[24px] border-2 border-dashed border-dash p-6 lg:col-span-2">
+              <p className="text-[15px] text-muted">Most people start a new project. Already have code saved on GitHub?</p>
+              <div>
+                <button type="button" className={btn.secondary} onClick={() => setGh(true)}>
+                  I already have a project on GitHub
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
           <form
             className="panel flex flex-col gap-3 p-6"
             onSubmit={(e) => {
@@ -264,13 +281,15 @@ export default function ProjectsClient({ initial }: { initial: ProjectInfo[] }) 
             )}
             <Result where="pick" />
           </div>
+            </>
+          )}
         </div>
       </section>
 
       <Confirm
         open={confirmNew}
         title={`Make “${slug}”?`}
-        text="It's saved on GitHub as a public project: other people can look at the code, like most school and hobby projects. That's fine for games and sites. Just never put passwords or private info in it."
+        text="Its code is saved on GitHub as a public project, like most school and hobby projects: other people could read the code. Your game isn't put on the web for anyone to play. Just never put passwords or private info in it."
         yes="Make it"
         onYes={create}
         onClose={() => setConfirmNew(false)}

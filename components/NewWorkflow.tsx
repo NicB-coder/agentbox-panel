@@ -61,6 +61,7 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
   // Next: the coach checks the goal first (once), then the workflow is made.
   function next(e?: React.FormEvent) {
     e?.preventDefault();
+    if (busy) return; // still drafting the steps: wait for them
     if (coached || (!goal.trim() && !brief) || (autoGoal && goal === autoGoal)) return make();
     setError(null);
     setIdeas(false);

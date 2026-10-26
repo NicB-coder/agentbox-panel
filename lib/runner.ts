@@ -762,6 +762,8 @@ function onEvent(runId: number, line: string, state: StreamState, phase: Phase) 
         let activity = PLAIN_TOOL[c.name] ?? "Working on it";
         if (c.name === "Bash") activity = typeof input.description === "string" && input.description ? plainActivity(input.description) : "Running a check";
         if (c.name.startsWith("mcp__")) activity = "Using a connected app";
+        // While planning it only reads: say so, so nobody thinks it's already building.
+        if (phase === "plan") activity = "Reading your project to write its plan";
         updateRun(runId, { activity: `${phase === "review" || phase === "final" ? "Reviewing: " : ""}${activity}…` });
         if (!builder) continue;
         // No progress lines from the agent? Move the default steps along by what it's doing.

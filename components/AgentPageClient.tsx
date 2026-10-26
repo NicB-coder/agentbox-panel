@@ -126,7 +126,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-6">
           {isHeartbeat ? <HeartbeatNow data={data} /> : <RightNow data={data} act={act} busy={busy} />}
-          {!isHeartbeat && <FollowUp agent={a} disabled={working} waiting={data.view.activeRun?.status === "waiting"} />}
+          {!isHeartbeat && !working && <FollowUp agent={a} disabled={false} />}
           {isHeartbeat ? <HeartbeatHistory data={data} /> : <History runs={runs} reports={data.reports} />}
         </div>
         <aside className="flex flex-col gap-6">
@@ -225,6 +225,9 @@ export function ProgressBar({ p, color = "#2F4FD8" }: { p: { step: number; of: n
 
 type Act = (l: string, u: string, b?: unknown) => Promise<void>;
 
+// Writing (or rewriting) its plan: nothing is being built yet.
+const planning = (run: Run) => run.status === "working" && (run.extra.proc?.phase ?? run.extra.flow?.stage) === "plan";
+
 // After "Change it" on a plan, the job is what Nic changed it to: say so right under the task.
 function Changed({ run }: { run: Run }) {
   const c = run.extra.planChanges;
@@ -263,12 +266,17 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
               {run.extra.flow?.careful ? " · Careful" : ""}
             </p>
           )}
-          {view.progress && run.status !== "waiting" && (
+          {planning(run) && (
+            <p className="mt-3 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
+              It's writing its plan. It will wait for your OK before it changes anything.
+            </p>
+          )}
+          {view.progress && run.status !== "waiting" && !planning(run) && (
             <div className="mt-4">
               <ProgressBar p={view.progress} color={view.agent.color} />
             </div>
           )}
-          {!(run.status === "waiting" && run.plan) && <Steps run={run} />}
+          {!(run.status === "waiting" && run.plan) && !planning(run) && <Steps run={run} />}
           {run.extra.flow?.big && <BigJob run={run} used={data.bigUsed} held={data.held} act={act} busy={busy} />}
           {pending && pending.kind === "tool" && <AskBox approval={pending} act={act} busy={busy} />}
           {run.plan && run.status === "waiting" && !pending && <PlanBox run={run} act={act} busy={busy} />}
@@ -369,7 +377,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
           </button>
         ) : (
           <button className={btn.secondary} disabled={!!busy} onClick={() => setConfirm(true)}>
-            Merge it
+            Put it in my project
           </button>
         )}
         {r?.verdict === "needs work" && !careful && (
@@ -416,7 +424,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
         open={confirm}
         title="Put these changes into your project?"
         text="This adds the changes to the real version of your project (this is called merging). If you change your mind later, start a task that says what to undo."
-        yes="Merge it"
+        yes="Put it in"
         onYes={() => {
           setConfirm(false);
           act("merge", `/api/runs/${run.id}/merge`);
@@ -642,7 +650,7 @@ function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["repo
                   </p>
                   {r.status === "stopped" && (
                     <p className="mt-0.5 text-[14px] text-muted">
-                      {i === 0 ? "What you can do: see Right now at the top of this page." : `Later runs came after it, so there's nothing to do.${/ran out of time/i.test(r.stopReason ?? "") ? " If this keeps happening, give it more time in Change this agent." : ""}`}
+                      {i === 0 ? "Its choices (like Pick up where it stopped) are in the Right now box above." : `Later runs came after it, so there's nothing to do.${/ran out of time/i.test(r.stopReason ?? "") ? " If this keeps happening, give it more time in Change this agent." : ""}`}
                     </p>
                   )}
                   {reports.find((x) => x.runId === r.id) ? (

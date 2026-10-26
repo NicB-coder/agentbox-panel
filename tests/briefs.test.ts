@@ -188,6 +188,6 @@ describe("Projects → Add a file", () => {
     assert.ok(it && it.kind === "file_pr");
     assert.equal(it.title, "Add CLAUDE.md to lookout");
     assert.equal(it.prUrl, "https://github.com/x/lookout/pull/9");
-    assert.match(it.text, /Press Merge it to finish/);
+    assert.match(it.text, /Press Add it to my project to finish/);
   });
 });

@@ -120,7 +120,7 @@ export function inboxItems(): InboxItem[] {
     items.push({
       key: `file${f.id}`, kind: "file_pr", at: f.createdAt, title: f.replaces ? `Update ${f.file} in ${f.project}` : `Add ${f.file} to ${f.project}`, who: f.project, color: "#555A63", icon: "folder",
       fileId: f.id, project: f.project, file: f.file, prUrl: f.prUrl, link: "/projects",
-      text: `This puts ${f.file} in ${f.project}, so every agent and workflow can read it. Press Merge it to finish.`,
+      text: `This puts ${f.file} in ${f.project}, so every agent and workflow can read it. Press Add it to my project to finish.`,
     });
   }
 

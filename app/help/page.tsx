@@ -30,7 +30,7 @@ export default function Help() {
             Try <strong>Research something</strong> in the same panel: ask a question you really want answered. You get a report with every source linked.
           </li>
           <li>
-            Check the <Link href="/inbox" className="inline-block min-h-6 px-0.5 font-semibold underline">Inbox</Link> when the badge shows a number. Press <strong>Look at it</strong> to see what changed, with before and after pictures, then <strong>Merge it</strong> or send it back.
+            Check the <Link href="/inbox" className="inline-block min-h-6 px-0.5 font-semibold underline">Inbox</Link> when the badge shows a number. Press <strong>Look at it</strong> to see what changed (with before and after pictures when it shows on the page), then <strong>Put it in my project</strong> or send it back.
           </li>
         </ol>
         <div className="mt-5">
@@ -80,7 +80,7 @@ export default function Help() {
           What keeps it safe
         </h2>
         <ul className="mt-4 flex list-disc flex-col gap-2 pl-5 text-[15px] leading-relaxed">
-          <li>Agents always work on a copy. Your real project only changes when you press Merge it or Ship it, and those always ask first.</li>
+          <li>Agents always work on a copy. Your real project only changes when you press Put it in my project, and that always asks first.</li>
           <li>A workflow only ships by itself if you set its Ship step to automatic, and only after every check passed. agentbox never updates itself unless you said so.</li>
           <li>Connected apps (email, calendar, files…) are only used when you tick them for a task, and anything that sends, deletes or books something asks you first.</li>
           <li>If an update doesn't start properly, agentbox goes back to the old version by itself.</li>

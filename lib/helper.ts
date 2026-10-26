@@ -545,7 +545,7 @@ export function actionFor(kind: string, ref: string): HelperAction | null {
     case "approve_wfrun": {
       const wr = id ? getWfRun(n) : null;
       if (!(wr?.status === "needs" && wr.waiting?.kind === "ask")) return null;
-      return shipsOnOk(wr) ? a("Approve and ship", `Approving lets "${getWorkflow(wr.workflowId)?.name ?? "the workflow"}" ship: its changes go into the real version of ${getWorkflow(wr.workflowId)?.project ?? "your project"}. If you change your mind later, start a task that says what to undo.`) : a("Approve");
+      return shipsOnOk(wr) ? a(`Approve and put “${cutWords(getWorkflow(wr.workflowId)?.name ?? "it", 40)}” in`, `Approving puts "${getWorkflow(wr.workflowId)?.name ?? "the workflow"}"'s changes go into the real version of ${getWorkflow(wr.workflowId)?.project ?? "your project"}. If you change your mind later, start a task that says what to undo.`) : a("Approve");
     }
     case "ship_wfrun": {
       const wr = id ? getWfRun(n) : null;
@@ -553,8 +553,8 @@ export function actionFor(kind: string, ref: string): HelperAction | null {
       const wf = getWorkflow(wr.workflowId);
       const pr = wr.prUrl ? prNumber(wr.prUrl) : "";
       return a(
-        "Ship it",
-        `This ships "${wf?.name ?? "the workflow"}"${pr ? ` (change #${pr})` : ""}: its changes go into the real version of ${wf?.project ?? "your project"}. If you change your mind later, start a task that says what to undo.`,
+        `Put “${cutWords(wf?.name ?? "it", 40)}” in your project`,
+        `This puts "${wf?.name ?? "the workflow"}"'s changes${pr ? ` (#${pr})` : ""} into the real version of ${wf?.project ?? "your project"}. If you change your mind later, start a task that says what to undo.`,
       );
     }
     case "merge_pr": {
@@ -562,7 +562,7 @@ export function actionFor(kind: string, ref: string): HelperAction | null {
       if (!(r?.status === "review" && r.prUrl)) return null;
       const pr = prNumber(r.prUrl);
       return a(
-        `Merge change #${pr}`,
+        `Put “${cutWords(r.task, 40)}” in your project (#${pr})`,
         `This puts "${cutWords(r.task, 80)}" (change #${pr}) into the real version of ${repoOf(r.prUrl).split("/").pop()}. If you change your mind later, start a task that says what to undo.`,
       );
     }

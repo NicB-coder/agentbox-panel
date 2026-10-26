@@ -26,6 +26,7 @@ export type TaskPanelOpen = {
   followUpId?: number; // fetches the job, then opens as a follow-up
   coach?: boolean; // open with the prompt coach already checking the task (the Helper's "Improve it")
   ideas?: boolean; // open with "Help me think of ideas" showing
+  simple?: boolean; // first time (from the welcome tour): just the goal and the project, the rest folded away
   followUp?: { id: number; name: string; project: string; kind: JobKind; freedom: Freedom; careful: boolean; model: Model; connectors: string[] };
 };
 
@@ -95,6 +96,11 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
   const [ideas, setIdeas] = useState(false);
   const [live, setLive] = useState<Connector[] | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  // What was typed when the panel closed without starting (Escape, Cancel, a tap outside): it comes back next time.
+  const draft = useRef("");
+  const started = useRef(false);
+  const [restored, setRestored] = useState(false);
+  const [simple, setSimple] = useState(false);
   // While it's open, the Helper sees exactly what's in it and can fill the goal box (on Nic's click).
   useHelperContext(
     isOpen
@@ -130,7 +136,9 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
       const f = d.followUp ?? (d.followUpId ? await followUpOf(d.followUpId) : null) ?? null;
       setFollow(f);
       setIdeaId(d.ideaId ?? null);
-      setTask(d.task ?? "");
+      const keep = !d.task && !f && !d.ideaId && !d.coach && !d.ideas ? draft.current : "";
+      setTask(d.task ?? keep);
+      setRestored(!!keep);
       const k = f?.kind ?? (TASK_FEATURES.research ? d.kind ?? "build" : "build");
       setKind(k);
       setProject(f?.project ?? d.project ?? (projects.includes(defaultProject ?? "") ? defaultProject! : defaultProjectOf(projects)));
@@ -153,6 +161,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
       setCoach(!!d.coach && !f && !!(d.task ?? "").trim());
       setCoachKey((k) => k + 1);
       setIdeas(!!d.ideas && !f);
+      setSimple(!!d.simple && !f);
       ref.current?.showModal();
       setIsOpen(true);
       setTimeout(() => document.getElementById(taskId)?.focus(), 30);
@@ -178,8 +187,6 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
     setIdeas(false);
     setCoachKey((k) => k + 1);
     setCoach(true);
-    // The questions show at the bottom of the panel: bring them into view.
-    setTimeout(() => document.getElementById(`${taskId}-coach`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   }
 
   function coachDone(t: string) {
@@ -215,6 +222,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
         big, budgetPct: budget, holdSmall, autoInstall, saveReport, brief, followUpOf: follow?.id, ideaId,
       });
       rememberProject(project);
+      started.current = true;
       ref.current?.close();
       window.dispatchEvent(new Event("agentbox:changed"));
       router.push(`/agents/${j.agentId}`);
@@ -236,7 +244,11 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      onClose={() => setIsOpen(false)}
+      onClose={() => {
+        setIsOpen(false);
+        if (!follow) draft.current = !started.current && task.trim() ? task : "";
+        started.current = false;
+      }}
       className="m-0 h-[100dvh] max-h-none w-full max-w-none p-0 backdrop:bg-black/30 sm:m-auto sm:h-auto sm:max-h-[calc(100dvh-48px)] sm:w-[min(640px,calc(100vw-32px))] sm:rounded-[24px]"
     >
       <form onSubmit={next} className="flex min-h-full flex-col">
@@ -306,8 +318,39 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
               }
               className="rounded-[14px] border border-[#C9CDD4] p-4 text-[16px] leading-relaxed"
             />
+            {restored && task && (
+              <p className="text-[14px] text-muted">
+                This is what you typed last time.{" "}
+                <button type="button" className="font-semibold underline" onClick={() => (setTask(""), setRestored(false), (draft.current = ""))}>
+                  Clear it
+                </button>
+              </p>
+            )}
           </div>
 
+          {/* The quick questions show right under the goal, where Nic is looking. */}
+          {coach && (
+            <CoachBox
+              key={coachKey}
+              where={research ? "research" : "build"}
+              goal={task}
+              brief={brief}
+              current={on}
+              onApply={applyTweak}
+              onDone={coachDone}
+              onEdit={(t) => {
+                setTask(t);
+                setCoach(false);
+                setCoached(true);
+                setTimeout(() => document.getElementById(taskId)?.focus(), 30);
+              }}
+              onClose={() => {
+                setCoach(false);
+                setTimeout(() => document.getElementById(taskId)?.focus(), 30);
+              }}
+              doneLabel={scheduled ? "Save" : "Start"}
+            />
+          )}
           {follow ? (
             <p className="text-[15px] text-muted">
               {follow.kind === "research" ? "It builds on the earlier report." : `Same project (${follow.project || "none"}). It carries on with the same change.`}
@@ -335,16 +378,19 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
             />
           )}
 
-          {!follow && <WhenPicker value={when} onChange={setWhen} />}
+          {simple && !more && (
+            <p className="text-[15px] text-muted">The other choices are set to good defaults: it starts now, works on its own and checks its work carefully. You can change them under More options.</p>
+          )}
+          {!follow && !(simple && !more) && <WhenPicker value={when} onChange={setWhen} />}
 
-          {research ? (
+          {!(simple && !more) && (research ? (
             <p className="flex items-center text-[15px] text-muted">
               Research only reads and reports. It never changes anything.
             </p>
           ) : (
             <FreedomPicker value={freedom} onChange={setFreedom} />
-          )}
-          <CarefulPicker value={careful} onChange={setCareful} />
+          ))}
+          {!(simple && !more) && <CarefulPicker value={careful} onChange={setCareful} />}
 
           <div>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 text-[15px] font-semibold" aria-expanded={more} onClick={() => setMore(!more)}>
@@ -403,29 +449,6 @@ export default function TaskPanel({ projects, connectors = [], defaultProject, u
               </div>
             )}
           </div>
-          {coach && <div id={`${taskId}-coach`} className="-mb-7 scroll-mt-20" />}
-          {coach && (
-            <CoachBox
-              key={coachKey}
-              where={research ? "research" : "build"}
-              goal={task}
-              brief={brief}
-              current={on}
-              onApply={applyTweak}
-              onDone={coachDone}
-              onEdit={(t) => {
-                setTask(t);
-                setCoach(false);
-                setCoached(true);
-                setTimeout(() => document.getElementById(taskId)?.focus(), 30);
-              }}
-              onClose={() => {
-                setCoach(false);
-                setTimeout(() => document.getElementById(taskId)?.focus(), 30);
-              }}
-              doneLabel={scheduled ? "Save" : "Start"}
-            />
-          )}
           {missing && <MissingFileBox missing={missing} onAttach={() => openBrief.current?.()} />}
           {error && <ErrorBox compact message={error} onRetry={() => start()} where="the Start a task panel" />}
         </div>

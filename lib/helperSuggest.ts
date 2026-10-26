@@ -56,9 +56,9 @@ export function suggestions(ctx: HelperContext): string[] {
     else if (last?.status === "stopped") out.push("Why did this stop?");
     out.push("What does this workflow do?", "Help me build a workflow");
   } else if (p.startsWith("/inbox")) {
-    out.push(inboxCount() ? "What should I do first?" : "What will show up here?", "What is a pull request?");
+    out.push(inboxCount() ? "What should I do first?" : "What will show up here?", "What does Merge it do?");
   } else if (p.startsWith("/projects")) {
-    out.push("How do I add a project?", "What's a repo?");
+    out.push("How do I start a new project?", "What does Play do?");
   } else if (p.startsWith("/settings")) {
     out.push("What does the usage limit do?", "What should I set it to?");
   } else if (p.startsWith("/help")) {
