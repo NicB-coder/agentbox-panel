@@ -268,6 +268,68 @@ I read the Lookout run records on a copy of the real database (read-only copy, n
   milestones). The Terminal page's typing goes to a real shell, so it was opened but not typed in.
 
 
+### Milestone 9: beginner review rounds as Sam
+
+Each round was a **fresh reviewer session with no memory of the build** (a separate agent told not to read the code or
+earlier rounds). It played Sam (15, never used an agent tool) on a fresh copy of the database, went through every page
+at 1366 and 390px wide, asked the Helper on every page and pop-up, and did all 10 core tasks with real runs on arcade.
+I then fixed what it found and wrote the fix next to every question in `REVIEW-ROUND-<n>.md`.
+
+**Round-by-round question counts**
+
+| Round | All questions | In the core tasks | Biggest finds |
+| --- | --- | --- | --- |
+| 1 | 58 | 41 | Review badge said "Nothing to fix" while the review said "not ready"; Change it on a plan didn't reach the reviewer; raw plan text; New task defaulted to the panel itself |
+| 2 | 64 | 51 | **Ship it merged with no "are you sure"** (now always asks); clashing changes still offered Merge; jargon in tips and Help |
+| 3 | 58 | 39 | No critical bug. Four names for a finished change; the step drafter made double build/ask steps; Check opened the wrong page |
+| 4 | 50 | 43 | No critical bug. "Merge it" vs "Ship it"; Escape lost the typed goal; the questions showed off-screen |
+| 5 | 50 | 29 | No critical bug. Helper misread the open form; "Ship" step name; usage-wait wording |
+
+Round 2 went up because that reviewer got much further (it ran a workflow to the end and pressed Ship). From round 3
+on, every button that puts a change into the real project asked first.
+
+**The main things that changed for beginners**
+- One name for putting a change in: **Put it in my project** (the workflow step is now called **Put it in**). It
+  always asks first, and the confirm says how to undo it. A finished change is **Ready to look at** everywhere.
+- New task: picks your last project (never the panel itself by default); the quick questions show right under the
+  goal and scroll into view; "Improve my goal" works with nothing ticked; Escape keeps what you typed; the first task
+  from the tour is a simple form; usage so far shows in the footer.
+- Plans are plain bullet points (no file paths or "plan mode"); "Change it" on a plan is shown on the page and given
+  to the reviewer; while it plans, the page says so instead of showing build steps.
+- Reviews: a missing VERDICT line no longer counts as "passed"; reviewers and agents are told not to use branch names,
+  paths or code words; activity lines are plain ("Looking at what changed", "Saving the work").
+- Projects: "Start a new project" first (GitHub options folded away), the real name shown as you type, messages next
+  to the box you used, drafts counted as "still being built".
+- See what changed: a clash warning with **Fix the clash**; no pictures when only non-page files changed; the exact
+  changes without the technical header lines; Put it in for workflows waiting at the step.
+- Workflows: tiles show step names and the project; hand-started workflows have no On/Off switch and always show Run
+  now; Saved ✓; Look at it / Try again after a run; one build step and no double "ask" from the step drafter; the
+  page check opens the page the run changed.
+- Helper: docks beside the page on a laptop (covers nothing); new answers stay in view; starts a fresh chat after 3
+  hours; knows the open pop-up, the drafted change, the visible page text (as data) and the open agent's history;
+  old action buttons show "no longer needed"; plain words, short answers, real waiting reasons.
+
+**v3.1 — Decisions I made (milestone 9)**
+- New projects stay **public** (the original brief asks for that); the pop-up now explains it plainly and says it's
+  free and that the game isn't put on the web.
+- "Merge" and "Ship" are both called **Put it in my project** in buttons; the words still appear once in the confirm
+  and the Help glossary so Nic can match them to GitHub.
+- The pill design keeps its colours; only the words changed ("Ready to look at", "Needs your OK").
+- Tiles and summaries from Nic's real history (e.g. "Follow ONE-QUESTION.md…") are left as he wrote them.
+- A task's better name is chosen before it starts (up to 8 seconds) so it never renames itself mid-run.
+
+**v3.1 — Needs Nic (from the review rounds)**
+- A reviewer pressed **Make it** in round 1, so there's a public empty repo **NicB-coder-bot/sam-hello-test** and a folder
+  `~/projects/sam-hello-test`. Delete both if you don't want them (I didn't delete anything).
+- In round 2, before Ship asked first, a reviewer shipped **arcade#13**, which added one line ("Made with agentbox by
+  Sam") to the end of arcade's README. Remove it if you like (a one-line task on arcade does it).
+- All other test pull requests (arcade#9–12 and #14–21) were closed with a comment and their branches deleted.
+
+**Not done / known limits (milestone 9)**
+- No round reached zero questions in the core tasks (29 in round 5). The remaining ones are listed with "Kept" or
+  "Not done" in the round files; the biggest open ones: a drafted "Change it in your own words" is lost if you leave
+  the page before Apply, and the Helper bubble still sometimes sits near a link on a phone.
+
 # v3: simpler, fully in the panel, deep research
 
 ## v3 — What Nic should click first
