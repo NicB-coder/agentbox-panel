@@ -23,7 +23,7 @@ export function Sheet({ title, icon, color, onClose, children, ask }: { title: s
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <aside
+    <aside data-helper-avoid=""
       ref={ref}
       tabIndex={-1}
       aria-label={`${title} settings`}
@@ -91,21 +91,21 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
   const timeSlider = (
     <label className="flex flex-col gap-2">
       <span className="flex items-baseline justify-between">
-        <Label tip="The longest this step may work. It stops if it runs over, so it can't run forever.">Time limit</Label>
+        <Label tip="The longest this one step may work. The whole workflow also has its own limit (Longest run, under Limits), and whichever comes first stops it. Its work is kept either way.">Time limit for this step</Label>
         <span className="text-[15px] font-semibold">{s.maxMinutes ?? 30} minutes</span>
       </span>
-      <input type="range" min={5} max={120} step={5} value={s.maxMinutes ?? 30} onChange={(e) => onChange({ maxMinutes: Number(e.target.value) }, "maxMinutes")} className="h-11 w-full accent-[#15171B]" />
+      <input type="range" aria-label="Time limit" aria-valuetext={`${s.maxMinutes ?? 30} minutes`} min={5} max={120} step={5} value={s.maxMinutes ?? 30} onChange={(e) => onChange({ maxMinutes: Number(e.target.value) }, "maxMinutes")} className="h-11 w-full accent-[#15171B]" />
     </label>
   );
   const modelPick = (tip: string) => (
     <Segmented
-      legend="Which model?"
+      legend="Which AI?"
       tip={tip}
       value={s.model ?? "sonnet"}
       onChange={(v) => onChange({ model: v })}
       options={[
-        { value: "sonnet", label: "Fast (Sonnet)" },
-        { value: "opus", label: "Smartest (Opus)" },
+        { value: "sonnet", label: "Fast" },
+        { value: "opus", label: "Smartest" },
       ]}
     />
   );
@@ -180,19 +180,19 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
       {s.type === "agent" && (
         <>
           <label className="flex flex-col gap-2">
-            <Label tip="Who works on this step. A fresh agent follows this step's instructions. Or pick one of your jobs to use its own description too.">Who does it?</Label>
+            <Label tip="A fresh agent (best for most steps) starts new and just follows this step's instructions. Or pick one of your agents from the home page: it also brings its own job description with it.">Who does it?</Label>
             <select
               value={s.agentId == null ? "quick" : String(s.agentId)}
               onChange={(e) => onChange({ agentId: e.target.value === "quick" ? null : Number(e.target.value), model: e.target.value === "quick" ? s.model ?? "sonnet" : undefined })}
               className={`${field} min-h-11`}
               aria-label="Who does it?"
             >
-              <option value="quick">A fresh agent</option>
+              <option value="quick">A fresh agent (recommended)</option>
               {agents
                 .filter((a) => !a.archived || a.id === s.agentId)
                 .map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {a.name} (one of your agents)
                   </option>
                 ))}
             </select>
@@ -235,7 +235,7 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
             <Label tip="Optional. Extra things the reviewer should check, like 'works on phones' or 'no new packages'.">Anything else to check? (optional)</Label>
             <textarea value={s.prompt ?? ""} onChange={(e) => onChange({ prompt: e.target.value }, "prompt")} rows={3} className="rounded-[14px] border border-[#C9CDD4] p-3 text-[15px]" aria-label="Anything else to check?" />
           </label>
-          {modelPick("A different model from the one that built it catches more. Smartest (Opus) reviewing Fast (Sonnet) work is a good pair.")}
+          {modelPick("A different AI from the one that built it catches more. Smartest checking Fast's work is a good pair.")}
           {timeSlider}
           {failSelect}
         </>
@@ -270,20 +270,20 @@ export default function StepPanel({ step: s, index, steps, agents, project, onCh
       {s.type === "ask" && (
         <label className="flex flex-col gap-2">
           <Label tip="What you'll see in the Inbox. You can Approve, Send it back with a note, or Stop.">What should it ask you? (optional)</Label>
-          <input value={s.question ?? ""} onChange={(e) => onChange({ question: e.target.value }, "question")} placeholder="For example: Look it over. Ship it?" className={`${field} min-h-11`} aria-label="What should it ask you?" maxLength={300} />
+          <input value={s.question ?? ""} onChange={(e) => onChange({ question: e.target.value }, "question")} placeholder="For example: Look it over. Put it in?" className={`${field} min-h-11`} aria-label="What should it ask you?" maxLength={300} />
         </label>
       )}
 
       {s.type === "ship" && (
         <>
           <Segmented
-            legend="How should it ship?"
-            tip="Shipping merges the pull request into main, the real version of your project. If your project deploys from GitHub (like Vercel), that starts the deploy."
+            legend="How should it go in?"
+            tip="This puts the finished change into the real version of your project. If your site goes live from GitHub, this also updates the live site."
             value={s.shipMode ?? "ask"}
             onChange={(v) => onChange({ shipMode: v })}
             options={[
               { value: "ask", label: "Ask me first" },
-              { value: "auto", label: "Ship automatically" },
+              { value: "auto", label: "Put it in by itself" },
             ]}
           />
           {s.shipMode === "auto" && (

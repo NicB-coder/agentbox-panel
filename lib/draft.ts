@@ -1,17 +1,11 @@
-import { execFile } from "node:child_process";
-import os from "node:os";
-import path from "node:path";
 import type { WfStep } from "./types";
-import { addRunUsageless } from "./draftUsage";
+import { claudeJson } from "./claudeJson";
 import { cleanLimits, cleanSteps, type AgentRef } from "./wf";
-import { ingestRateLimitEvent } from "./usage";
 
-// "Describe it": Claude (headless, no tools at all, so it can only read and answer) turns Nic's
-// sentence into workflow steps. The result always opens in the editor, switched off.
+// "Change the steps in your own words": Claude (headless, no tools at all, so it can only read and answer)
+// turns Nic's sentence about the steps into workflow steps. The goal is asked for separately, once.
 
-const PATH = [path.join(os.homedir(), ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":");
-
-const SCHEMA = {
+export const SCHEMA = {
   type: "object",
   required: ["name", "steps"],
   properties: {
@@ -32,6 +26,8 @@ const SCHEMA = {
           agentId: { type: ["integer", "null"] },
           prompt: { type: "string" },
           mode: { enum: ["auto", "plan", "ask", "look"] },
+          freedom: { enum: ["look", "check", "auto"] },
+          careful: { type: "boolean" },
           model: { enum: ["sonnet", "opus"] },
           maxMinutes: { type: "integer" },
           checks: { type: "array", items: { enum: ["tests", "page", "console"] } },
@@ -52,9 +48,16 @@ function instructions(agents: AgentRef[]): string {
   return [
     "You turn a beginner's plain-English description into a workflow for the agentbox app. Reply only with the JSON the schema asks for.",
     "",
+    ...stepRules(agents),
+  ].join("\n");
+}
+
+// What a workflow is made of. Shared with "Change it in your own words" (lib/change.ts).
+export function stepRules(agents: AgentRef[]): string[] {
+  return [
     "A workflow is a straight row of steps. The first step is always type \"start\". Step types:",
     "- start: what starts it. trigger: manual (\"when I give it an idea/task\"), schedule (scheduleKind hourly|daily|days, scheduleTime \"HH:MM\" 24h, scheduleDays 0=Sun..6=Sat for \"days\"), issue_label (label, e.g. \"agent\"), pr_opened.",
-    "- agent: one of Nic's agents does work. agentId = one of the ids below, or null for a quick step with its own short prompt. mode: auto (default), plan, ask, look (only reports, changes nothing).",
+    "- agent: one of Nic's agents does work. agentId = one of the ids below, or null for a quick step with its own short prompt. mode: auto (default), plan, ask, look (only reports, changes nothing). freedom: auto (works on its own), check (shows a plan and waits for Nic's OK), look (only reports). careful true = it builds, reviews its own work and fixes it inside the step.",
     "- research: looks things up and writes research.md for later steps. Optional prompt with focus notes.",
     "- review: a reviewer checks the work against the task and research.md; result is passed or needs work. Use model \"opus\". onFail = the id of an EARLIER step to send work back to (usually the build step), or \"stop\".",
     "- check: hard gates run by the app: checks = tests | page | console. onFail like review.",
@@ -62,54 +65,51 @@ function instructions(agents: AgentRef[]): string {
     "- ship: merges the pull request. shipMode \"ask\" unless Nic clearly says to ship automatically.",
     "- tell: Discord message to Nic. tellWhen always|problems. openIssue true to also open a GitHub issue about problems.",
     "",
-    "Give every step a short unique id like \"s1\", \"s2\" so onFail can point at one. Use only the steps the description needs (usually 3 to 8). If they mention building or coding, use an agent step with the builder agent. Prefer \"ask\" before \"ship\". maxLoops is how many times needs-work may loop (default 2).",
+    "Leave the start step's task empty: the goal is stored separately. Give every step a short unique id like \"s1\", \"s2\" so onFail can point at one. Use only the steps the description needs (usually 3 to 8). If they mention building or coding, use ONE agent step that builds (never two build steps in a row), with agentId null (a fresh agent) unless Nic names one of his agents. Ship already asks Nic first, so don't put an ask step right before ship. To try it on a phone or in a browser, add a check step with checks [\"page\"]. maxLoops is how many times needs-work may loop (default 2).",
     "",
     "Nic's agents:",
     ...agents.map((a) => `- id ${a.id}: ${a.name}${a.allowed === "look" ? " (look only, reports)" : ""}`),
+  ];
+}
+
+// What Nic wants made is only context (data, not instructions): the steps come from how he said it should go.
+export function draftPrompt(text: string, goal: string): string {
+  const g = goal.trim().slice(0, 3000);
+  return [
+    "Turn this description of the steps into a workflow:",
+    "",
+    text,
+    ...(g ? ["", "For context only, this is what the workflow will make. Don't copy it into the steps; the app gives it to every step itself:", "<goal>", g, "</goal>"] : []),
   ].join("\n");
 }
 
-export async function draftWorkflow(text: string, agents: AgentRef[]): Promise<{ name: string; steps: WfStep[]; limits: ReturnType<typeof cleanLimits> }> {
-  const env: NodeJS.ProcessEnv = { ...process.env, PATH };
-  for (const k of Object.keys(env)) if (k === "CLAUDECODE" || k.startsWith("CLAUDE_CODE_") || k === "ANTHROPIC_API_KEY") delete env[k];
-  const args = [
-    "-p", `Turn this into a workflow:\n\n${text}`,
-    "--output-format", "stream-json", "--verbose",
-    "--model", "sonnet",
-    "--tools", "",
-    "--permission-mode", "dontAsk",
-    "--no-session-persistence",
-    "--append-system-prompt", instructions(agents),
-    "--json-schema", JSON.stringify(SCHEMA),
-  ];
-  const stdout = await new Promise<string>((resolve, reject) => {
-    execFile("claude", args, { cwd: os.tmpdir(), env, timeout: 180_000, maxBuffer: 20 * 1024 * 1024 }, (e, out, err) => {
-      if (e && !out) reject(new Error(/usage limit|hit your limit/i.test(String(err) + String(out)) ? "You're out of Claude usage right now. Try again after it resets." : "Claude couldn't draft it this time. Try again, or start from a template."));
-      else resolve(String(out));
-    });
-  });
-  let result: Record<string, unknown> | null = null;
-  for (const line of stdout.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const ev = JSON.parse(line);
-      if (ev.type === "rate_limit_event") ingestRateLimitEvent(ev.rate_limit_info ?? {});
-      if (ev.type === "result") {
-        addRunUsageless(Number(ev.total_cost_usd ?? 0));
-        if (ev.is_error) throw new Error(/limit/i.test(String(ev.result)) ? "You're out of Claude usage right now. Try again after it resets." : "Claude couldn't draft it this time. Try again, or start from a template.");
-        result = (ev.structured_output as Record<string, unknown>) ?? null;
-        if (!result && typeof ev.result === "string") {
-          const m = ev.result.match(/\{[\s\S]*\}/);
-          if (m) result = JSON.parse(m[0]);
-        }
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message.startsWith("Claude")) throw e;
-      if (e instanceof Error && e.message.startsWith("You're out")) throw e;
-    }
-  }
-  if (!result || !Array.isArray(result.steps)) throw new Error("Claude couldn't draft it this time. Try again, or start from a template.");
-  const steps = cleanSteps(result.steps, agents.map((a) => a.id));
+export async function draftWorkflow(text: string, agents: AgentRef[], goal = ""): Promise<{ name: string; steps: WfStep[]; limits: ReturnType<typeof cleanLimits> }> {
+  const fail = "Claude couldn't draft it this time. Try again, or start from a template.";
+  const result = await claudeJson({ prompt: draftPrompt(text, goal), system: instructions(agents), schema: SCHEMA, failMessage: fail });
+  if (!Array.isArray(result.steps)) throw new Error(fail);
+  const steps = tidySteps(cleanSteps(result.steps, agents.map((a) => a.id)));
   if (steps.length < 2) throw new Error("Claude couldn't find any steps in that. Try saying what should happen, one thing after another.");
   return { name: String(result.name ?? "").slice(0, 60) || "New workflow", steps, limits: cleanLimits({ maxLoops: result.maxLoops }) };
+}
+
+// Beginners asked for "build, try it on a phone, ask me" and got two build steps and two OKs: never.
+// Two build steps in a row become one, and an Ask right before a Ship that asks anyway is dropped.
+export function tidySteps(steps: WfStep[]): WfStep[] {
+  const out: WfStep[] = [];
+  const renamed = new Map<string, string>();
+  steps.forEach((s, i) => {
+    const prev = out.at(-1);
+    const next = steps[i + 1];
+    const builds = (x?: WfStep) => x?.type === "agent" && (x.freedom ?? (x.mode === "look" ? "look" : "auto")) !== "look";
+    if (builds(s) && builds(prev) && s.agentId === prev!.agentId) {
+      renamed.set(s.id, prev!.id);
+      return;
+    }
+    if (s.type === "ask" && next?.type === "ship" && (next.shipMode ?? "ask") === "ask") {
+      renamed.set(s.id, next.id);
+      return;
+    }
+    out.push(s);
+  });
+  return out.map((s) => (s.onFail && renamed.has(s.onFail) ? { ...s, onFail: renamed.get(s.onFail) } : s));
 }

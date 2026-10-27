@@ -103,13 +103,13 @@ export function duration(ms: number): string {
 
 export const ALLOWED_WORDS: Record<Allowed, { label: string; hint: string }> = {
   look: { label: "Look only", hint: "Reads and reports. Never changes anything." },
-  suggest: { label: "Suggest changes", hint: "Makes changes on a copy and opens a pull request for you." },
+  suggest: { label: "Suggest changes", hint: "Makes changes on a copy and shows you the finished change to look at." },
   make: { label: "Make changes", hint: "Can save and send its work to its own branch. Never to main." },
 };
 
 export const MODE_WORDS: Record<WorkMode, { label: string; hint: string }> = {
   auto: { label: "Auto", hint: "Works on its own. A safety checker approves each step." },
-  plan: { label: "Plan first", hint: "Writes a short plan, then waits for your OK." },
+  plan: { label: "Check with me first", hint: "Writes a short plan, then waits for your OK." },
   ask: { label: "Ask me each step", hint: "Pauses before every command or change." },
   look: { label: "Look only", hint: "Never changes anything, just reports." },
 };
@@ -117,7 +117,7 @@ export const MODE_WORDS: Record<WorkMode, { label: string; hint: string }> = {
 export const NOTIFY_WORDS: Record<NotifyOn | "never", string> = {
   finished: "Finished",
   needs_ok: "Needs my OK",
-  problems: "Only if something goes wrong",
+  problems: "Something goes wrong",
   never: "Never",
 };
 
@@ -135,7 +135,7 @@ export function agentSentence(a: Pick<AgentInput, "name" | "project" | "schedule
   if (!a.enabled) return `${name} is switched off, so it won't run until you turn it back on.`;
 
   let when: string;
-  if (a.scheduleKind === "manual") when = "When you start it";
+  if (a.scheduleKind === "manual") when = "Each time you start it";
   else if (a.scheduleKind === "hourly") when = "Every hour";
   else if (a.scheduleKind === "daily") when = `Every ${partOfDay(a.scheduleTime)} at ${clock(a.scheduleTime)}`;
   else {
@@ -150,7 +150,7 @@ export function agentSentence(a: Pick<AgentInput, "name" | "project" | "schedule
   else if (lookOnly) verb = `look at ${project} without changing anything`;
   else if (a.mode === "plan") verb = `work on ${project} once you OK its plan`;
   else if (a.mode === "ask") verb = `work on ${project}, checking with you before each step`;
-  else verb = `work on ${project} on its own and send you a pull request`;
+  else verb = `work on ${project} on its own and show you the finished change`;
   const careful = a.job?.careful === false ? "" : research ? ", checked against its sources," : lookOnly ? "" : ", reviewed and fixed before you see it,";
 
   const n = new Set(a.notify);
@@ -170,6 +170,13 @@ export function agentAsInput(a: Agent): AgentInput {
 }
 
 // Agents write a little markdown. In the main UI we show plain words.
+// An agent's summary for Nic: sentences about files, commits or branches are left out (when something else is left).
+export function plainSummary(s: string): string {
+  const parts = plainText(s).split(/(?<=[.!?])\s+/);
+  const keep = parts.filter((p) => !/\b(commit(ted)?|branch|pull request|PR|CLAUDE\.md|BRIEF\.md|git|diff|merge[sd]?|worktree|repo)\b/i.test(p));
+  return (keep.length ? keep : parts).join(" ");
+}
+
 export function plainText(s: string): string {
   return s
     .replace(/\*\*([^*]+)\*\*/g, "$1")
@@ -198,4 +205,35 @@ export function dayAt(ms: number, now = Date.now()): string {
           ? d.toLocaleDateString("en-US", { weekday: "long" })
           : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `${day} at ${clockOf(ms)}`;
+}
+
+// The reviewer's verdict. If it forgot the VERDICT line, its words decide: a review that says it isn't
+// ready must never show as "Nothing to fix".
+export function verdictOf(text: string): "passed" | "needs work" {
+  const said = text.match(/VERDICT:\s*(passed|needs work)/gi)?.at(-1);
+  if (said) return /needs work/i.test(said) ? "needs work" : "passed";
+  return /\b(not ready|isn't ready|is not ready|needs work|needs to be fixed|must be fixed|must fix|changes needed|should be fixed|is missing|are missing|doesn't work|does not work|broken)\b/i.test(text) ? "needs work" : "passed";
+}
+
+// Shorten at a word, with "…" when something was cut ("…coming faster and" → "…coming faster…").
+export function cutWords(s: string, max: number): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const at = cut.lastIndexOf(" ");
+  return `${(at > max * 0.6 ? cut.slice(0, at) : cut).replace(/[\s,;:.\-–—]+$/, "").replace(/\s+(and|or|the|a|an|to|of|with|that|in|on|for)$/i, "")}…`;
+}
+
+// Nic pressed Stop. (Older runs say "You stopped it.", which means the same.)
+export const USER_STOPPED = "Stopped with the Stop button.";
+export const userStop = (reason: string | null | undefined) => reason === USER_STOPPED || reason === "You stopped it.";
+
+// The plan as Nic reads it: no markdown marks, no notes about plan files or plan mode.
+export function planText(p: string): string {
+  return plainText(p)
+    .split("\n")
+    .filter((l) => !/plan mode|plan (file|is saved)|\.claude\/plans|ExitPlanMode|submit (it|the plan) for approval/i.test(l))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }

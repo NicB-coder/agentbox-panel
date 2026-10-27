@@ -70,6 +70,9 @@ export function runLine(r: Run): string {
   ];
   if (r.status === "working" && r.activity) parts.push(`right now: ${cut(r.activity, 160)}`);
   if (r.status === "queued" && r.activity) parts.push(cut(r.activity, 120));
+  // The real reason it waits (never guess one): usage, a restart, or a sign-in.
+  if (r.status === "queued" && r.extra.resume)
+    parts.push(`why it's waiting: ${r.extra.resume.why === "usage" ? "Claude said the usage limit was reached (this can differ from the meter, which updates every few minutes)" : r.extra.resume.why === "restart" ? "the panel restarted while it worked" : "a sign-in is needed"}; it carries on by itself at ${clockOf(r.extra.resume.until)}`);
   if (r.stopReason) parts.push(`why it stopped: ${cut(r.stopReason, 300)}`);
   if (r.prUrl) parts.push(`pull request: ${r.prUrl}`);
   if (r.steps.length) parts.push(`steps: ${stepsLine(r.steps)}`);
@@ -162,7 +165,7 @@ export function buildSnapshot(): string {
   const agents = agentRefs();
   const wfs = listWorkflows();
   out.push("", "## Workflows");
-  if (!wfs.length) out.push("- None yet. (New workflow → Describe it, or pick a template.)");
+  if (!wfs.length) out.push("- None yet. (New workflow → say what you want to make, then Next.)");
   for (const w of wfs) {
     const steps = w.steps.map((st) => `${st.id}: ${stepTitle(st, agents)} (${STEP_INFO[st.type].title})`).join(" → ");
     const last = listWfRuns(w.id, 1)[0];
@@ -185,7 +188,7 @@ export function buildSnapshot(): string {
   for (const i of items.slice(0, 15)) {
     const ref =
       i.kind === "approval" ? `[approval ${i.approvalId}]` : "runId" in i ? `[run ${i.runId}]` : "wfRunId" in i ? `[wfrun ${i.wfRunId}]` : "";
-    const kind = { approval: "asks for OK on a step", plan: "plan waiting for approval", pr: "pull request to look at", failed: "stopped", wf_ask: "workflow waiting at Ask me", wf_ship: "workflow waiting to Ship", wf_failed: "workflow stopped" }[i.kind];
+    const kind = { approval: "asks for OK on a step", plan: "plan waiting for approval", pr: "pull request to look at", failed: "stopped", wf_ask: "workflow waiting at Ask me", wf_ship: "workflow waiting to Ship", wf_failed: "workflow stopped", wf_done: "workflow finished, pull request to look at", quiet: "finished without really doing anything", file_pr: "a file Nic added on the Projects page, waiting to be merged in" }[i.kind];
     out.push(`- ${ref} ${i.who} · ${kind} · "${cut(i.title, 120)}" · ${cut(i.text, 200)} · ${ago(i.at)}`);
   }
 

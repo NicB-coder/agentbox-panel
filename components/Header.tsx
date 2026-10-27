@@ -77,7 +77,7 @@ export default function Header({ initial, projects, connectors }: { initial: Hea
   return (
     <>
       <header className="sticky top-0 z-30 h-16 border-b border-line bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-full max-w-[1112px] items-center gap-3 px-4">
+        <div className="mx-auto flex h-full max-w-[1112px] items-center gap-2 px-4 sm:gap-3">
           <div className="flex shrink-0 items-center gap-3">
             <Link href="/" className="flex min-h-11 items-center text-[20px] font-bold tracking-tight">
               agentbox
@@ -107,11 +107,9 @@ export default function Header({ initial, projects, connectors }: { initial: Hea
 
           <div className="ml-auto flex items-center gap-2">
             <UsageMeter u={data.usage} />
-            <span className="hidden lg:block">
-              <button type="button" className={`${btn.pill} whitespace-nowrap`} onClick={() => openTaskPanel()}>
-                New task
-              </button>
-            </span>
+            <button type="button" className={`${btn.pill} whitespace-nowrap max-lg:!px-3.5`} onClick={() => openTaskPanel()}>
+              New task
+            </button>
             <div className="hidden items-center gap-2 lg:flex">
               <button type="button" className={btn.secondary + " !rounded-full !px-4 whitespace-nowrap"} onClick={() => (data.pausedAll ? togglePause() : setConfirm(true))} disabled={busy}>
                 {data.pausedAll ? "Resume everything" : "Pause everything"}
@@ -193,7 +191,7 @@ export default function Header({ initial, projects, connectors }: { initial: Hea
         onClose={() => setConfirm(false)}
       />
       <Tour done={data.tourDone} />
-      <TaskPanel projects={projects} connectors={connectors} />
+      <TaskPanel projects={projects} connectors={connectors} usagePct={data.usage.state.session?.pct ?? null} />
     </>
   );
 }
@@ -233,7 +231,7 @@ function PhoneMenu({ open, onClose, onNewTask, onPause, pausedAll }: { open: boo
           <Icon name="heart" color="#15171B" /> Machine
         </Link>
         <Link href="/terminal" className={item} onClick={onClose}>
-          <Icon name="flow" color="#15171B" /> Terminal
+          <Icon name="flow" color="#15171B" /> Terminal (advanced)
         </Link>
         <Link href="/settings" className={item} onClick={onClose}>
           <Icon name="bolt" color="#15171B" /> Settings
@@ -307,7 +305,7 @@ function UsageMeter({ u }: { u: UsageView }) {
     long = "Claude usage · checking…";
     short = "Usage";
   } else {
-    long = `Claude usage ${about}${pct}%${s.session?.resetsAt ? ` · resets ${dayClock(s.session.resetsAt)}` : ""}`;
+    long = `Claude usage ${about}${pct}% used${s.session?.resetsAt ? ` · resets ${dayClock(s.session.resetsAt)}` : ""}`;
     short = `${pct}%`;
   }
 
@@ -319,14 +317,17 @@ function UsageMeter({ u }: { u: UsageView }) {
         aria-controls={panelId}
         aria-label={`${long}. Show usage details`}
         onClick={() => setOpen(!open)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full border px-3 text-[14px] font-semibold whitespace-nowrap"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full border px-2.5 text-[14px] font-semibold whitespace-nowrap sm:px-3"
         style={{ background: tone.bg, color: tone.fg, borderColor: tone.border }}
       >
-        <span className="relative h-1.5 w-8 overflow-hidden rounded-full bg-[#D5D9DF] sm:w-10" aria-hidden="true">
+        <span className="relative hidden h-1.5 w-10 overflow-hidden rounded-full bg-[#D5D9DF] sm:block" aria-hidden="true">
           <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${s.limited ? 100 : Math.min(100, pct ?? 0)}%`, background: tone.bar }} />
         </span>
         <span className="hidden 2xl:inline">{long}</span>
-        <span className="2xl:hidden">{short}</span>
+        <span className="2xl:hidden">
+          {short}
+          {pct !== null && !s.limited && <span> used</span>}
+        </span>
       </button>
       {open && (
         <div id={panelId} className="fixed inset-x-3 top-[72px] z-40 rounded-[24px] border border-line bg-white p-5 shadow-[0_20px_60px_rgba(21,23,27,0.18)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[380px]">
@@ -367,18 +368,20 @@ export function UsagePanel({ u, now }: { u: UsageView; now: number }) {
         <p className="font-semibold">
           This session: {s.session ? `${about}${s.session.pct}% used` : "not checked yet"}
         </p>
+        <p className="mt-0.5 text-[13px] text-muted">Claude lets you use a set amount every few hours (a session). This is how much of it you've used.</p>
         {s.session && bar(s.session.pct, tone.bar)}
         {s.session?.resetsAt && <p className="mt-1 text-[14px] text-muted">Resets at {dayClock(s.session.resetsAt)} (in {until(s.session.resetsAt, now)})</p>}
       </div>
       <div>
         <p className="font-semibold">This week: {s.week ? `${about}${s.week.pct}% used` : "not checked yet"}</p>
+        <p className="mt-0.5 text-[13px] text-muted">There's also a bigger amount for the whole week.</p>
         {s.week && bar(s.week.pct, "#7048C8")}
         {s.week?.resetsAt && <p className="mt-1 text-[14px] text-muted">Resets {dayClock(s.week.resetsAt)}</p>}
       </div>
-      <Breakdown title="Today, by agent" items={u.byAgent} empty="No agent runs yet today." />
-      <Breakdown title="Today, by workflow" items={u.byWorkflow} empty="No workflow runs yet today." />
+      <Breakdown title="Who used it today (share of today's total)" items={u.byAgent} empty="No agent runs yet today." />
+      <Breakdown title="Workflows today (share of today's total)" items={u.byWorkflow} empty="No workflow runs yet today." />
       <p className="text-[13px] leading-snug text-muted">
-        {s.exact ? "Numbers come from Claude Code's own usage check" : "These numbers are an estimate"}
+        {s.exact ? "Numbers come from Claude's own usage check" : "These numbers are an estimate"}
         {s.updatedAt ? `, updated ${Math.max(0, Math.round((now - s.updatedAt) / 60000))} min ago` : ""}. They include everything on your Claude account, not only agentbox.
       </p>
       <Link href="/settings" className="text-[14px] font-semibold underline">
@@ -401,7 +404,7 @@ function Breakdown({ title, items, empty }: { title: string; items: UsageView["b
               <span className="flex justify-between gap-2">
                 <span className="truncate">{i.name}</span>
                 <span className="shrink-0 text-muted">
-                  {i.share}% · {i.runs} {i.runs === 1 ? i.unit?.[0] ?? "run" : i.unit?.[1] ?? "runs"}
+                  {i.share}% of today · {i.runs} {i.runs === 1 ? i.unit?.[0] ?? "run" : i.unit?.[1] ?? "runs"}
                 </span>
               </span>
               <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-[#E6E8EC]" aria-hidden="true">

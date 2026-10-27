@@ -49,7 +49,7 @@ export default function MachineClient({ initial }: { initial: MachineInfo }) {
           <Line>{m.bootedAt ? `Last restart ${ago(m.bootedAt, now)} (${new Date(m.bootedAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })})` : ""}</Line>
           <Line>The panel started {ago(m.panelStartedAt, now)}.</Line>
         </Card>
-        <Card title="Tailscale" tip="Tailscale is the private network that lets you open the panel from your phone and laptop. Nobody else can reach it.">
+        <Card title="Private network (Tailscale)" tip="Tailscale is the private network that lets you open the panel from your phone and laptop. Nobody else can reach it.">
           <Big>
             <Dot ok={m.tailscale.connected} /> {m.tailscale.text}
           </Big>
@@ -67,12 +67,13 @@ export default function MachineClient({ initial }: { initial: MachineInfo }) {
           )}
         </Card>
         <Card title="Version" tip="Which version of agentbox is running. Update it from Settings.">
-          <Big>{m.version ? m.version.commit : "Unknown"}</Big>
+          <Big>{m.version ? `From ${new Date(m.version.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "Unknown"}</Big>
           {m.version && (
-            <Line>
-              From {new Date(m.version.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            <details className="text-[14px] text-muted">
+              <summary className="inline-flex min-h-11 cursor-pointer items-center font-medium">Details</summary>
+              Version {m.version.commit}
               {m.version.branch !== "main" ? ` · branch ${m.version.branch}` : ""}
-            </Line>
+            </details>
           )}
           <Link href="/settings#update" className={btn.link}>
             Update agentbox
@@ -87,7 +88,7 @@ export default function MachineClient({ initial }: { initial: MachineInfo }) {
         </h2>
         <ul className="mt-3 divide-y divide-line">
           <Account name="Claude" ok={m.claude.signedIn} text={m.claude.text} cmd={SIGN_IN.claude} how="Opens a sign-in link. Open it, sign in with your Claude account, and paste the code back if it asks." />
-          <Account name="GitHub (the bot)" ok={m.github.signedIn} text={m.github.text} cmd={SIGN_IN.github} how="Shows a one-time code. Open github.com/login/device signed in as the bot, and type the code." />
+          <Account name="GitHub (agentbox's own account)" ok={m.github.signedIn} text={m.github.text} cmd={SIGN_IN.github} how="Shows a one-time code. Open github.com/login/device signed in as the bot, and type the code." />
           <li className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-[15px] font-semibold">Discord messages</span>
             <span className="text-[15px] text-muted">
@@ -95,7 +96,7 @@ export default function MachineClient({ initial }: { initial: MachineInfo }) {
             </span>
           </li>
           <li className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-[15px] font-semibold">People logged in to this Mac</span>
+            <span className="text-[15px] font-semibold">Accounts signed in at this Mac's screen</span>
             <span className="text-[15px] text-muted">{m.macUsers.length ? m.macUsers.join(", ") : "Nobody at the screen"}</span>
           </li>
         </ul>

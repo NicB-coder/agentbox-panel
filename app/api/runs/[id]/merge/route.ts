@@ -18,7 +18,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   );
   if (!out.ok) {
     const conflict = /conflict|not mergeable/i.test(out.err);
-    return Response.json({ error: conflict ? "GitHub can't merge it because it clashes with newer changes. Use Send back with a note and ask it to bring the branch up to date." : "GitHub wouldn't merge it. Open it on GitHub to see why." }, { status: 409 });
+    return Response.json({ error: conflict ? "This clashes with a newer change in your project, so it can't go in as it is. Press Look at it, then Fix the clash." : "GitHub wouldn't merge it. Open it on GitHub to see why." }, { status: 409 });
   }
   // Follow-ups share one pull request: they're all done now.
   db().prepare("UPDATE runs SET status = 'done' WHERE pr_url = ? AND status = 'review'").run(run.prUrl);

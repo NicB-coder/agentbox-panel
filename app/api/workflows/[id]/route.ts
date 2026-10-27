@@ -1,5 +1,5 @@
 import { deleteWorkflow, getWorkflow, listAgents, setWorkflowEnabled, updateWorkflow } from "@/lib/db";
-import { cleanLimits, cleanSteps } from "@/lib/wf";
+import { cleanLimits, cleanSteps, goalTooLong } from "@/lib/wf";
 import { activeWfRun } from "@/lib/workflowRunner";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,8 @@ export async function PUT(req: Request, { params }: Ctx) {
   const b = (await req.json().catch(() => ({}))) as { name?: string; project?: string; steps?: unknown; limits?: unknown; note?: string };
   const name = String(b.name ?? "").trim().slice(0, 60);
   if (!name) return Response.json({ error: "Give the workflow a name." }, { status: 400 });
+  const long = goalTooLong(b.steps);
+  if (long) return Response.json({ error: long }, { status: 400 });
   const w = updateWorkflow(id, { name, project: String(b.project ?? ""), steps: cleanSteps(b.steps, listAgents().map((a) => a.id)), limits: cleanLimits(b.limits) }, String(b.note ?? "Saved").slice(0, 80));
   return Response.json(w);
 }

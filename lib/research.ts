@@ -26,10 +26,10 @@ export const REPORT_FORMAT = [
   "Number the sources in the order you first cite them. Every [n] in the text must match a source in the list.",
 ].join("\n");
 
-export function researchPrompt(question: string, opts: { project?: string; brief?: boolean } = {}): string {
+export function researchPrompt(question: string, opts: { project?: string; brief?: string } = {}): string {
   return [
     `Nic's research question:\n${question}`,
-    opts.brief ? "\nNic attached a brief with more detail. Read it first: .agentbox/brief.md in your folder." : "",
+    opts.brief ? `\n${opts.brief}` : "",
     opts.project ? `\nIt's for the project "${opts.project}", which is in your folder. Look at it where that helps.` : "",
     "",
     RESEARCH_METHOD,

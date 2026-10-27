@@ -11,7 +11,7 @@ export const agentRefs = (): AgentRef[] =>
     .map((a) => ({ id: a.id, name: a.name, color: a.color, icon: a.icon, slug: a.slug, allowed: a.allowed, archived: a.archived }));
 
 export type WorkflowTile = {
-  id: number; name: string; sentence: string; status: PillStatus; timeLabel: string; note: string | null; chips: { icon: string; color: string }[];
+  id: number; name: string; project: string; sentence: string; status: PillStatus; timeLabel: string; note: string | null; chips: { icon: string; color: string; title: string }[];
   current: { index: number; of: number; title: string } | null; // the step it's on, while it runs
 };
 
@@ -19,7 +19,9 @@ export function workflowTile(w: Workflow, agents = agentRefs()): WorkflowTile {
   const runs = listWfRuns(w.id, 1);
   const last = runs[0];
   const active = activeWfRun(w.id);
-  let status: PillStatus = w.enabled ? "on" : "off";
+  // One you start by hand is simply "Ready": On/Off only matters for ones that start by themselves.
+  const manual = (w.steps[0]?.trigger ?? "manual") === "manual";
+  let status: PillStatus = manual ? "ready" : w.enabled ? "on" : "off";
   let note: string | null = null;
   let current: WorkflowTile["current"] = null;
   if (active) {
@@ -36,10 +38,10 @@ export function workflowTile(w: Workflow, agents = agentRefs()): WorkflowTile {
     note = last.status === "stopped" ? last.stopReason : last.summary;
   }
   return {
-    id: w.id, name: w.name, sentence: flowSentence(w, agents), status, note, current,
+    id: w.id, name: w.name, project: w.project, sentence: flowSentence(w, agents), status, note, current,
     chips: w.steps.map((s) => {
       const a = s.type === "agent" && s.agentId != null ? agents.find((x) => x.id === s.agentId) : null;
-      return { icon: a?.icon ?? stepIconOf(s), color: a?.color ?? STEP_INFO[s.type].color };
+      return { icon: a?.icon ?? stepIconOf(s), color: a?.color ?? STEP_INFO[s.type].color, title: stepTitle(s, agents) };
     }),
     timeLabel: active ? `started ${ago(active.startedAt)}` : last ? `last run ${ago(last.endedAt ?? last.startedAt)}` : "never run",
   };

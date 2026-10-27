@@ -120,6 +120,10 @@ export type RunExtra = {
   checkoutRef?: string; // look at this ref (e.g. a pull request's branch) instead of making a new branch
   prReview?: { prUrl: string; sourceRunId: number | null }; // this run reviews a pull request
   review?: { runId: number; status: "running" | "done" | "stopped"; verdict?: "passed" | "needs work"; text?: string; at: number }; // a review of this run's pull request
+  // v3.1
+  quiet?: Quiet; // it finished but didn't really do anything: the Inbox says so
+  quick?: boolean; // it opened a pull request in under 2 minutes: worth a closer look
+  planChanges?: string[]; // what Nic asked to change in its plan (Change it), oldest first
 };
 
 export type Phase = "plan" | "work" | "review" | "fix" | "polish" | "final" | "outline" | "milestone";
@@ -143,7 +147,7 @@ export type Flow = {
   big?: { milestones: Milestone[]; index: number; handoff: string; weekCarry: number; weekStart: number | null; lastWeek: number | null; budgetPct: number };
 };
 
-export type StreamState = { result: null | { text: string; isError: boolean; subtype: string }; sawStepMarker: boolean; edited: boolean; limited: boolean; authError: boolean };
+export type StreamState = { result: null | { text: string; isError: boolean; subtype: string }; sawStepMarker: boolean; edited: boolean; limited: boolean; authError: boolean; proseAt?: number };
 
 export type ProcState = {
   key: string; label: string; out: string; err: string; exit: string; pidFile: string; plist: string | null; startedAt: number;
@@ -184,6 +188,7 @@ export type HeartbeatRun = {
   at: number; // ms
   onTime: boolean;
   reply: string | null;
+  outOfUsage?: boolean; // it checked in, but Claude answered "you've hit your limit"
 };
 
 export type HeartbeatInfo = {
@@ -247,6 +252,7 @@ export type WfStep = {
   scheduleTime?: string;
   label?: string; // GitHub issue label
   task?: string; // start step: what this workflow should make (the default task for Run now, Test run and automatic runs)
+  brief?: BriefRef; // start step: an attached brief, copied into every run's folder
   // agent / research / review
   agentId?: number | null; // null = quick step
   prompt?: string;
@@ -269,6 +275,9 @@ export type WfStep = {
   tellWhen?: "always" | "problems";
   openIssue?: boolean;
 };
+
+// An attached brief file. The text is kept by the panel (lib/briefs.ts), found by its hash.
+export type BriefRef = { name: string; lines: number; hash: string };
 
 export type WfLimits = { maxLoops: number; maxMinutes: number; maxUsagePct: number };
 
@@ -324,7 +333,12 @@ export type WorkflowRun = {
   waitedMs: number;
   startedAt: number;
   endedAt: number | null;
+  quiet: Quiet | null; // it finished but didn't really do anything: the Inbox says so
+  prWaiting?: boolean; // it finished with an open pull request: the Inbox shows it until it's merged, closed or dismissed
 };
+
+// "It finished without changing anything": what happened and what to do next, in plain words.
+export type Quiet = { why: string; next: string };
 
 export type WorkflowVersion = { id: number; workflowId: number; savedAt: number; note: string; def: WorkflowInput };
 
@@ -335,7 +349,10 @@ export type Idea = { id: number; text: string; createdAt: number };
 export type InboxItem =
   | { key: string; kind: "approval"; at: number; title: string; who: string; color: string; icon: string; approvalId: number; text: string; detail: string | null; link: string }
   | { key: string; kind: "plan"; at: number; title: string; who: string; color: string; icon: string; runId: number; text: string; link: string }
-  | { key: string; kind: "pr"; at: number; title: string; who: string; color: string; icon: string; runId: number; prUrl: string; text: string; link: string; careful: string | null; reviewedHere: boolean; review: RunExtra["review"] | null }
+  | { key: string; kind: "pr"; at: number; title: string; who: string; color: string; icon: string; runId: number; prUrl: string; text: string; link: string; careful: string | null; reviewedHere: boolean; review: RunExtra["review"] | null; quick: boolean }
   | { key: string; kind: "failed"; at: number; title: string; who: string; color: string; icon: string; runId: number; agentId: number; text: string; link: string; canRetry: boolean; canContinue: boolean; stopKind: "time" | "budget" | "signin" | "error"; signIn?: "claude" | "github" }
-  | { key: string; kind: "wf_ask" | "wf_ship"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string | null; link: string; test: boolean }
-  | { key: string; kind: "wf_failed"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; workflowId: number; text: string; link: string };
+  | { key: string; kind: "wf_ask" | "wf_ship"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string | null; link: string; test: boolean; ships: boolean; project: string }
+  | { key: string; kind: "wf_done"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; text: string; prUrl: string; link: string; test: boolean }
+  | { key: string; kind: "wf_failed"; at: number; title: string; who: string; color: string; icon: string; wfRunId: number; workflowId: number; text: string; link: string }
+  | { key: string; kind: "file_pr"; at: number; title: string; who: string; color: string; icon: string; fileId: number; project: string; file: string; prUrl: string; text: string; link: string }
+  | { key: string; kind: "quiet"; at: number; title: string; who: string; color: string; icon: string; runId?: number; wfRunId?: number; text: string; next: string; said: string | null; link: string; canRetry: boolean; prUrl?: string };

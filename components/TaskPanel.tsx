@@ -1,11 +1,16 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import type { Freedom, JobKind, Model, NotifyOn } from "@/lib/types";
-import { defaultMinutes } from "@/lib/job";
+import type { BriefRef, Freedom, JobKind, Model, NotifyOn } from "@/lib/types";
+import { BIG_TIME_NOTE, BIG_USAGE_TIP, DEFAULT_JOB, FREEDOM_WORDS, defaultMinutes } from "@/lib/job";
+import { scheduleWords } from "@/lib/words";
+import { useHelperContext } from "./helper/helperStore";
 import { ErrorBox, Label, Switch, post } from "./bits";
-import { CarefulPicker, Chip, FreedomPicker, MinutesSlider, ModelPicker, NotifyPicker, WhenPicker, type When } from "./controls";
-import ProjectSelect from "./ProjectSelect";
+import { CarefulPicker, Chip, FreedomPicker, MinutesSlider, ModelPicker, PercentSlider, NotifyPicker, WhenPicker, type When } from "./controls";
+import BriefPicker, { MissingFileBox, missingOf, type MissingInfo } from "./BriefPicker";
+import { CoachBox, IdeaHelp } from "./Coach";
+import type { SuggestionKey } from "@/lib/coach";
+import ProjectSelect, { defaultProjectOf, rememberProject } from "./ProjectSelect";
 import Segmented from "./Segmented";
 import { Icon, btn } from "./ui";
 
@@ -19,6 +24,9 @@ export type TaskPanelOpen = {
   project?: string;
   ideaId?: number;
   followUpId?: number; // fetches the job, then opens as a follow-up
+  coach?: boolean; // open with the prompt coach already checking the task (the Helper's "Improve it")
+  ideas?: boolean; // open with "Help me think of ideas" showing
+  simple?: boolean; // first time (from the welcome tour): just the goal and the project, the rest folded away
   followUp?: { id: number; name: string; project: string; kind: JobKind; freedom: Freedom; careful: boolean; model: Model; connectors: string[] };
 };
 
@@ -50,14 +58,12 @@ async function followUpOf(id: number): Promise<TaskPanelOpen["followUp"] | null>
 // Features that switch on as they're finished (never show a half-built one).
 export const TASK_FEATURES = { research: true, big: true, connectors: true };
 
-type Brief = { name: string; text: string };
 
-export default function TaskPanel({ projects, connectors = [], defaultProject }: { projects: string[]; connectors?: Connector[]; defaultProject?: string }) {
+export default function TaskPanel({ projects, connectors = [], defaultProject, usagePct = null }: { projects: string[]; connectors?: Connector[]; defaultProject?: string; usagePct?: number | null }) {
   const ref = useRef<HTMLDialogElement>(null);
   const router = useRouter();
   const titleId = useId();
   const taskId = useId();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [follow, setFollow] = useState<TaskPanelOpen["followUp"] | null>(null);
   const [ideaId, setIdeaId] = useState<number | null>(null);
@@ -75,15 +81,42 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
   const [notify, setNotify] = useState<NotifyOn[]>(["finished", "needs_ok", "problems"]);
   const [askEach, setAskEach] = useState(false);
   const [big, setBig] = useState(false);
-  const [budget, setBudget] = useState(40);
+  const [budget, setBudget] = useState(DEFAULT_JOB.budgetPct);
   const [holdSmall, setHoldSmall] = useState(true);
   const [autoInstall, setAutoInstall] = useState(false);
   const [saveReport, setSaveReport] = useState(false);
-  const [brief, setBrief] = useState<Brief | null>(null);
-  const [briefPick, setBriefPick] = useState<null | { file: string }[]>(null);
+  const [brief, setBrief] = useState<BriefRef | null>(null);
+  const [missing, setMissing] = useState<MissingInfo | null>(null);
+  const openBrief = useRef<(() => void) | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [coach, setCoach] = useState(false);
+  const [coachKey, setCoachKey] = useState(0); // a fresh coach each time it opens
+  const [coached, setCoached] = useState(false);
+  const [ideas, setIdeas] = useState(false);
   const [live, setLive] = useState<Connector[] | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  // What was typed when the panel closed without starting (Escape, Cancel, a tap outside): it comes back next time.
+  const draft = useRef("");
+  const started = useRef(false);
+  const [restored, setRestored] = useState(false);
+  const [goalHint, setGoalHint] = useState("");
+  const [simple, setSimple] = useState(false);
+  // While it's open, the Helper sees exactly what's in it and can fill the goal box (on Nic's click).
+  useHelperContext(
+    isOpen
+      ? {
+          panels: [
+            `${follow ? `Follow-up panel for ${follow.name}` : "Start a task panel"} · What kind: ${kind === "research" ? "Research something" : "Build something"} · goal box says: "${task.slice(0, 1000)}" · Project: ${project || "none"} · When: ${when.scheduleKind === "manual" ? "Now" : scheduleWords(when.scheduleKind, when.scheduleDays, when.scheduleTime)} · Freedom: ${FREEDOM_WORDS[freedom].label} · ${careful ? "Careful" : "Quick"} · Model: ${model === "opus" ? "Smartest" : "Fast"} · Time limit: ${big ? "doesn't apply (Big job)" : `${minutes} min`}${big ? ` · Big job on, usage budget ${budget}%` : ""}${askEach ? " · Ask me each step on" : ""} · Brief: ${brief ? brief.name : "none"}${coach ? " · the prompt coach is open" : ""}${ideas ? " · Help me think of ideas is open" : ""}${more ? " · More options is unfolded" : ""}`,
+          ],
+          fill: `the goal box of the ${follow ? "Follow-up" : "Start a task"} panel`,
+        }
+      : null,
+    (t) => {
+      setTask(t);
+      setCoached(true); // the Helper already improved it with him; Start goes straight on
+    },
+  );
   useEffect(() => {
     // The newest list of connected apps, when More options opens.
     if (!more || live) return;
@@ -104,10 +137,12 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       const f = d.followUp ?? (d.followUpId ? await followUpOf(d.followUpId) : null) ?? null;
       setFollow(f);
       setIdeaId(d.ideaId ?? null);
-      setTask(d.task ?? "");
+      const keep = !d.task && !f && !d.ideaId && !d.coach && !d.ideas ? draft.current : "";
+      setTask(d.task ?? keep);
+      setRestored(!!keep);
       const k = f?.kind ?? (TASK_FEATURES.research ? d.kind ?? "build" : "build");
       setKind(k);
-      setProject(f?.project ?? d.project ?? (projects.includes(defaultProject ?? "") ? defaultProject! : projects[0] ?? ""));
+      setProject(f?.project ?? d.project ?? (projects.includes(defaultProject ?? "") ? defaultProject! : defaultProjectOf(projects)));
       setWhen({ scheduleKind: "manual", scheduleDays: [1, 2, 3, 4, 5], scheduleTime: "18:00" });
       setFreedom(f?.freedom ?? (k === "research" ? "look" : "auto"));
       setCareful(f?.careful ?? true);
@@ -117,11 +152,20 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
       setMore(false);
       setAskEach(false);
       setBig(false);
+      setBudget(DEFAULT_JOB.budgetPct);
       setBrief(null);
-      setBriefPick(null);
+      setMissing(null);
       setSaveReport(false);
       setError("");
+      setGoalHint("");
+      // Follow-ups and ideas Nic already picked don't need coaching.
+      setCoached(!!f || !!d.ideaId);
+      setCoach(!!d.coach && !f && !!(d.task ?? "").trim());
+      setCoachKey((k) => k + 1);
+      setIdeas(!!d.ideas && !f);
+      setSimple(!!d.simple && !f);
       ref.current?.showModal();
+      setIsOpen(true);
       setTimeout(() => document.getElementById(taskId)?.focus(), 30);
     };
     window.addEventListener("agentbox:task-panel", open);
@@ -135,51 +179,76 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
     if (k === "research") setBig(false);
   }
 
-  async function readFile(f: File | undefined) {
-    if (!f) return;
-    if (f.size > 400_000) return setError("That file is too big. Keep a brief under about 400 KB.");
-    if (!/\.(md|markdown|txt)$/i.test(f.name)) return setError("Pick a Markdown (.md) or text (.txt) file.");
-    setBrief({ name: f.name, text: await f.text() });
-    setError("");
-  }
-
-  async function listBriefs() {
-    setError("");
-    try {
-      const j = await post<{ files: { file: string }[] }>(`/api/projects/${encodeURIComponent(project)}/briefs`, {}, "GET");
-      setBriefPick(j.files);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  async function pickBrief(file: string) {
-    try {
-      const j = await post<Brief>(`/api/projects/${encodeURIComponent(project)}/briefs?file=${encodeURIComponent(file)}`, {}, "GET");
-      setBrief(j);
-      setBriefPick(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  async function start(e?: React.FormEvent) {
+  // Start: the prompt coach checks the task first (once), then it starts.
+  function next(e?: React.FormEvent) {
     e?.preventDefault();
-    if (task.trim().length < 3 && !brief) return setError(kind === "research" ? "Write your question first." : "Write what it should do first.");
-    if (!project && kind !== "research") return setError("Pick a project first.");
+    // A box left empty isn't an error: say so right under the box and put the cursor there.
+    if (task.trim().length < 3 && !brief) {
+      setGoalHint(kind === "research" ? "Write your question here first." : "Write what it should do here first. One sentence is enough.");
+      const el = document.getElementById(taskId);
+      el?.focus();
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    if (!project && kind !== "research") return setGoalHint("Pick a project below first.");
+    setGoalHint("");
+    if (coached) return start();
+    setError("");
+    setIdeas(false);
+    setCoachKey((k) => k + 1);
+    setCoach(true);
+  }
+
+  // Started from the coach: wait one render, so settings it just turned on (like Smartest) are used.
+  const [startWith, setStartWith] = useState<string | null>(null);
+  useEffect(() => {
+    if (startWith === null) return;
+    setStartWith(null);
+    start(startWith);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startWith]);
+  function coachDone(t: string) {
+    setCoach(false);
+    setCoached(true);
+    if (t !== task) setTask(t);
+    setStartWith(t);
+  }
+
+  function applyTweak(k: SuggestionKey) {
+    if (k === "big_job") (setBig(true), setMore(true));
+    if (k === "research_kind") switchKind("research");
+    if (k === "smartest") setModel("opus");
+    if (k === "look_only") setFreedom("look");
+    if (k === "careful") setCareful(true);
+  }
+  const on: SuggestionKey[] = [
+    ...(big ? (["big_job"] as const) : []),
+    ...(kind === "research" ? (["research_kind"] as const) : []),
+    ...(model === "opus" ? (["smartest"] as const) : []),
+    ...(freedom === "look" ? (["look_only"] as const) : []),
+    ...(careful ? (["careful"] as const) : []),
+  ];
+
+  async function start(withTask?: string) {
+    const task_ = withTask ?? task;
     setBusy(true);
     setError("");
+    setMissing(null);
     try {
       const j = await post<{ agentId: number }>("/api/tasks", {
-        kind, task, project, ...when, freedom, careful, maxMinutes: minutes, model, connectors: picked, notify, askEachStep: askEach,
+        kind, task: task_, project, ...when, freedom, careful, maxMinutes: minutes, model, connectors: picked, notify, askEachStep: askEach,
         big, budgetPct: budget, holdSmall, autoInstall, saveReport, brief, followUpOf: follow?.id, ideaId,
       });
+      rememberProject(project);
+      started.current = true;
       ref.current?.close();
       window.dispatchEvent(new Event("agentbox:changed"));
       router.push(`/agents/${j.agentId}`);
       router.refresh();
     } catch (err) {
-      setError((err as Error).message);
+      const m = missingOf(err);
+      if (m) setMissing(m);
+      else setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -193,9 +262,14 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      onClose={() => {
+        setIsOpen(false);
+        if (!follow) draft.current = !started.current && task.trim() ? task : "";
+        started.current = false;
+      }}
       className="m-0 h-[100dvh] max-h-none w-full max-w-none p-0 backdrop:bg-black/30 sm:m-auto sm:h-auto sm:max-h-[calc(100dvh-48px)] sm:w-[min(640px,calc(100vw-32px))] sm:rounded-[24px]"
     >
-      <form onSubmit={start} className="flex min-h-full flex-col">
+      <form onSubmit={next} className="flex min-h-full flex-col">
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-white px-5 py-3 sm:px-8 sm:py-4">
           <h2 id={titleId} className="min-w-0 truncate text-[20px] font-bold sm:text-[22px]">
             {follow ? `Follow-up: ${follow.name}` : "Start a task"}
@@ -211,7 +285,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
           {TASK_FEATURES.research && !follow && (
             <Segmented<JobKind>
               legend="What kind?"
-              tip="Build something: it makes or changes things in a project and gives you a pull request. Research something: it looks things up across many sources and writes you a report with every source linked."
+              tip="Build something: it makes or changes things in a project, and you look at the change before it goes in. Research something: it looks things up across many sources and writes you a report with every source linked."
               value={kind}
               onChange={switchKind}
               options={[
@@ -222,13 +296,35 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
           )}
 
           <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-4">
             <Label as="label" htmlFor={taskId} tip={follow ? "What it should do next on this same job. It already knows what it did before." : research ? "Your question in plain words. Say what you'll use the answer for, so it knows what matters." : "Say what you want, what a good result looks like, and anything it should never do."}>
               {follow ? (research ? "What else do you want to know?" : "What should it do next?") : research ? "What do you want to know?" : "What should it do?"}
             </Label>
+              {!follow && !ideas && (
+                <button type="button" className={btn.link + " !text-[14px]"} onClick={() => (setIdeas(true), setCoach(false))}>
+                  Help me think of ideas
+                </button>
+              )}
+            </div>
+            {ideas && (
+              <IdeaHelp
+                where={research ? "research" : "build"}
+                onClose={() => setIdeas(false)}
+                onPick={(t) => {
+                  setTask(t);
+                  setIdeas(false);
+                  setTimeout(() => document.getElementById(taskId)?.focus(), 30);
+                }}
+              />
+            )}
             <textarea
               id={taskId}
               value={task}
-              onChange={(e) => setTask(e.target.value)}
+              onChange={(e) => {
+                setTask(e.target.value);
+                setGoalHint("");
+                if (coach) setCoach(false);
+              }}
               rows={6}
               placeholder={
                 follow
@@ -241,53 +337,47 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               }
               className="rounded-[14px] border border-[#C9CDD4] p-4 text-[16px] leading-relaxed"
             />
-            {TASK_FEATURES.big && !follow && (
-              <div className="flex flex-wrap items-center gap-2">
-                {brief ? (
-                  <span className="inline-flex min-h-11 items-center gap-2 rounded-full bg-soft px-4 text-[14px] font-semibold">
-                    <Icon name="book" color="#15171B" size={18} />
-                    {brief.name} · {Math.max(1, Math.round(brief.text.length / 1000))} KB
-                    <button type="button" className="ml-1 min-h-11 px-1 underline" onClick={() => setBrief(null)}>
-                      Remove
-                    </button>
-                  </span>
-                ) : (
-                  <>
-                    <button type="button" className={btn.link} onClick={() => fileRef.current?.click()}>
-                      Attach a brief file
-                    </button>
-                    {project && (
-                      <button type="button" className={btn.link} onClick={listBriefs}>
-                        Pick one from the project
-                      </button>
-                    )}
-                    <input ref={fileRef} type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => readFile(e.target.files?.[0])} />
-                  </>
-                )}
-              </div>
+            {goalHint && (
+              <p role="alert" className="text-[15px] font-semibold text-[#8A4600]">
+                {goalHint}
+              </p>
             )}
-            {briefPick && (
-              <div className="rounded-[14px] border border-line p-3">
-                {briefPick.length === 0 ? (
-                  <p className="text-[14px] text-muted">There are no .md or .txt files in {project}.</p>
-                ) : (
-                  <ul className="flex max-h-56 flex-col overflow-auto">
-                    {briefPick.map((f) => (
-                      <li key={f.file}>
-                        <button type="button" className="flex min-h-11 w-full items-center rounded-[10px] px-3 text-left text-[14px] hover:bg-soft" onClick={() => pickBrief(f.file)}>
-                          {f.file}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+            {restored && task && (
+              <p className="text-[14px] text-muted">
+                This is what you typed last time.{" "}
+                <button type="button" className="font-semibold underline" onClick={() => (setTask(""), setRestored(false), (draft.current = ""))}>
+                  Clear it
+                </button>
+              </p>
             )}
           </div>
 
+          {/* The quick questions show right under the goal, where Nic is looking. */}
+          {coach && (
+            <CoachBox
+              key={coachKey}
+              where={research ? "research" : "build"}
+              goal={task}
+              brief={brief}
+              current={on}
+              onApply={applyTweak}
+              onDone={coachDone}
+              onEdit={(t) => {
+                setTask(t);
+                setCoach(false);
+                setCoached(true);
+                setTimeout(() => document.getElementById(taskId)?.focus(), 30);
+              }}
+              onClose={() => {
+                setCoach(false);
+                setTimeout(() => document.getElementById(taskId)?.focus(), 30);
+              }}
+              doneLabel={scheduled ? "Save" : "Start"}
+            />
+          )}
           {follow ? (
             <p className="text-[15px] text-muted">
-              {follow.kind === "research" ? "It builds on the earlier report." : `Same project (${follow.project || "none"}), same branch and pull request if one is open.`}
+              {follow.kind === "research" ? "It builds on the earlier report." : `Same project (${follow.project || "none"}). It carries on with the same change.`}
             </p>
           ) : (
             <ProjectSelect
@@ -295,20 +385,36 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
               onChange={setProject}
               projects={projects}
               optional={research}
-              tip={research ? "Optional. Pick one if the question is about a project, or to save the report there." : "The code it works on. It always works in its own copy, never straight in main."}
+              tip={research ? "Optional. Pick one if the question is about a project, or to save the report there." : "Which app, game or site it works on. It works on its own copy, so your real project only changes when you say so."}
             />
           )}
 
-          {!follow && <WhenPicker value={when} onChange={setWhen} />}
+          {!follow && (
+            <BriefPicker
+              project={project}
+              value={brief}
+              onChange={(b) => {
+                setBrief(b);
+                setMissing(null);
+              }}
+              openRef={openBrief}
+              tip="Optional. A text file with longer instructions (for example a list of what the game must have). The agent reads it before it starts."
+            />
+          )}
 
-          {research ? (
+          {simple && !more && (
+            <p className="text-[15px] text-muted">The other choices are set to good defaults: it starts now, works on its own and checks its work carefully. You can change them under More options.</p>
+          )}
+          {!follow && !(simple && !more) && <WhenPicker value={when} onChange={setWhen} />}
+
+          {!(simple && !more) && (research ? (
             <p className="flex items-center text-[15px] text-muted">
               Research only reads and reports. It never changes anything.
             </p>
           ) : (
             <FreedomPicker value={freedom} onChange={setFreedom} />
-          )}
-          <CarefulPicker value={careful} onChange={setCareful} />
+          ))}
+          {!(simple && !more) && <CarefulPicker value={careful} onChange={setCareful} />}
 
           <div>
             <button type="button" className="inline-flex min-h-11 items-center gap-2 text-[15px] font-semibold" aria-expanded={more} onClick={() => setMore(!more)}>
@@ -319,7 +425,7 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
             </button>
             {more && (
               <div className="mt-4 flex flex-col gap-6 rounded-[18px] bg-soft p-4 sm:p-5">
-                {!big && <MinutesSlider value={minutes} onChange={(v) => (setMinutes(v), setMinutesTouched(true))} />}
+                <MinutesSlider value={minutes} onChange={(v) => (setMinutes(v), setMinutesTouched(true))} off={big ? BIG_TIME_NOTE : undefined} />
                 <ModelPicker value={model} onChange={setModel} />
                 {TASK_FEATURES.connectors && (
                   <fieldset>
@@ -345,45 +451,48 @@ export default function TaskPanel({ projects, connectors = [], defaultProject }:
                   </fieldset>
                 )}
                 <NotifyPicker value={notify} onChange={setNotify} />
-                {freedom !== "look" && <Switch label="Ask me each step" tip="It stops before every command or change and waits for your Allow or Deny. Slow, but you see everything." checked={askEach} onChange={setAskEach} />}
+                {freedom !== "look" && <Switch label="Ask me each step" tip="Even stricter than Check with me first: it stops before every single change and waits for you to press Allow or Deny. Slow, but you see everything." checked={askEach} onChange={setAskEach} />}
                 {TASK_FEATURES.big && !follow && !research && (
                   <Switch
                     label="Big job"
-                    tip="For long jobs that take hours. No time limit: it works milestone by milestone, saves its work after each one, waits out usage limits, and keeps going after restarts. It stops if it uses more than its usage budget."
+                    tip="Only for jobs that take hours; most tasks leave this off. It works in stages, saves its work after each one, and waits out usage limits. Instead of a time limit it may use up to about 75% of your weekly usage (you can change that)."
                     checked={big}
                     onChange={setBig}
                   />
                 )}
                 {big && (
                   <div className="flex flex-col gap-5 border-l-2 border-line pl-4">
-                    <MinutesSlider
-                      label="Usage budget"
-                      tip="The most of your weekly Claude usage it may use, in points of the weekly meter. You can raise it while it runs."
-                      value={budget}
-                      onChange={setBudget}
-                      min={5}
-                      max={100}
-                    />
+                    <PercentSlider label="Most usage per run" tip={BIG_USAGE_TIP} value={budget} onChange={setBudget} />
                     <Switch label="Hold small runs" tip="While it works, small scheduled runs wait, so they don't eat its usage. They start again when it's done." checked={holdSmall} onChange={setHoldSmall} />
                     {project === "agentbox-panel" && (
                       <Switch label="Install when finished" tip="When it's done and reviewed, merge it and update this panel to the new version. If the new version doesn't start, it goes back to the old one by itself." checked={autoInstall} onChange={setAutoInstall} />
                     )}
                   </div>
                 )}
-                {research && project && <Switch label="Save the report in the project" tip="Also adds the report to the project's reports folder as a pull request." checked={saveReport} onChange={setSaveReport} />}
+                {research && project && <Switch label="Save the report in the project" tip="Also adds the report to the project's reports folder (you OK it in the Inbox first)." checked={saveReport} onChange={setSaveReport} />}
               </div>
             )}
           </div>
+          {missing && <MissingFileBox missing={missing} onAttach={() => openBrief.current?.()} />}
           {error && <ErrorBox compact message={error} onRetry={() => start()} where="the Start a task panel" />}
         </div>
 
-        <div className="sticky bottom-0 flex justify-end gap-3 border-t border-line bg-white px-5 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:px-8 sm:py-4">
+        <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-line bg-white px-5 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:px-8 sm:py-4">
+          {usagePct !== null && (
+            <p className={`mr-auto text-[13px] leading-tight ${usagePct >= 80 ? "font-semibold text-[#8A4600]" : "text-muted"}`}>
+              {usagePct >= 80 ? `Usage is high (${usagePct}% of this session). It may wait for the reset.` : `${usagePct}% of this session's usage used so far.`}
+            </p>
+          )}
           <button type="button" className={btn.secondary} onClick={() => ref.current?.close()}>
             Cancel
           </button>
-          <button type="submit" className={btn.primary} disabled={busy}>
-            {busy ? "Starting…" : scheduled ? "Save" : "Start"}
-          </button>
+          {!coach ? (
+            <button type="submit" className={btn.primary} disabled={busy}>
+              {busy ? "Starting…" : scheduled ? "Save" : "Start"}
+            </button>
+          ) : (
+            <p className="text-[14px] font-medium text-[#2A3F9E]">Pick an option in the box above ↑</p>
+          )}
         </div>
       </form>
     </dialog>

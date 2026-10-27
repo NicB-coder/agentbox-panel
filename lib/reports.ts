@@ -41,7 +41,7 @@ export async function saveReport(run: Run): Promise<Report | null> {
   const question = run.extra.followUp ? run.task : agent.prompt;
   const title = reportTitle(md, agent.name);
   const project = run.extra.project ?? agent.project ?? "";
-  const reviewed = carefulLine(run.extra.flow)?.replace(" · optimized", "") ?? null;
+  const reviewed = carefulLine(run.extra.flow)?.replace(" · polished", "") ?? null;
   const id = db()
     .prepare("INSERT OR REPLACE INTO reports (agent_id, run_id, question, title, markdown, reviewed, project, created_at) VALUES (?,?,?,?,?,?,?,?)")
     .run(agent.id, run.id, question, title, md, reviewed, project || null, Date.now()).lastInsertRowid as number;

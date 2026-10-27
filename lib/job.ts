@@ -7,12 +7,21 @@ export const DEFAULT_JOB: JobSettings = {
   askEachStep: false,
   connectors: [],
   big: false,
-  budgetPct: 40,
+  budgetPct: 75, // Big jobs: about 75% of the weekly meter
   holdSmall: true,
   autoInstall: false,
   saveReport: false,
   brief: null,
 };
+
+// What the Big job limits really do (runner.ts: bigUsage and OVER_BUDGET), in plain words.
+export const BIG_USAGE_TIP =
+  "The most of your weekly Claude usage (the “This week” meter at the top) this job may use in total, even across a weekly reset. If it goes over, it pauses with its work saved; press Raise the budget in the Inbox to carry on.";
+// Workflows (workflowRunner.ts: overLimits and usageUsed).
+export const WF_USAGE_TIP =
+  "The most of the “This session” usage meter (at the top) one run may use, added up across resets, so 100% is one full session. If it goes over, it stops and keeps its work; press Pick up where it stopped in the Inbox to carry on.";
+export const WF_TIME_TIP = "The longest one run can take, start to finish. Time spent waiting for you or for usage doesn't count. If a run goes over, it stops and keeps its work so far.";
+export const BIG_TIME_NOTE = "A Big job has no time limit. It stops when it's done or when it reaches its Most usage per run.";
 
 export function jobOf(raw: unknown): JobSettings {
   const j = (raw && typeof raw === "object" ? raw : {}) as Partial<JobSettings>;
@@ -26,7 +35,7 @@ export function jobOf(raw: unknown): JobSettings {
 export const FREEDOM_WORDS: Record<Freedom, { label: string; tip: string }> = {
   look: { label: "Look only", tip: "It reads and reports back. It never changes anything." },
   check: { label: "Check with me first", tip: "It writes a short plan and waits for your OK before it changes anything." },
-  auto: { label: "On its own", tip: "It works by itself. A safety checker approves each step, and you always get the result as a pull request." },
+  auto: { label: "On its own", tip: "It works by itself. A safety checker approves each step, and you look at the finished change before it goes into your project." },
 };
 
 export const FREEDOM_ORDER: Freedom[] = ["look", "check", "auto"];
@@ -61,7 +70,8 @@ const MAKE = new Set(["make", "build", "create", "write", "add", "design", "set"
 
 // A short name for the job from the task: "Make an arcade website with 4 games" → "Arcade website".
 export function jobName(task: string, kind: JobKind = "build"): string {
-  const first = task.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s|\n/)[0] ?? "";
+  // The coach's improved goals start with labels like "What to make: …": name it from what follows.
+  const first = task.replace(/^\s*(what to (make|build|do)|goal|task)\s*:\s*/i, "").replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s|\n/)[0] ?? "";
   const words = first.replace(LEAD, "").replace(/[^\p{L}\p{N}'\- ]/gu, " ").split(" ").filter(Boolean);
   if (!words.length) return kind === "research" ? "Research" : "New task";
   let suffix = "";
@@ -83,6 +93,12 @@ export function jobName(task: string, kind: JobKind = "build"): string {
       continue;
     }
     if (/^(with|that|which|so|because|using|from|where|when|but|then)$/i.test(w)) break;
+    // "Add a short comment at the top…" → "Short comment", never a name that ends on "at".
+    if (/^(at|by|into|onto|as|near|under|over|inside|below|above|across|before|after|between|via)$/i.test(w)) {
+      if (keep.length) break;
+      continue;
+    }
+    if (keep.at(-1)?.toLowerCase() === w.toLowerCase()) continue; // never "Make Make"
     keep.push(w.length > 18 ? w.slice(0, 18) : w);
   }
   if (!keep.length) keep.push(...words.slice(0, 2));

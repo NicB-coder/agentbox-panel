@@ -87,7 +87,7 @@ export async function runTool(name: string, args: Record<string, unknown>): Prom
       return [
         `[workflow ${w.id}] ${w.name} · ${w.enabled ? "On" : "Off"} · project ${w.project}`,
         flowSentence(w, agents),
-        `Limits: send back up to ${w.limits.maxLoops} times · at most ${w.limits.maxMinutes} minutes per run · at most about ${w.limits.maxUsagePct}% of a session's usage`,
+        `Limits: send back up to ${w.limits.maxLoops} times · at most ${w.limits.maxMinutes} minutes per run · Most usage per run about ${w.limits.maxUsagePct}% of the “This session” usage meter, added up across resets`,
         "",
         "Steps:",
         ...steps,

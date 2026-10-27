@@ -1,4 +1,4 @@
-import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent, runsWithStatus } from "./db";
+import { activeRun, listAgents, listRuns, pendingApprovalForRun, getAgent, runsWithStatus, wfRunsWithStatus } from "./db";
 import { readHeartbeat } from "./heartbeat";
 import { lowDisk } from "./machine";
 import { listReports } from "./reports";
@@ -7,7 +7,7 @@ import { inboxCount } from "./inbox";
 import { usageState } from "./usage";
 import { bigUsage, canContinue, carefulLine } from "./runner";
 import type { Agent, AgentView, HeartbeatInfo, Run } from "./types";
-import { ago, clock, clockOf, duration, inWords, nextRunAfter, plainText, scheduleWords } from "./words";
+import { ago, clock, clockOf, duration, inWords, nextRunAfter, plainText, scheduleWords, userStop } from "./words";
 
 // "Step 3 of 6 · Final check"
 export function progressOf(run: Run): { step: number; of: number; label: string } | null {
@@ -43,11 +43,14 @@ function heartbeatView(a: Agent, hb: HeartbeatInfo): AgentView {
     : last
       ? `Last check-in at ${clockOf(last.at)}${last.reply ? `: “${last.reply}”` : "."}`
       : "No check-ins yet.";
+  // It just shows agentbox is alive; say so, so nobody thinks they have to look after it.
+  const out = hb.todayRuns.filter((r) => r.outOfUsage).length;
+  const calm = status === "stopped" ? summary : `Shows this Mac is awake and answering. Nothing for you to do.${out ? ` (${out} of today's check-ins came while Claude was out of usage.)` : ` ${summary}`}`;
   return {
     agent: a,
     status,
     task: status === "stopped" && overdue ? "Missed its last check-in" : "Hourly check-in",
-    summary,
+    summary: calm,
     waitingForOk: false,
     timeLabel: `${hb.onTimeToday} of ${hb.expectedToday} on time`,
     activeRun: null,
@@ -74,7 +77,7 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
       status: "queued",
       pillLabel: "Waiting",
       task: run.task,
-      summary: run.activity ?? "Waiting for usage to reset",
+      summary: run.extra.resume && run.extra.resume.until < now ? "Trying again now…" : run.activity ?? "Waiting for usage to reset",
       timeLabel: run.extra.resume ? `back at ${clockOf(run.extra.resume.until)}` : `asked ${ago(run.startedAt, now)}`,
       progress: progressOf(run),
       elapsedMs: run.extra.activeMs ?? 0,
@@ -84,6 +87,7 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
     return {
       ...base,
       status: "needs",
+      pillLabel: "Needs your OK",
       task: run.task,
       summary: pending?.kind === "plan" || run.plan ? "Waiting for your OK on its plan." : `Waiting for your OK: ${pending?.summary ?? "it has a question"}`,
       waitingForOk: true,
@@ -107,8 +111,9 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
     return {
       ...base,
       status: "needs",
+      pillLabel: "Ready to look at",
       task: review.task,
-      summary: careful ? `Ready to merge. ${careful}.` : "Its pull request is ready for you to look at.",
+      summary: careful ? `Finished and ready for you to look at. ${careful}.` : "Finished and ready for you to look at.",
       timeLabel: ago(review.endedAt ?? review.startedAt, now),
     };
   }
@@ -121,7 +126,7 @@ export function agentView(a: Agent, hb?: HeartbeatInfo): AgentView {
       timeLabel: last ? ago(last.endedAt ?? last.startedAt, now) : "",
     };
   }
-  if (last?.status === "stopped" && (last.extra.outOfTime || last.extra.overBudget) && last.stopReason !== "You stopped it.") {
+  if (last?.status === "stopped" && (last.extra.outOfTime || last.extra.overBudget) && !userStop(last.stopReason)) {
     return {
       ...base,
       status: "timeout",
@@ -211,9 +216,11 @@ export function homeState(): HomeState {
   const working = views.filter((v) => v.status === "working").length;
   const needs = inboxCount();
   const h = new Date().getHours();
-  const greeting = `Good ${h < 5 ? "evening" : h < 12 ? "morning" : h < 18 ? "afternoon" : "evening"}, Nic`;
+  const greeting = h < 5 ? "Hi, Nic" : `Good ${h < 12 ? "morning" : h < 18 ? "afternoon" : "evening"}, Nic`;
+  const flows = wfRunsWithStatus("running", "queued").length;
   const parts = [
     `${working} agent${working === 1 ? "" : "s"} working`,
+    ...(flows ? [`${flows} workflow${flows === 1 ? "" : "s"} running`] : []),
     needs ? `${needs} thing${needs === 1 ? "" : "s"} need${needs === 1 ? "s" : ""} you` : "nothing needs you",
   ];
   const u = usageState();
@@ -224,7 +231,7 @@ export function homeState(): HomeState {
     : u.limited
     ? `You're out of Claude usage${u.limitedUntil ? ` until ${clockOf(u.limitedUntil)}` : " for now"}. New runs wait and start by themselves after that.`
     : queued
-      ? `${queued} ${queued === 1 ? "run is" : "runs are"} waiting for usage to reset.`
+      ? `${queued} ${queued === 1 ? "run is" : "runs are"} waiting for Claude's usage to free up. ${queued === 1 ? "It carries" : "They carry"} on by themselves. Nothing is broken.`
       : null;
   return { greeting, summary: parts.join(" · "), needs, usageNote, views, archived };
 }

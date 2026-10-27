@@ -1,6 +1,7 @@
 import { getRun, helperAgentId, runsWithStatus } from "./db";
 import { patchExtra, startRun } from "./runner";
 import type { Run } from "./types";
+import { verdictOf } from "./words";
 
 // Reviews of pull requests that weren't made in Careful mode (Quick tasks, workflows, and "Get a second opinion").
 // A look-only reviewer (Opus) reads the pull request's branch and writes findings; the Inbox shows them
@@ -13,7 +14,7 @@ export function reviewPrompt(prUrl: string, task: string | null): string {
     "",
     "You're in a copy of the project with the pull request's changes checked out. Read the pull request and its comments (gh pr view --comments), look at what changed (gh pr diff), and run the tests or open the page if you can, without changing anything.",
     "Does it do what was asked? Are there bugs, broken or risky changes, or missing pieces? Only real problems, not style preferences.",
-    "Write a short review in plain words for a high-school developer: one line on what's good, then a numbered list of what should be fixed (or say nothing needs fixing).",
+    "Write a short review in plain words for a 15-year-old beginner: one line on what's good, then a numbered list of what should be fixed (or say nothing needs fixing). Don't mention branch names, file paths, commands or code words; describe things by what they do (\"the game page\", \"the README, the project's welcome note\").",
     "End with exactly one line:",
     "VERDICT: passed",
     "or",
@@ -44,7 +45,7 @@ export async function reviewRunPr(source: Run, opts: { model?: "opus" | "sonnet"
     project,
     extra: {
       label: "Reviewer", role: "review", allowed: "look", model: opts.model ?? "opus", maxMinutes: 20, careful: false,
-      prompt: reviewPrompt(source.prUrl, source.task), checkoutRef: `origin/${branch}`, prReview: { prUrl: source.prUrl, sourceRunId: source.id },
+      prompt: reviewPrompt(source.prUrl, source.extra.planChanges?.length ? `${source.task}\n\nThen Nic changed it (his changes win): ${source.extra.planChanges.join(" / ")}` : source.task), checkoutRef: `origin/${branch}`, prReview: { prUrl: source.prUrl, sourceRunId: source.id },
     },
   });
   patchExtra(source.id, { review: { runId: run.id, status: "running", at: Date.now() } });
@@ -73,7 +74,7 @@ export function onReviewEnded(reviewRun: Run) {
   const src = reviewRun.extra.prReview?.sourceRunId;
   const source = src ? getRun(src) : null;
   const text = reviewRun.result ?? "";
-  const verdict = /VERDICT:\s*needs work/i.test(text) ? "needs work" : "passed";
+  const verdict = verdictOf(text);
   if (!source) {
     const url = reviewRun.extra.prReview?.prUrl;
     if (url) import("./db").then((m) => m.setSetting(`review:${url}`, { runId: reviewRun.id, status: reviewRun.status === "done" ? "done" : "stopped", verdict, text: text.replace(/^\s*VERDICT:.*$/gim, "").trim().slice(0, 8000), at: Date.now() }));

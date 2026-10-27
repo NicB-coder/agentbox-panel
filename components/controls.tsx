@@ -10,10 +10,10 @@ import { field } from "./ui";
 // The shared controls of the "Start a task" panel, the job settings and workflow steps.
 // Short labels only; every explanation lives in an ⓘ bubble.
 
-export const FREEDOM_TIP = "How much it may do on its own. Look only: it reads and reports, never changes anything. Check with me first: it shows you a short plan and waits for your OK. On its own: it works by itself and you get the result as a pull request to look at.";
-export const CAREFUL_TIP = "Careful: after it builds, a second AI (a different model) reviews the work, it fixes what's found (up to 2 rounds), polishes it, and it's checked once more before it reaches your Inbox. Quick: just does it. Good for tiny tasks.";
+export const FREEDOM_TIP = "How much it may do on its own. Look only: it reads and reports, never changes anything. Check with me first: it shows you a short plan and waits for your OK. On its own: it works by itself, and you look at the finished change before it goes into your project.";
+export const CAREFUL_TIP = "Careful: after it builds, a second AI reviews the work, it fixes what's found (up to 2 rounds), polishes it, and it's checked once more before it reaches your Inbox. Quick: just does it, with one fast check by a second AI at the end. Good for tiny tasks.";
 
-export function FreedomPicker({ value, onChange, legend = "Freedom", tip = FREEDOM_TIP }: { value: Freedom; onChange: (v: Freedom) => void; legend?: string; tip?: string }) {
+export function FreedomPicker({ value, onChange, legend = "How much can it do on its own?", tip = FREEDOM_TIP }: { value: Freedom; onChange: (v: Freedom) => void; legend?: string; tip?: string }) {
   return <Segmented<Freedom> legend={legend} tip={tip} value={value} onChange={onChange} options={FREEDOM_ORDER.map((f) => ({ value: f, label: FREEDOM_WORDS[f].label }))} />;
 }
 
@@ -35,8 +35,8 @@ export function CarefulPicker({ value, onChange, tip = CAREFUL_TIP }: { value: b
 export function ModelPicker({ value, onChange }: { value: Model; onChange: (v: Model) => void }) {
   return (
     <Segmented<Model>
-      legend="Model"
-      tip="Fast (Sonnet) is good for most jobs. Smartest (Opus) thinks harder but takes longer and uses more of your Claude usage."
+      legend="Which AI?"
+      tip="Fast is good for most jobs. Smartest thinks harder, but takes longer and uses more of your Claude usage."
       value={value}
       onChange={onChange}
       options={[
@@ -47,18 +47,34 @@ export function ModelPicker({ value, onChange }: { value: Model; onChange: (v: M
   );
 }
 
-export function MinutesSlider({ value, onChange, min = 5, max = 180, label = "Time limit", tip = "The longest one run may take. It's a safety cap: if it runs out, you can press Keep going. Waiting for you or for usage doesn't count." }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string; tip?: string }) {
-  const id = useId();
+export function MinutesSlider({ value, onChange, min = 5, max = 180, label = "Time limit", tip = "The longest one run may take. It's a safety cap: if it runs out, its work is kept and you can press Keep going or Pick up where it stopped. Waiting for you or for usage doesn't count. It starts at 30 minutes for Quick jobs and 1 hour for Careful ones.", off }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string; tip?: string; off?: string }) {
   const words = value >= 60 ? `${Math.floor(value / 60)} h${value % 60 ? ` ${value % 60} min` : ""}` : `${value} min`;
+  return <Slider value={value} onChange={onChange} min={min} max={max} label={label} tip={tip} words={off ? "Doesn't apply" : words} off={off} />;
+}
+
+// A share of a usage meter, "about 75%".
+export function PercentSlider({ value, onChange, label, tip }: { value: number; onChange: (v: number) => void; label: string; tip: string }) {
+  return <Slider value={value} onChange={onChange} min={5} max={100} label={label} tip={tip} words={`about ${value}%`} />;
+}
+
+// `off`: greyed out, with one line saying why it doesn't apply.
+function Slider({ value, onChange, min, max, label, tip, words, off }: { value: number; onChange: (v: number) => void; min: number; max: number; label: string; tip: string; words: string; off?: string }) {
+  const id = useId();
+  const noteId = useId();
   return (
     <div className="flex flex-col gap-2">
       <span className="flex items-center justify-between gap-3">
         <Label as="label" htmlFor={id} tip={tip}>
           {label}
         </Label>
-        <span className="text-[15px] font-semibold">{words}</span>
+        <span className={`text-[15px] font-semibold ${off ? "text-muted" : ""}`}>{words}</span>
       </span>
-      <input id={id} type="range" min={min} max={max} step={5} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-11 w-full accent-[#15171B]" />
+      <input id={id} type="range" min={min} max={max} step={5} value={value} disabled={!!off} aria-describedby={off ? noteId : undefined} onChange={(e) => onChange(Number(e.target.value))} className="h-11 w-full accent-[#15171B] disabled:cursor-not-allowed disabled:opacity-40" />
+      {off && (
+        <p id={noteId} className="text-[14px] text-muted">
+          {off}
+        </p>
+      )}
     </div>
   );
 }
@@ -71,7 +87,7 @@ export function NotifyPicker({ value, onChange }: { value: NotifyOn[]; onChange:
   };
   return (
     <fieldset>
-      <Label as="legend" tip="When it sends you a Discord message. Pick as many as you like.">
+      <Label as="legend" tip="agentbox can send you a message on Discord (a chat app) when these things happen, if messages are set up in Settings. Tick as many as you like, or Never for no messages.">
         Tell me when
       </Label>
       <div className="flex flex-wrap gap-2">
@@ -109,7 +125,7 @@ export function WhenPicker({ value, onChange, nowLabel = "Now" }: { value: When;
     <div className="flex flex-col gap-3">
       <Segmented<ScheduleKind>
         legend="When does it run?"
-        tip="Now starts it straight away, once. The others start it by themselves on a timetable, until you pause or archive it."
+        tip={`${nowLabel === "Now" ? "Now starts it straight away, once." : `${nowLabel}: it only runs when you ask it to, never on a timetable.`} The others start it by themselves on a timetable, until you pause or archive it.`}
         value={value.scheduleKind}
         onChange={(k) => set({ scheduleKind: k, scheduleDays: k === "days" && !value.scheduleDays.length ? [1, 2, 3, 4, 5] : value.scheduleDays })}
         options={(["manual", "hourly", "daily", "days"] as ScheduleKind[]).map((k) => ({ value: k, label: k === "manual" ? nowLabel : SCHEDULE_WORDS[k] }))}

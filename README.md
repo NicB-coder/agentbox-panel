@@ -45,6 +45,18 @@ Data lives in `data/agentbox.db` (SQLite) and run logs in `data/logs/`. Both are
 - **Heartbeat** is the existing `com.agentbox.heartbeat` launchd job, shown read-only. Its logs stay empty when it works, so the panel reads each check-in from the Claude Code transcript it leaves behind.
 - **Discord pings** use the webhook stored in the Keychain as `discord-heartbeat`. It is read when needed and never saved anywhere else.
 
+## v3.1: ask once, help writing good goals, easy to edit, beginner-proof
+
+![New workflow](docs/screenshots/v3.1-start-screen.png)
+
+- **Ask once.** New workflow (`components/NewWorkflow.tsx`) asks for the goal and project only; the editor opens with the goal filled in. Run now and Test run start straight away; agents always get the saved goal plus anything typed for that run (`runTaskText` in `lib/wf.ts`). Goals can be up to 40,000 characters.
+- **No silent failures.** Runs that finish without changes, without a pull request, or very quickly get an Inbox card (`lib/quiet.ts`). A step can end with `STUCK: <why>` to stop the workflow with a plain reason.
+- **Briefs** (`lib/briefs.ts`, `components/BriefPicker.tsx`): attach a text file or pick one from the project; it's copied into every run. Nothing starts if a file the goal mentions is missing. Projects → **Add a file** opens a pull request you merge from the Inbox (`lib/projectFiles.ts`).
+- **Prompt coach** (`lib/coach.ts`): quick tap-to-answer questions for vague goals, an improved goal next to yours, suggested settings and idea help.
+- **Easy editing:** change a workflow in your own words with a before → after preview (`/api/workflows/<id>/change`), Undo, Version history, Make a copy, Edit while it runs.
+- **Helper** follows you into every pop-up and panel, never replays old replies, and answers from live data. Its test set is in `helper-eval/`.
+- **Upgrading:** the database upgrades itself on start (two new columns on `workflow_runs`, a new `file_prs` table; nothing else changes). `scripts/migration-check.ts` tests that on a copy of a real database.
+
 ## v3: one agent per job, everything in the panel, deep research
 
 ![Start a task](docs/screenshots/v3-start-a-task.png)
@@ -93,7 +105,7 @@ node scripts/m2-test.mjs out/               # workflow templates, editor, undo, 
 node scripts/m3-test.mjs out/               # Describe it (uses a little Claude usage)
 node scripts/walkthrough.mjs out/           # screenshots of every page at both widths
 node scripts/helper-test.mjs out/           # Helper: bubble, streamed reply, saved across reload (a little usage)
-npm test                                     # 31 quick checks (Helper, job names, Freedom, task input, Careful line, reattaching to output), no app and no usage
+npm test                                     # 85 quick checks (Helper, job names, Freedom, ask once, briefs, missing files, no silent failures, edit in words…), no app and no usage
 BASE_URL=http://127.0.0.1:3100 DB=/tmp/agentbox-dev/agentbox.db node scripts/helper-calm-test.mjs out/  # Helper: calm typing, New text button, sneaky log, Create it twice (a little usage)
 node scripts/helper-test2.mjs out/          # Helper: suggestions, buttons, Are you sure?, Create it cards (some usage)
 node scripts/helper-walkthrough.mjs out/ 1366  # Helper: a beginner question on every page, answers saved to a file
@@ -108,6 +120,14 @@ node scripts/v3/m2.mjs …      # Ran out of time → Keep going, Careful line, 
 node scripts/v3/m4.mjs 3      # busy tiles, Shipped in the Inbox, Discord settings, workflow task box and steps (a little usage)
 node scripts/v3/m56.mjs …     # research panel, Reports, Report page, Connectors
 node scripts/v3/term.mjs      # the Terminal page
+```
+
+v3.1 checks, against a dev copy (`scripts/qa/`, never the live panel):
+
+```sh
+BASE_URL=http://127.0.0.1:3253 node scripts/qa/sweep.mjs out.json   # every page at 1366/768/390px: errors, failed requests, layout, load time
+BASE_URL=http://127.0.0.1:3253 node scripts/qa/click-all.mjs out.json  # clicks every control and records what happened
+node --import ./tests/register.mjs scripts/migration-check.ts copy.db  # upgrades a COPY of a database and checks every row survived
 ```
 
 To try changes without touching the always-on service: `scripts/dev-copy.sh fresh` (copies the database, port 3100, schedules and Discord off, a production build in `.next-dev`).

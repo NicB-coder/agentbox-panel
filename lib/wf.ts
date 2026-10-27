@@ -1,6 +1,6 @@
 // Workflow building blocks shared by the browser and the server: step types, templates,
 // the plain-English sentence for a whole flow, and turning anything into a clean workflow.
-import type { CheckKind, Freedom, Model, StartTrigger, StepType, WfLimits, WfStep, WorkflowInput, WorkMode } from "./types";
+import type { BriefRef, CheckKind, Freedom, Model, StartTrigger, StepType, WfLimits, WfStep, WorkflowInput, WorkMode } from "./types";
 import { clock, scheduleWords, times } from "./words";
 
 export type AgentRef = { id: number; name: string; color: string; icon: string; slug?: string; allowed?: string; archived?: boolean };
@@ -9,10 +9,10 @@ export const STEP_INFO: Record<StepType, { title: string; icon: string; color: s
   start: { title: "Start", icon: "play", color: "#2B8A3E", help: "What starts the workflow." },
   agent: { title: "Build", icon: "hammer", color: "#2F4FD8", help: "An agent does a piece of the work: builds or changes something, or just takes a look." },
   research: { title: "Research", icon: "book", color: "#7048C8", help: "Looks things up and writes research.md for the later steps to use." },
-  review: { title: "Review", icon: "eye", color: "#0F7B6C", help: "A reviewer checks the work against the task and the research. Passed, or needs work." },
+  review: { title: "Review", icon: "eye", color: "#0F7B6C", help: "A second AI checks the work against what you asked for. It either passes it, or sends it back to be fixed." },
   check: { title: "Check", icon: "check", color: "#0E7490", help: "Hard tests, not opinions: tests pass, the page loads, no errors." },
   ask: { title: "Ask me", icon: "hand", color: "#B45309", help: "Waits for you in the Inbox: Approve, Send back or Stop." },
-  ship: { title: "Ship", icon: "rocket", color: "#BE185D", help: "Merges the pull request into main." },
+  ship: { title: "Put it in", icon: "rocket", color: "#BE185D", help: "Puts the finished change into your real project (this is also called shipping). It asks you first, unless you set it to automatic." },
   tell: { title: "Tell me", icon: "bell", color: "#2F4FD8", help: "Sends you a Discord message with a summary and links." },
 };
 
@@ -30,6 +30,9 @@ export const CHECK_WORDS: Record<CheckKind, string> = {
   page: "Page loads in a real browser",
   console: "No errors in the browser console",
 };
+
+// The longest goal a workflow can save. It used to be 8,000 and longer goals were cut off without a word (Lookout, Oct 23).
+export const GOAL_MAX = 40_000;
 
 export const DEFAULT_LIMITS: WfLimits = { maxLoops: 2, maxMinutes: 120, maxUsagePct: 25 };
 
@@ -76,7 +79,7 @@ export function stepSubtitle(s: WfStep, steps: WfStep[], agents: AgentRef[]): st
       if (s.trigger === "issue_label") return `Issue labeled “${s.label || "agent"}”`;
       return TRIGGER_WORDS[s.trigger ?? "manual"];
     case "agent":
-      return s.agentId == null ? short(s.prompt) || "Write what it should do" : short(s.prompt) || "Does its usual job";
+      return s.agentId == null ? short(s.prompt) || "Write what it should do" : short(s.prompt) || "Builds what your goal says";
     case "research":
       return short(s.prompt) || "Looks things up";
     case "review":
@@ -103,6 +106,40 @@ function failWords(s: WfStep, steps: WfStep[], agents: AgentRef[]) {
   return t ? `If it needs work: back to ${stepTitle(t, agents)}` : "If it needs work: stop";
 }
 
+// What a workflow run's agents are told it's about: the saved goal, plus anything typed for this one run.
+// Both, never one instead of the other: Lookout's run "did nothing" because the typed line replaced the goal.
+export function runTaskText(goal: string, extra: string): string {
+  const g = goal.trim();
+  const x = extra.trim();
+  if (g && x && x !== g) return `What this workflow should make (Nic's saved goal):\n${g}\n\nFor this run, Nic adds:\n${x}`;
+  if (g || x) return `The task for this run:\n${g || x}`;
+  return "There's no extra task for this run: do the job described below.";
+}
+
+// "Run with a different goal…": the run's own copy of the steps carries that goal; the saved workflow keeps its own.
+export function stepsWithGoal(steps: WfStep[], goal?: string): WfStep[] {
+  const g = goal?.trim();
+  return g ? steps.map((s, i) => (i === 0 ? { ...s, task: g } : s)) : steps;
+}
+
+// A save that would cut the goal off is refused instead (plain words for the editor).
+export function goalTooLong(rawSteps: unknown): string | null {
+  const first = Array.isArray(rawSteps) ? (rawSteps[0] as { task?: unknown } | undefined) : undefined;
+  const len = typeof first?.task === "string" ? first.task.length : 0;
+  return len > GOAL_MAX ? `The goal is too long (${len.toLocaleString("en-US")} characters). Keep it under ${GOAL_MAX.toLocaleString("en-US")}.` : null;
+}
+
+// An attached brief as saved with a workflow: its name, length and the hash the panel keeps its text under.
+export function cleanBriefRef(raw: unknown): BriefRef | undefined {
+  const r = raw as Partial<BriefRef> | null;
+  if (!r || typeof r !== "object" || typeof r.hash !== "string" || !/^[a-f0-9]{24}$/.test(r.hash)) return undefined;
+  const name = String(r.name ?? "").replace(/[^\w.\- ]+/g, "").trim().slice(0, 80);
+  return { name: name && !name.startsWith(".") ? name : "brief.md", lines: Math.max(0, Math.round(Number(r.lines) || 0)), hash: r.hash };
+}
+
+// "Brief: CLAUDE.md · 142 lines"
+export const briefLabel = (b: { name: string; lines: number }) => `${b.name} · ${b.lines.toLocaleString("en-US")} ${b.lines === 1 ? "line" : "lines"}`;
+
 export const hasFailPath = (s: WfStep) => s.type === "review" || s.type === "check";
 
 // "When you start it, it researches the task, Builder builds it, a reviewer checks it (back to Builder if it needs work, up to 2 times), ..."
@@ -124,7 +161,7 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
         {
           const a = agents.find((x) => x.id === s.agentId);
           const look = (s.freedom ?? (s.mode === "look" ? "look" : null)) === "look" || a?.allowed === "look";
-          const how = s.careful ? " carefully" : "";
+          const how = s.careful ? " carefully (with its own check by a second AI)" : "";
           parts.push(s.agentId == null ? (look ? "it takes a look" : `it builds it${how}`) : look ? `${stepTitle(s, agents)} takes a look` : `${stepTitle(s, agents)} works on it${how}`);
         }
         break;
@@ -133,7 +170,7 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
         break;
       case "review": {
         const t = s.onFail && s.onFail !== "stop" ? steps.find((x) => x.id === s.onFail) : null;
-        parts.push(t ? `a reviewer checks it (back to ${stepTitle(t, agents)} if it needs work, up to ${times(w.limits.maxLoops)})` : "a reviewer checks it (stops if it needs work)");
+        parts.push(t ? `a reviewer checks it (if it needs work, it goes back to the “${stepTitle(t, agents)}” step, up to ${times(w.limits.maxLoops)})` : "a reviewer checks it (stops if it needs work)");
         break;
       }
       case "check": {
@@ -145,15 +182,23 @@ export function flowSentence(w: Pick<WorkflowInput, "steps" | "limits">, agents:
         parts.push("it asks for your OK");
         break;
       case "ship":
-        parts.push(s.shipMode === "auto" ? "it ships automatically if every check passed" : "it ships after you say yes");
+        parts.push(s.shipMode === "auto" ? "it puts it in your project by itself if every check passed" : "it puts it in your project after you say yes");
         break;
       case "tell":
-        parts.push(s.tellWhen === "problems" ? "it tells you if something's wrong" : "it tells you on Discord");
+        parts.push(s.tellWhen === "problems" ? "it sends you a message if something's wrong" : "it sends you a message");
         break;
     }
   }
   if (!parts.length) return `${when}, nothing happens yet. Add a step.`;
-  const text = `${when}, ${joinAnd(parts)}.`;
+  // The same thing twice in a row is said once: "a reviewer checks it twice (…)".
+  const said: { p: string; n: number }[] = [];
+  for (const p of parts) {
+    const prev = said.at(-1);
+    if (prev && prev.p === p) prev.n++;
+    else said.push({ p, n: 1 });
+  }
+  const phrases = said.map(({ p, n }) => (n === 1 ? p : p.replace(/( \(|$)/, ` ${n === 2 ? "twice" : `${n} times`}$1`)));
+  const text = `${when}, ${joinAnd(phrases)}.`;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
@@ -167,10 +212,10 @@ function joinAnd(xs: string[]) {
 export type TemplateKey = "build-review-ship" | "nightly-site-check" | "research-report" | "issues-to-prs";
 
 export const TEMPLATES: { key: TemplateKey; name: string; blurb: string }[] = [
-  { key: "build-review-ship", name: "Build → Review → Ship", blurb: "Research an idea, build it, get it reviewed and tested, then ship it after you say yes." },
-  { key: "nightly-site-check", name: "Nightly site check", blurb: "Every night it looks at your site in a real browser. If something's wrong, you get a message and a GitHub issue." },
-  { key: "research-report", name: "Research report", blurb: "Research a topic and write a short report as a pull request in a reports folder." },
-  { key: "issues-to-prs", name: "Ideas to pull requests", blurb: "When a GitHub issue gets the “agent” label, it gets built, a reviewer checks it, then it asks you." },
+  { key: "build-review-ship", name: "Build → Review → Put it in", blurb: "Look things up first, build it, have it checked and tested, then put it in after you say yes." },
+  { key: "nightly-site-check", name: "Nightly site check", blurb: "Every night it opens your site in a real browser and tells you if something's broken." },
+  { key: "research-report", name: "Research report", blurb: "Look a topic up and write you a short report, saved in your project." },
+  { key: "issues-to-prs", name: "Ideas to pull requests", blurb: "For people who use GitHub: when an idea there gets the “agent” label, it gets built, checked, then it asks you." },
 ];
 
 export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: string): WorkflowInput {
@@ -178,7 +223,7 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
   const start = (trigger: StartTrigger, more: Partial<WfStep> = {}): WfStep => ({ id: newId(), type: "start", trigger, task: "", ...more });
   const build = (): WfStep => ({
     id: newId(), type: "agent", agentId: null, freedom: "auto", careful: false, model: "sonnet", maxMinutes: 45,
-    prompt: "Build what the task asks for. Keep the change focused, test that it really works (run the tests, or open the page in a browser), and commit.",
+    prompt: "Build what the task asks for. Keep the change focused, check that it really works (open it in a browser, or run its checks), and save your work.",
   });
   const review = (to: string): WfStep => ({ id: newId(), type: "review", prompt: "", maxMinutes: 15, model: "opus", onFail: to });
   const limits = { ...DEFAULT_LIMITS };
@@ -195,7 +240,7 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
           b,
           review(b.id),
           { id: newId(), type: "check", checks: ["tests"], pagePath: "/", onFail: b.id },
-          { id: newId(), type: "ask", question: "It's built, reviewed and tested. Ship it?" },
+          { id: newId(), type: "ask", question: "It's built, reviewed and tested. Put it in your project?" },
           { id: newId(), type: "ship", shipMode: "ask" },
           { id: newId(), type: "tell", tellWhen: "always", openIssue: false },
         ],
@@ -240,6 +285,44 @@ export function templateWorkflow(key: TemplateKey, agents: AgentRef[], project: 
   }
 }
 
+// The steps a new workflow gets when Nic only says what he wants to make (the start screen):
+// Build (Careful mode) → Review → Ship, and Ship asks him first.
+export function defaultWorkflow(goal: string, project: string): WorkflowInput {
+  const b: WfStep = {
+    id: newId(), type: "agent", agentId: null, freedom: "auto", careful: true, model: "sonnet", maxMinutes: 60,
+    prompt: "Build what the task asks for. Keep the change focused, check that it really works (open it in a browser, or run its checks), and save your work.",
+  };
+  return {
+    name: nameFromGoal(goal),
+    project,
+    limits: { ...DEFAULT_LIMITS },
+    steps: [
+      { id: newId(), type: "start", trigger: "manual", task: goal.trim() },
+      b,
+      { id: newId(), type: "review", prompt: "", maxMinutes: 15, model: "opus", onFail: b.id },
+      { id: newId(), type: "ship", shipMode: "ask" },
+    ],
+  };
+}
+
+// A short workflow name from the goal: "Make an arcade website with 4 games" → "Arcade website with 4 games".
+export function nameFromGoal(goal: string): string {
+  const line = goal.trim().split("\n").find((l) => l.replace(/[#*>\-\s]/g, "")) ?? "";
+  const words = line
+    .replace(/[#*_`>]/g, " ")
+    .replace(/^\s*(what to make|the goal|goal)\s*:\s*(an?\s+|the\s+)?/i, "") // the prompt coach's "What to make: …"
+    .replace(/^\s*(please\s+)?(i want( you)? to\s+|can you\s+)?(make|build|create|write|add|design|code)\s+(me\s+)?(an?|the|some|my)?\s*/i, "")
+    .split(/[.!?]\s|\s+(?:that|which|who|so|where)\s/i)[0]
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 5);
+  // Don't end on a little joining word: "Snake game with" → "Snake game".
+  while (words.length > 1 && /^(a|an|the|and|or|with|for|to|of|in|on|at|by|from|into|that|which|so|it|my|its|your)$/i.test(words[words.length - 1].replace(/[.,:;!?]+$/, ""))) words.pop();
+  const name = words.join(" ").replace(/[.,:;!?]+$/, "");
+  if (!name) return "New workflow";
+  return (name.charAt(0).toUpperCase() + name.slice(1)).slice(0, 60);
+}
+
 // ---------- cleaning up anything into a valid workflow ----------
 
 const TYPES: StepType[] = ["start", "agent", "research", "review", "check", "ask", "ship", "tell"];
@@ -273,7 +356,9 @@ export function cleanSteps(raw: unknown, agentIds: number[]): WfStep[] {
         s.scheduleTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(r.scheduleTime)) ? String(r.scheduleTime) : "02:00";
       }
       if (s.trigger === "issue_label") s.label = text("label", 50).trim() || "agent";
-      s.task = text("task", 8000);
+      s.task = text("task", GOAL_MAX);
+      const brief = cleanBriefRef(r.brief);
+      if (brief) s.brief = brief;
     }
     if (type === "agent" || type === "research" || type === "review") {
       s.prompt = text("prompt");
@@ -330,6 +415,7 @@ export function workflowProblems(w: WorkflowInput, agents: AgentRef[], projects:
   if (!w.name.trim()) p.push("Give the workflow a name.");
   if (!projects.includes(w.project)) p.push("Pick a project.");
   if (w.steps.length < 2) p.push("Add at least one step after Start.");
+  if ((w.steps[0]?.task ?? "").length > GOAL_MAX) p.push(`The goal is too long. Keep it under ${GOAL_MAX.toLocaleString("en-US")} characters.`);
   for (const s of w.steps) {
     if (s.type === "agent" && s.agentId != null && !agents.some((a) => a.id === s.agentId)) p.push("One step uses an agent that no longer exists. Pick another.");
     if (s.type === "agent" && s.agentId == null && !(s.prompt ?? "").trim()) p.push("A Build or Look step needs its instructions.");
@@ -342,4 +428,10 @@ export function workflowProblems(w: WorkflowInput, agents: AgentRef[], projects:
 export function stepIconOf(s: WfStep): string {
   if (s.type === "agent" && s.agentId == null && (s.freedom ?? (s.mode === "look" ? "look" : "auto")) === "look") return "eye";
   return STEP_INFO[s.type].icon;
+}
+
+// Pressing OK here puts the changes into the real project (a Ship step, or an Ask right before one): it asks first.
+export function shipsOnOk(wr: { waiting: { kind: string } | null; steps: { type: string }[]; current: number; test: boolean }): boolean {
+  if (wr.test || !wr.waiting) return false;
+  return wr.waiting.kind === "ship" || (wr.waiting.kind === "ask" && wr.steps[wr.current + 1]?.type === "ship");
 }

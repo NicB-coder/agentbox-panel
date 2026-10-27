@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { UpdateStatus } from "@/lib/update";
-import { InfoTip, post } from "./bits";
+import { Confirm, InfoTip, post } from "./bits";
 import { btn } from "./ui";
 
 // Update agentbox: one button, a clear progress view, and a plain success or failure message.
@@ -10,6 +10,7 @@ export default function UpdateBox() {
   const [away, setAway] = useState(false); // the panel is restarting
   const [err, setErr] = useState("");
   const [log, setLog] = useState<string | null>(null);
+  const [ask, setAsk] = useState(false);
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/update", { cache: "no-store" });
@@ -69,9 +70,21 @@ export default function UpdateBox() {
         </p>
       )}
       <div className="mt-4 flex flex-wrap gap-3">
-        <button className={btn.primary} disabled={running} onClick={() => start()}>
+        <button className={btn.primary} disabled={running} onClick={() => setAsk(true)}>
           {running ? "Updating…" : "Update agentbox"}
         </button>
+        <Confirm
+          open={ask}
+          title="Update agentbox now?"
+          text="It gets the newest version and restarts the panel, which takes a few minutes. This page reconnects by itself, and if the new version doesn't start, the old one comes back on its own."
+          yes="Update it"
+          no="Not now"
+          onYes={() => {
+            setAsk(false);
+            start();
+          }}
+          onClose={() => setAsk(false)}
+        />
         {s && !running && s.state !== "uptodate" && (
           <button
             className={btn.link}

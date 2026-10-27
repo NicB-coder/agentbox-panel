@@ -8,7 +8,7 @@ import { DEFAULT_JOB, freedomOf, modeFor } from "@/lib/job";
 import { AgentIcon, COLOR_CHOICES, ICON_CHOICES, ICON_NAMES, Icon, btn } from "./ui";
 import { CarefulPicker, FreedomPicker, MinutesSlider, ModelPicker, NotifyPicker, WhenPicker } from "./controls";
 import ProjectSelect from "./ProjectSelect";
-import { ErrorBox, InfoTip, Label, Switch } from "./bits";
+import { Confirm, ErrorBox, InfoTip, Label, Switch } from "./bits";
 import { useHelperContext } from "./helper/helperStore";
 
 const PLACEHOLDER = `For example: Every night, open my portfolio site in a real browser at laptop and phone width. Click every link and check every page loads, images show up and nothing overlaps. A good result is a short list of real problems with which page they're on, or "all good". Never change any code, never fill in forms.`;
@@ -26,10 +26,14 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
   const freedom = freedomOf(a);
   const setFreedom = (f: Freedom, ask: boolean) => setA((x) => ({ ...x, ...modeFor(f, ask), job: { ...(x.job ?? DEFAULT_JOB), askEachStep: f !== "look" && ask } }));
   // The Helper can see what's typed so far (e.g. "Help me write what it should do").
-  useHelperContext({
-    agentId: id ?? undefined,
-    editing: `${id ? "this agent's settings" : "a new agent"}, not saved yet. Name: "${a.name}". What it should do so far: "${a.prompt.slice(0, 1200)}". ${agentSentence(a)}`,
-  });
+  useHelperContext(
+    {
+      agentId: id ?? undefined,
+      editing: `${id ? "this agent's settings" : "a new agent"}, not saved yet. Name: "${a.name}". What it should do so far: "${a.prompt.slice(0, 1200)}". ${agentSentence(a)}`,
+      fill: 'the "What should this agent do?" box',
+    },
+    (t) => setA((x) => ({ ...x, prompt: t })),
+  );
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -53,8 +57,10 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
     router.refresh();
   }
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
   async function remove() {
-    if (!id || !confirm(`Delete ${initial.name}? Its history goes too. This can't be undone.`)) return;
+    setConfirmDelete(false);
+    if (!id) return;
     const r = await fetch(`/api/agents/${id}`, { method: "DELETE" });
     if (r.ok) {
       router.push("/");
@@ -77,7 +83,7 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
         <section className="panel flex flex-col gap-6 p-6 sm:p-8">
           <label className="flex flex-col gap-2">
             <Label tip="What you'll call it, like Arcade site. Shown on its tile.">Name</Label>
-            <input value={a.name} onChange={(e) => set("name", e.target.value)} maxLength={40} placeholder="Site Checker" className={`${field} min-h-11`} />
+            <input aria-label="Name" value={a.name} onChange={(e) => set("name", e.target.value)} maxLength={40} placeholder="Site Checker" className={`${field} min-h-11`} />
           </label>
           <fieldset>
             <Label as="legend" tip="Its color on the tile, so you can spot it quickly.">Color</Label>
@@ -126,19 +132,19 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
 
         {/* Settings */}
         <section className="panel flex flex-col gap-8 p-6 sm:p-8">
-          <ProjectSelect value={a.project} onChange={(p) => set("project", p)} projects={projects} optional={job.kind === "research"} tip="The code this job works on. It always works in its own copy, never straight in main." />
+          <ProjectSelect value={a.project} onChange={(p) => set("project", p)} projects={projects} optional={job.kind === "research"} tip="Which app, game or site it works on. It always works on its own copy, never straight in your real project." />
           <WhenPicker value={{ scheduleKind: a.scheduleKind, scheduleDays: a.scheduleDays, scheduleTime: a.scheduleTime }} onChange={(w) => setA((x) => ({ ...x, ...w }))} nowLabel="When I start it" />
           <FreedomPicker value={freedom} onChange={(f) => setFreedom(f, job.askEachStep)} />
           <CarefulPicker value={job.careful} onChange={(c) => setJob({ careful: c })} />
           <MinutesSlider value={a.maxMinutes} onChange={(v) => set("maxMinutes", v)} />
           <ModelPicker value={a.model} onChange={(v) => set("model", v)} />
           <NotifyPicker value={a.notify} onChange={(v) => set("notify", v)} />
-          {freedom !== "look" && <Switch label="Ask me each step" tip="It stops before every command or change and waits for your Allow or Deny." checked={job.askEachStep} onChange={(v) => setFreedom(freedom, v)} />}
-          <Switch label="On" tip="Turn it off to keep it but stop it from running, even on its schedule." checked={a.enabled} onChange={(v) => set("enabled", v)} />
+          {freedom !== "look" && <Switch label="Ask me each step" tip="Even stricter than Check with me first: it stops before every single change and waits for you to press Allow or Deny." checked={job.askEachStep} onChange={(v) => setFreedom(freedom, v)} />}
+          <Switch label={a.enabled ? "On (it can run)" : "Off (it won't run)"} tip="Off keeps the agent but stops it from running at all: no schedule, and Run now and follow-ups won't start it either. Leave it On unless you want it to rest." checked={a.enabled} onChange={(v) => set("enabled", v)} />
         </section>
 
-        <div className="sticky bottom-[calc(56px+env(safe-area-inset-bottom))] -mx-4 border-t border-line bg-white/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
-          <p className="mb-4 text-[16px] font-medium leading-relaxed" aria-live="polite">
+        <div data-helper-avoid="" className="sticky bottom-[calc(56px+env(safe-area-inset-bottom))] -mx-4 border-t border-line bg-white/95 px-4 py-4 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+          <p className="mb-4 text-[16px] font-medium leading-relaxed max-sm:mb-3 max-sm:line-clamp-1 max-sm:text-[14px]" aria-live="polite" title={agentSentence(a)}>
             {agentSentence(a)}
           </p>
           {error && (
@@ -154,10 +160,11 @@ export default function AgentEditor({ id, initial, projects }: { id: number | nu
               Cancel
             </Link>
             {id && (
-              <button type="button" onClick={remove} className="ml-auto min-h-11 px-2 text-[15px] font-semibold text-[#A11B12] underline">
+              <button type="button" onClick={() => setConfirmDelete(true)} className="ml-auto min-h-11 px-2 text-[15px] font-semibold text-[#A11B12] underline">
                 Delete agent
               </button>
             )}
+            <Confirm open={confirmDelete} title={`Delete ${initial.name}?`} text="Its history goes too. A change it finished that's waiting for you stays on GitHub but leaves your Inbox. This can't be undone." yes="Delete it" danger onYes={remove} onClose={() => setConfirmDelete(false)} />
           </div>
         </div>
       </div>

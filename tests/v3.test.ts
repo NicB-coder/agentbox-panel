@@ -18,6 +18,7 @@ describe("job names", () => {
     assert.equal(job.jobName("Make an arcade website with 4 games"), "Arcade website");
     assert.equal(job.jobName("Fix the helper replies"), "Helper replies fixes");
     assert.match(job.jobName("What are the best free hosts for a portfolio?", "research"), /research/i);
+    assert.equal(job.jobName("Add a short comment at the top of index.html"), "Short comment");
     assert.equal(job.jobName(""), "New task");
   });
 });
@@ -51,7 +52,7 @@ describe("the Start a task panel's input", () => {
 describe("Careful mode", () => {
   test("the Inbox line", () => {
     const base = { careful: true, stage: "final" as const, round: 1, fixes: 2, polished: true, workSession: null };
-    assert.equal(carefulLine({ ...base, reviews: [{ kind: "final", verdict: "passed", text: "", at: 0, model: "opus" }] }), "Reviewed ✓ · 2 fixes made · optimized");
+    assert.equal(carefulLine({ ...base, reviews: [{ kind: "final", verdict: "passed", text: "", at: 0, model: "opus" }] }), "Reviewed ✓ · 2 fixes made · polished");
     assert.equal(carefulLine({ ...base, reviews: [] }), null);
     assert.equal(carefulLine(undefined), null);
   });

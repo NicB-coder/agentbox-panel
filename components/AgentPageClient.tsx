@@ -3,11 +3,12 @@ import Link from "next/link";
 import { useState } from "react";
 import type { AgentPageState } from "@/lib/views";
 import type { Agent, Approval, PillStatus, Run, Step } from "@/lib/types";
-import { ago, clockOf, duration, agentSentence, plainText } from "@/lib/words";
+import { ago, clockOf, duration, agentSentence, plainSummary, plainText, planText, userStop } from "@/lib/words";
 import { FREEDOM_WORDS, freedomOf } from "@/lib/job";
 import { AgentIcon, StatusPill, btn } from "./ui";
 import { usePoll } from "./usePoll";
-import { Confirm, ErrorBox } from "./bits";
+import { Confirm, ErrorBox, post as call } from "./bits";
+import { TextViewer } from "./BriefPicker";
 import { openTaskPanel } from "./TaskPanel";
 
 async function post(url: string, body: unknown = {}) {
@@ -22,6 +23,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [archiveAsk, setArchiveAsk] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const { view, schedule, runs, heartbeat } = data;
   const a = view.agent;
   const isHeartbeat = a.kind === "heartbeat";
@@ -69,18 +71,18 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
                   {a.paused ? "Resume" : "Pause"}
                 </button>
               </>
-            ) : (
-              <button className={btn.primary} disabled={working || !!busy} onClick={() => openFollowUp(a)}>
+            ) : working ? null : (
+              <button className={btn.primary} disabled={!!busy} onClick={() => openFollowUp(a)}>
                 Add a follow-up
               </button>
             )}
             {working && (
-              <button className={btn.danger} disabled={!!busy} onClick={() => act("stop", `/api/agents/${id}/stop`)}>
+              <button className={btn.danger} disabled={!!busy} onClick={() => setStopping(true)}>
                 {busy === "stop" ? "Stopping…" : "Stop"}
               </button>
             )}
             <Link href={`/agents/${id}/edit`} className={btn.secondary}>
-              Settings
+              Change this agent
             </Link>
             {!working && (
               <button className={btn.secondary} disabled={!!busy} onClick={() => (a.archived ? act("archive", `/api/agents/${id}/archive`, { archived: false }) : setArchiveAsk(true))}>
@@ -102,6 +104,19 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
         }}
         onClose={() => setArchiveAsk(false)}
       />
+      <Confirm
+        open={stopping}
+        title={`Stop ${a.name}?`}
+        text="It stops what it's doing now. Its work so far is kept, and you can pick up where it stopped later."
+        yes="Stop it"
+        no="Keep it going"
+        danger
+        onYes={() => {
+          setStopping(false);
+          act("stop", `/api/agents/${id}/stop`);
+        }}
+        onClose={() => setStopping(false)}
+      />
       {error && (
         <div className="mt-4">
           <ErrorBox message={error} onRetry={() => setError("")} where={`${a.name}'s page`} />
@@ -111,7 +126,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-6">
           {isHeartbeat ? <HeartbeatNow data={data} /> : <RightNow data={data} act={act} busy={busy} />}
-          {!isHeartbeat && <FollowUp agent={a} disabled={working} />}
+          {!isHeartbeat && !working && !(runs[0]?.status === "stopped" && data.canContinue[runs[0].id]) && <FollowUp agent={a} disabled={false} />}
           {isHeartbeat ? <HeartbeatHistory data={data} /> : <History runs={runs} reports={data.reports} />}
         </div>
         <aside className="flex flex-col gap-6">
@@ -126,6 +141,7 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
               The job
             </h2>
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-muted">{a.prompt}</p>
+            {a.job.brief && <JobBrief id={a.id} name={a.job.brief} />}
             {!isHeartbeat && <p className="mt-4 text-[15px] leading-relaxed">{agentSentence(a)}</p>}
             {isHeartbeat && <p className="mt-4 text-[14px] text-muted">This is the existing hourly job on this Mac. It's shown here to watch, not to change.</p>}
           </section>
@@ -133,6 +149,25 @@ export default function AgentPageClient({ initial, id }: { initial: AgentPageSta
       </div>
 
       <FullLog id={id} runs={runs} heartbeatLog={heartbeat ? [heartbeat.outLogTail, heartbeat.errLogTail] : null} />
+    </div>
+  );
+}
+
+// "Brief: CLAUDE.md · View": what the job was given to follow.
+function JobBrief({ id, name }: { id: number; name: string }) {
+  const [view, setView] = useState<null | { title: string; text: string | null }>(null);
+  async function open() {
+    setView({ title: name, text: null });
+    const j = await call<{ text: string }>(`/api/agents/${id}/brief`, {}, "GET").catch((e: Error) => ({ text: e.message }));
+    setView({ title: name, text: j.text });
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-2 text-[15px]">
+      <span className="font-semibold">Brief: {name}</span>
+      <button type="button" className={btn.link} onClick={open}>
+        View
+      </button>
+      <TextViewer view={view} onClose={() => setView(null)} />
     </div>
   );
 }
@@ -190,6 +225,21 @@ export function ProgressBar({ p, color = "#2F4FD8" }: { p: { step: number; of: n
 
 type Act = (l: string, u: string, b?: unknown) => Promise<void>;
 
+// Writing (or rewriting) its plan: nothing is being built yet.
+const planning = (run: Run) => run.status === "working" && (run.extra.proc?.phase ?? run.extra.flow?.stage) === "plan";
+
+// After "Change it" on a plan, the job is what Nic changed it to: say so right under the task.
+function Changed({ run }: { run: Run }) {
+  const c = run.extra.planChanges;
+  if (!c?.length) return null;
+  return (
+    <p className="mt-2 rounded-[14px] bg-[#EEF1FD] px-4 py-2 text-[15px] text-[#2A3F9E]">
+      <span className="font-semibold">You changed it: </span>
+      {c.at(-1)}
+    </p>
+  );
+}
+
 function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: string }) {
   const { view, runs } = data;
   const run = view.activeRun;
@@ -205,9 +255,16 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
       {run ? (
         <>
           <p className="clamp-3 mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
+          <Changed run={run} />
           {run.status === "queued" ? (
             <p className="mt-2 rounded-[14px] bg-soft px-4 py-3 text-[15px] font-medium">
-              {run.activity ?? "Waiting"}. {run.extra.resume ? "It carries on by itself, right where it left off." : "It starts by itself."}
+              {run.extra.resume?.why === "usage"
+                ? run.extra.resume.until < Date.now()
+                  ? "Claude's usage is back: trying again now…"
+                  : `Claude's usage ran out for now, so it's waiting. It carries on by itself at ${clockOf(run.extra.resume.until)}, right where it left off. Nothing for you to do. (Claude's own limit can kick in a little before the meter at the top shows 100%.)`
+                : run.extra.resume
+                  ? `${run.activity ?? "Waiting"}. It carries on by itself, right where it left off.`
+                  : `${run.activity ?? "Waiting"}. It starts by itself.`}
             </p>
           ) : (
             <p className="mt-1 text-[15px] text-muted">
@@ -215,12 +272,17 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
               {run.extra.flow?.careful ? " · Careful" : ""}
             </p>
           )}
-          {view.progress && run.status !== "waiting" && (
+          {planning(run) && (
+            <p className="mt-3 rounded-[14px] bg-[#EEF1FD] px-4 py-3 text-[15px] font-medium text-[#2A3F9E]">
+              It's writing its plan. It will wait for your OK before it changes anything.
+            </p>
+          )}
+          {view.progress && run.status !== "waiting" && !planning(run) && (
             <div className="mt-4">
               <ProgressBar p={view.progress} color={view.agent.color} />
             </div>
           )}
-          <Steps run={run} />
+          {!(run.status === "waiting" && run.plan) && !planning(run) && <Steps run={run} />}
           {run.extra.flow?.big && <BigJob run={run} used={data.bigUsed} held={data.held} act={act} busy={busy} />}
           {pending && pending.kind === "tool" && <AskBox approval={pending} act={act} busy={busy} />}
           {run.plan && run.status === "waiting" && !pending && <PlanBox run={run} act={act} busy={busy} />}
@@ -232,7 +294,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
           <p className="mt-3 text-[20px] font-semibold leading-snug">{last.task}</p>
           <div className="mt-4 rounded-[18px] bg-[#FDF0DC] p-5 text-[#8A4600]">
             <p className="text-[16px] font-semibold">{last.extra.overBudget ? "It used its usage budget." : `It ran out of time after ${duration(last.extra.activeMs ?? 0)} of work.`}</p>
-            <p className="mt-1 text-[15px]">Its work so far is kept. It carries on right where it stopped.</p>
+            <p className="mt-1 text-[15px]">Its work so far is kept. {data.canContinue[last.id] ? "Press the button below to give it more and it carries on right where it stopped." : "Press Try again to start it again."}</p>
             <div className="mt-4 flex flex-wrap gap-3">
               {data.canContinue[last.id] ? (
                 last.extra.overBudget ? (
@@ -278,7 +340,7 @@ function RightNow({ data, act, busy }: { data: AgentPageState; act: Act; busy: s
                   </div>
                 </div>
               ) : (
-                <ErrorBox compact message={last.stopReason ?? "It stopped before finishing."} onRetry={() => act("retry", `/api/runs/${last.id}/retry`)} retryLabel={data.canContinue[last.id] ? "Pick up where it stopped" : undefined} where={`${view.agent.name}: "${last.task}"`} />
+                <ErrorBox compact noFix={userStop(last.stopReason)} message={last.stopReason ?? "It stopped before finishing."} onRetry={() => act("retry", `/api/runs/${last.id}/retry`)} retryLabel={data.canContinue[last.id] ? "Pick up where it stopped" : undefined} where={`${view.agent.name}: "${last.task}"`} />
               )}
             </div>
           )}
@@ -299,12 +361,13 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   return (
     <>
       <p className="clamp-3 mt-3 text-[20px] font-semibold leading-snug">{run.task}</p>
-      <p className="mt-1 text-[15px] text-muted">{run.result ? plainText(run.result) : "It finished and opened a pull request for you."}</p>
+      <Changed run={run} />
+      <p className="mt-1 text-[15px] text-muted">{run.result ? plainSummary(run.result) : "It finished. It's ready for you to look at."}</p>
       {careful && <p className="mt-3 text-[15px] font-semibold text-[#1E6B34]">{careful}</p>}
-      {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A reviewer is reading it now…</p>}
+      {!careful && r?.status === "running" && <p className="mt-3 text-[15px] font-medium text-[#2A3F9E]">A second AI is double-checking this change. Its notes appear here in a few minutes.</p>}
       {!careful && r?.status === "done" && (
         <div className="mt-3">
-          <p className={`text-[15px] font-semibold ${r.verdict === "passed" ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{r.verdict === "passed" ? "Reviewed ✓ Nothing to fix." : "The reviewer found things to fix:"}</p>
+          <p className={`text-[15px] font-semibold ${r.verdict === "passed" ? "text-[#1E6B34]" : "text-[#8A4600]"}`}>{r.verdict === "passed" ? "Reviewed ✓ No problems found." : "The reviewer found things to fix:"}</p>
           {r.verdict !== "passed" && r.text && <div className="mt-2 max-h-72 overflow-auto rounded-[14px] bg-soft p-4 text-[14px] leading-relaxed whitespace-pre-wrap">{plainText(r.text)}</div>}
         </div>
       )}
@@ -320,7 +383,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
           </button>
         ) : (
           <button className={btn.secondary} disabled={!!busy} onClick={() => setConfirm(true)}>
-            Merge it
+            Put it in my project
           </button>
         )}
         {r?.verdict === "needs work" && !careful && (
@@ -329,7 +392,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
           </button>
         )}
         <button className={btn.secondary} disabled={!!busy} onClick={() => setNoting(!noting)} aria-expanded={noting}>
-          Send back with a note
+          Ask it to change something
         </button>
       </div>
       {noting && (
@@ -351,7 +414,7 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
           </div>
         </form>
       )}
-      <p className="mt-3 text-[14px] text-muted">When it's merged, this turns to Done by itself.</p>
+      <p className="mt-3 text-[14px] text-muted">{r?.status === "running" ? "You can put it in now, or wait a few minutes for the second AI's notes. " : ""}Once it's in your project, this turns to Done by itself.</p>
       <Confirm
         open={install}
         title="Install it?"
@@ -365,9 +428,9 @@ function ReadyBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
       />
       <Confirm
         open={confirm}
-        title="Merge this pull request?"
-        text="Its changes go into main, the real version of your project. You can't undo this from here."
-        yes="Merge it"
+        title="Put these changes into your project?"
+        text="This adds the changes to the real version of your project (this is called merging, or shipping). Changed your mind later? It's easy to undo: start a task that says what to take out, and an agent does it."
+        yes="Put it in"
         onYes={() => {
           setConfirm(false);
           act("merge", `/api/runs/${run.id}/merge`);
@@ -384,7 +447,7 @@ function carefulText(run: Run): string | null {
   const last = f.reviews[f.reviews.length - 1];
   const bits = [last.verdict === "passed" ? "Reviewed ✓" : f.fixedSinceReview ? "Reviewed and corrected ✓" : "Reviewed: a few things still need a look"];
   if (f.fixes) bits.push(`${f.fixes} ${f.fixes === 1 ? "fix" : "fixes"} made`);
-  if (f.polished) bits.push("optimized");
+  if (f.polished) bits.push("polished");
   return bits.join(" · ");
 }
 
@@ -420,7 +483,7 @@ function BigJob({ run, used, held, act, busy }: { run: Run; used: number | null;
       <div>
         <p className="flex flex-wrap items-center justify-between gap-2 text-[15px]">
           <span className="font-semibold">Usage</span>
-          <span className="text-muted">{used === null ? "checking…" : `about ${used}% of your week, budget ${budget}%`}</span>
+          <span className="text-muted">{used === null ? "checking…" : `about ${used}% of this week's usage · budget ${budget}%`}</span>
         </p>
         <span className="mt-2 block h-2 overflow-hidden rounded-full bg-[#E6E8EC]" aria-hidden="true">
           <span className="block h-full rounded-full bg-[#7048C8]" style={{ width: `${Math.min(100, ((used ?? 0) / Math.max(1, budget)) * 100)}%` }} />
@@ -475,7 +538,7 @@ function PlanBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
   return (
     <div className="mt-6 rounded-[18px] bg-[#FDF0DC] p-5">
       <p className="text-[14px] font-semibold text-[#8A4600]">Here's its plan. Is this OK?</p>
-      <div className="mt-3 max-h-[28rem] overflow-auto rounded-[14px] bg-white p-4 text-[15px] leading-relaxed whitespace-pre-wrap">{run.plan}</div>
+      <div className="mt-3 max-h-[28rem] overflow-auto rounded-[14px] bg-white p-4 text-[15px] leading-relaxed whitespace-pre-wrap">{planText(run.plan ?? "")}</div>
       {!changing ? (
         <div className="mt-4 flex flex-wrap gap-3">
           <button className={btn.primary} disabled={!!busy} onClick={() => act("approve", `/api/runs/${run.id}/plan`, { approve: true })}>
@@ -495,7 +558,7 @@ function PlanBox({ run, act, busy }: { run: Run; act: Act; busy: string }) {
         >
           <label className="flex flex-col gap-2">
             <span className="text-[15px] font-semibold">What should it change?</span>
-            <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={3} className="rounded-[14px] border border-[#C9CDD4] bg-white p-3 text-[15px]" />
+            <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={3} placeholder="For example: Make it smaller, just one game." className="rounded-[14px] border border-[#C9CDD4] bg-white p-3 text-[15px]" />
           </label>
           <div className="flex gap-3">
             <button type="submit" className={btn.primary} disabled={!!busy || !msg.trim()}>
@@ -519,7 +582,7 @@ export function openFollowUp(a: Agent, task?: string) {
 }
 
 // Follow-ups continue the same job; they open the shared Start a task panel.
-function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
+function FollowUp({ agent, disabled, waiting }: { agent: Agent; disabled: boolean; waiting?: boolean }) {
   const [task, setTask] = useState("");
   return (
     <section className="panel p-6 sm:p-8" aria-labelledby="give-h">
@@ -527,7 +590,7 @@ function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
         Add a follow-up
       </h2>
       <p className="mt-1 text-[15px] text-muted">
-        {agent.job.kind === "research" ? "Ask more about the same topic. It builds on the earlier report." : "It continues this job: same project, same branch and pull request if one is open."}
+        {agent.job.kind === "research" ? "Ask more about the same topic. It builds on the earlier report." : "It carries on with this same job, so it remembers what it did and keeps working on the same change."}
       </p>
       <form
         className="mt-4 flex flex-col gap-4"
@@ -549,9 +612,9 @@ function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
         </label>
         <div className="flex flex-wrap items-center gap-3">
           <button type="submit" className={btn.primary} disabled={disabled}>
-            Next
+            Check and start
           </button>
-          {disabled && <span className="text-[14px] text-muted">It's working right now. You can add a follow-up when it's done.</span>}
+          {disabled && <span className="text-[14px] text-muted">{waiting ? "It's waiting for your answer above. You can add a follow-up when it's done." : "It's working right now. You can add a follow-up when it's done."}</span>}
         </div>
       </form>
     </section>
@@ -561,13 +624,16 @@ function FollowUp({ agent, disabled }: { agent: Agent; disabled: boolean }) {
 const RESULT: Record<Run["status"], { status: PillStatus; label: string }> = {
   queued: { status: "queued", label: "Waiting" },
   working: { status: "working", label: "Working" },
-  waiting: { status: "needs", label: "Needs you" },
-  review: { status: "needs", label: "Needs you" },
+  waiting: { status: "needs", label: "Needs your OK" },
+  review: { status: "needs", label: "Ready to look at" },
   done: { status: "done", label: "Done" },
   stopped: { status: "stopped", label: "Stopped" },
 };
 
 function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["reports"] }) {
+  const [all, setAll] = useState(false);
+  const SHOW = 8;
+  const shown = all ? runs : runs.slice(0, SHOW);
   return (
     <section className="panel p-6 sm:p-8" aria-labelledby="hist-h">
       <h2 id="hist-h" className="text-[18px] font-semibold">
@@ -577,17 +643,22 @@ function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["repo
         <p className="mt-3 text-[15px] text-muted">No runs yet.</p>
       ) : (
         <ul className="mt-2 divide-y divide-line">
-          {runs.map((r) => {
+          {shown.map((r, i) => {
             const res = RESULT[r.status];
             return (
               <li key={r.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-semibold leading-snug">{r.task}</p>
+                  <p className="clamp-2 text-[15px] font-semibold leading-snug" title={r.task.slice(0, 600)}>{plainText(r.task.split("\n")[0])}</p>
                   <p className="mt-0.5 text-[14px] text-muted">
                     {new Date(r.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, {clockOf(r.startedAt)}
                     {r.endedAt ? ` · took ${duration(r.endedAt - r.startedAt)}` : ""}
                     {r.status === "stopped" && r.stopReason ? ` · ${r.stopReason}` : ""}
                   </p>
+                  {r.status === "stopped" && (
+                    <p className="mt-0.5 text-[14px] text-muted">
+                      {i === 0 ? "Its choices (like Pick up where it stopped) are in the Right now box above." : `Later runs came after it, so there's nothing to do.${/ran out of time/i.test(r.stopReason ?? "") ? " If this keeps happening, give it more time in Change this agent." : ""}`}
+                    </p>
+                  )}
                   {reports.find((x) => x.runId === r.id) ? (
                     <Link href={`/reports/${reports.find((x) => x.runId === r.id)!.id}`} className="inline-flex min-h-11 items-center text-[14px] font-semibold text-[#2A3F9E] underline">
                       Read the report: {reports.find((x) => x.runId === r.id)!.title}
@@ -608,6 +679,11 @@ function History({ runs, reports }: { runs: Run[]; reports: AgentPageState["repo
             );
           })}
         </ul>
+      )}
+      {runs.length > SHOW && (
+        <button type="button" className={btn.link + " mt-2"} aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show older runs (${runs.length - SHOW} more)`}
+        </button>
       )}
     </section>
   );
@@ -642,6 +718,11 @@ function HeartbeatNow({ data }: { data: AgentPageState }) {
       <p className="mt-3 text-[20px] font-semibold leading-snug">
         {hb.onTimeToday} of {hb.expectedToday} check-ins on time today
       </p>
+      {hb.todayRuns.some((r) => r.outOfUsage) && (
+        <p className="mt-1 text-[15px] font-medium text-[#8A4600]">
+          {hb.todayRuns.filter((r) => r.outOfUsage).length} of them came in while Claude was out of usage, so they couldn't say more than that. That's not a problem with this Mac.
+        </p>
+      )}
       <p className="mt-1 text-[15px] text-muted">
         {hb.running ? "Checking in right now." : last ? `Last check-in ${ago(last.at)} at ${clockOf(last.at)}.` : "No check-ins yet."}
         {last?.reply ? ` It said: “${last.reply}”` : ""}
@@ -665,10 +746,10 @@ function HeartbeatHistory({ data }: { data: AgentPageState }) {
               <p className="text-[15px] font-semibold">
                 {new Date(r.at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}, {clockOf(r.at)}
               </p>
-              {r.reply && <p className="text-[14px] text-muted">{r.reply}</p>}
+              {r.reply && <p className="text-[14px] text-muted">{r.outOfUsage ? "Claude was out of usage, so it could only say that." : r.reply}</p>}
             </div>
             <div>
-              <StatusPill status={r.onTime ? "done" : "needs"} label={r.onTime ? "On time" : "Late"} />
+              <StatusPill status={r.outOfUsage ? "needs" : r.onTime ? "done" : "needs"} label={r.outOfUsage ? "Out of usage" : r.onTime ? "On time" : "Late"} />
             </div>
           </li>
         ))}
@@ -725,7 +806,7 @@ function FullLog({ id, runs, heartbeatLog }: { id: number; runs: Run[]; heartbea
                 >
                   {runs.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {clockOf(r.startedAt)} · {r.task.slice(0, 60)}
+                      {new Date(r.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, {clockOf(r.startedAt)} · {r.task.slice(0, 60)}
                     </option>
                   ))}
                 </select>

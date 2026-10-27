@@ -1,4 +1,4 @@
-import { getRun } from "@/lib/db";
+import { dismissRun, getRun } from "@/lib/db";
 import { canContinue, continueRun, startRun } from "@/lib/runner";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       task: usual ? undefined : run.task, mode: run.mode, trigger: "manual",
       extra: run.extra.followUp ? { followUp: true, careful: run.extra.careful, model: run.extra.model, allowed: run.extra.allowed, maxMinutes: run.extra.maxMinutes } : undefined,
     });
+    if (run.extra.quiet) dismissRun(run.id); // its "finished without doing anything" item is answered
     return Response.json(fresh, { status: 201 });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 409 });

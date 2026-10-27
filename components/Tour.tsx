@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
 import { post } from "./bits";
+import { openTaskPanel } from "./TaskPanel";
 import { Icon, btn } from "./ui";
 
 const STEPS = [
@@ -11,18 +12,18 @@ const STEPS = [
   },
   {
     icon: "hammer",
-    title: "Every task gets its own agent",
-    text: "Press New task, say what you want, and press Start. It becomes an agent named after the job, with its own tile. Click a tile to see what it's doing right now or add a follow-up. Nothing goes into your main code until you say so.",
+    title: "Each job gets its own helper",
+    text: "Your work lives in a project (a folder for one app or game). Make one on the Projects page, or use one you have. Then press New task, say what you want, and press Start. It gets its own tile: click it to see what it's doing right now. Nothing changes in your real project until you say so.",
   },
   {
     icon: "flow",
     title: "Workflows chain steps together",
-    text: "A workflow passes work from one step to the next: research it, build it, review it, test it, then ask you. Start from a ready-made template, or just describe what should happen.",
+    text: "A workflow is a bigger job done in steps, one after another: build it, have it checked, then ask you. Say what you want to make and agentbox sets up the steps for you. One job, once? Use New task. The same careful steps every time? Use a workflow.",
   },
   {
     icon: "inbox",
     title: "The Inbox and the usage meter",
-    text: "Anything that needs you (an OK, a pull request to look at, something that went wrong) shows up in the Inbox. The meter at the top shows how much of your Claude usage is left and when it resets. Stuck? Tap the round chat bubble in the corner and ask the Helper.",
+    text: "The Inbox shows anything that needs you, like a finished change to look at. The meter at the top shows how much of your Claude usage (the AI that does the work) you've used. Pause everything stops all agents at once. Stuck? Tap the round chat bubble and ask the Helper.",
   },
 ];
 
@@ -69,9 +70,23 @@ export default function Tour({ done }: { done: boolean }) {
         </h2>
         <p className="text-[16px] leading-relaxed text-muted">{s.text}</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button type="button" className={btn.primary} onClick={() => (last ? end() : setI(i + 1))} autoFocus>
-            {last ? "Let's go" : "Next"}
+          <button
+            type="button"
+            className={btn.primary}
+            onClick={() => {
+              if (!last) return setI(i + 1);
+              end();
+              setTimeout(() => openTaskPanel({ simple: true }), 50);
+            }}
+            autoFocus
+          >
+            {last ? "Start my first task" : "Next"}
           </button>
+          {last && (
+            <button type="button" className={btn.secondary} onClick={end}>
+              Just look around
+            </button>
+          )}
           {i > 0 && (
             <button type="button" className={btn.secondary} onClick={() => setI(i - 1)}>
               Back

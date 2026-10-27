@@ -5,7 +5,8 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import type { HelperAction, HelperCard, HelperMessage } from "@/lib/helperTypes";
 import { Confirm, post } from "../bits";
 import { refreshHeader } from "../Header";
-import { openNewTask } from "../TaskPanel";
+import { openNewTask, openTaskPanel } from "../TaskPanel";
+import { fillHelperForm } from "./helperStore";
 import { AgentIcon, Icon, btn } from "../ui";
 
 // One message in the Helper chat: plain paragraphs and bullets, clickable chips,
@@ -28,7 +29,7 @@ export function streamingText(raw: string): { text: string; preparing: boolean }
     }
     text = text.replace(/```(agent-preview|workflow-preview)[\s\S]*?```/g, "");
   }
-  text = text.replace(/\[\[(button|task):[^\]]*\]\]/g, "");
+  text = text.replace(/\[\[(button|task|fill|coach|change):[^\]]*\]\]/g, "");
   const open = text.lastIndexOf("[[");
   if (open >= 0 && text.indexOf("]]", open) < 0) text = text.slice(0, open);
   return { text: text.replace(/\n{3,}/g, "\n\n"), preparing };
@@ -39,10 +40,20 @@ export function streamingText(raw: string): { text: string; preparing: boolean }
 const WORD_MS = 75;
 const nextWord = /\s*\S+/y;
 
-function useCalmReveal(full: string, animate: boolean): { text: string; caughtUp: boolean } {
-  const [pos, setPos] = useState(0);
-  const calm = animate && !(typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+// How much of each reply has been typed out on this page so far. Kept outside the component, so
+// closing and opening the chat, moving it into a pop-up or re-rendering never types a reply again.
+const typedSoFar = new Map<number, number>();
+
+// Only a reply that's being written right now types out. A saved reply (or one that finished while
+// the chat was closed) shows straight away as finished text. A reply that was already partly written
+// when it came on screen starts from what's there and only types the new words.
+export function useCalmReveal(id: number, full: string, writing: boolean): { text: string; caughtUp: boolean } {
+  const [pos, setPos] = useState(() => (writing ? Math.min(typedSoFar.get(id) ?? full.length, full.length) : Math.max(typedSoFar.get(id) ?? 0, full.length)));
+  const calm = !(typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   const behind = calm && pos < full.length;
+  useEffect(() => {
+    typedSoFar.set(id, calm ? pos : full.length);
+  }, [id, pos, calm, full.length]);
   useEffect(() => {
     if (!behind) return;
     const t = setInterval(() => {
@@ -154,13 +165,43 @@ export function RichText({ text, chips, onNavigate }: { text: string; chips?: Re
 
 // ---------- action buttons ----------
 
+// The Helper's suggested text for the goal box that's open: a preview with Use this.
+// Nothing in the form changes until Nic presses it.
+function FillCard({ a }: { a: HelperAction }) {
+  const [state, setState] = useState<"idle" | "done" | "gone">("idle");
+  return (
+    <div className="w-full max-w-[92%] overflow-hidden rounded-[20px] border border-[rgba(21,23,27,0.28)] bg-white">
+      <div className="flex flex-col gap-3 p-4">
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-muted">Suggested goal · preview</p>
+        <p className="whitespace-pre-wrap text-[14px] leading-snug">{a.task}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={btn.primary + " !min-h-11 !rounded-full !px-4 !text-[14px]"}
+            onClick={() => setState(fillHelperForm(a.task ?? "") ? "done" : "gone")}
+          >
+            {state === "done" ? "✓ Put in the goal box" : "Use this"}
+          </button>
+          {state === "gone" && <span className="text-[14px] text-[#A11B12]">That box isn't open any more. Open it again, then press Use this.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActionButton({ a, onNavigate }: { a: HelperAction; onNavigate: () => void }) {
   const router = useRouter();
   const [state, setState] = useState<"idle" | "busy" | "done">("idle");
   const [err, setErr] = useState("");
   const [confirm, setConfirm] = useState(false);
-  const nav = a.kind === "open" || a.kind === "test_run" || a.kind === "new_task";
+  const nav = a.kind === "open" || a.kind === "test_run" || a.kind === "new_task" || a.kind === "coach_goal" || a.kind === "idea_help" || a.kind === "change_workflow";
 
+  if (a.stale)
+    return (
+      <span className="inline-flex min-h-11 items-center rounded-full border border-dashed border-[#C9CDD4] px-4 text-[14px] text-muted">
+        {a.label} · no longer needed
+      </span>
+    );
   async function go() {
     setConfirm(false);
     setErr("");
@@ -174,8 +215,19 @@ function ActionButton({ a, onNavigate }: { a: HelperAction; onNavigate: () => vo
       onNavigate();
       return;
     }
+    if (a.kind === "change_workflow") {
+      router.push(`/workflows/${a.ref}?run=0&change=${encodeURIComponent(a.task ?? "")}`, { scroll: false });
+      onNavigate();
+      return;
+    }
+    if (a.kind === "coach_goal" || a.kind === "idea_help") {
+      openTaskPanel(a.kind === "coach_goal" ? { task: a.task ?? "", coach: true } : { ideas: true });
+      onNavigate();
+      return;
+    }
     if (a.kind === "new_task") {
       openNewTask({ task: a.task ?? "", agentId: Number(a.ref) });
+      onNavigate();
       return;
     }
     setState("busy");
@@ -317,16 +369,23 @@ function Card({ card, msgId, index, created, onChange, onNavigate }: { card: Hel
 
 // ---------- one message ----------
 
+const CUT_WORDS: Record<NonNullable<HelperMessage["meta"]["cutOff"]>, string> = {
+  restart: "Stopped partway: agentbox restarted while I was writing.",
+  time: "Stopped partway: it took too long.",
+  usage: "Stopped partway: Claude usage ran out.",
+  error: "Stopped partway: something went wrong.",
+};
+
 export function MessageView({
-  m, live, status, animate, onChange, onNavigate,
-}: { m: HelperMessage; live?: string; status?: string; animate?: boolean; onChange: () => void; onNavigate: () => void }) {
+  m, live, status, onChange, onNavigate, onContinue,
+}: { m: HelperMessage; live?: string; status?: string; onChange: () => void; onNavigate: () => void; onContinue?: (id: number) => void }) {
   const writing = m.status === "streaming";
   // What there is to show so far (unfinished cards and buttons hidden), typed out calmly.
   const sofar = m.role !== "helper" ? { text: "", preparing: false } : writing ? streamingText(live ?? m.text) : { text: m.text, preparing: false };
-  const reveal = useCalmReveal(sofar.text, !!animate);
+  const reveal = useCalmReveal(m.id, sofar.text, writing);
   if (m.role === "user") {
     return (
-      <li className="flex flex-col items-end gap-1">
+      <li data-role="user" className="flex flex-col items-end gap-1">
         <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15px] leading-snug text-white">{m.text}</div>
         {m.meta.context && <span className="pr-1 text-[12px] text-muted">on {m.meta.context}</span>}
       </li>
@@ -359,9 +418,17 @@ export function MessageView({
       ))}
       {!streaming && !!meta.actions?.length && (
         <div className="flex max-w-full flex-wrap gap-2">
-          {meta.actions.map((a, i) => (
-            <ActionButton key={i} a={a} onNavigate={onNavigate} />
-          ))}
+          {meta.actions.map((a, i) => (a.kind === "fill_goal" ? <FillCard key={i} a={a} /> : <ActionButton key={i} a={a} onNavigate={onNavigate} />))}
+        </div>
+      )}
+      {!streaming && meta.cutOff && (
+        <div className="flex flex-wrap items-center gap-2 pl-1">
+          {m.status !== "error" && <span className="text-[14px] font-medium text-[#8A4600]">{CUT_WORDS[meta.cutOff]}</span>}
+          {onContinue && meta.resume && (
+            <button type="button" className={btn.secondary + " !min-h-11 !rounded-full !px-4 !text-[14px]"} onClick={() => onContinue(m.id)}>
+              {m.status === "error" ? "Try again" : "Continue"}
+            </button>
+          )}
         </div>
       )}
       {!streaming && !!meta.tools?.length && <p className="pl-1 text-[12px] text-muted">Looked at: {meta.tools.map((t) => t.replace(/^(Reading|Looking at|Checking) /, "")).join(", ")}</p>}

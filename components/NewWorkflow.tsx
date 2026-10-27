@@ -1,43 +1,148 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { STEP_INFO, stepIconOf, TEMPLATES, templateWorkflow, type AgentRef, type TemplateKey } from "@/lib/wf";
-import { BackLink, ErrorBox, InfoTip, post } from "./bits";
-import ProjectSelect from "./ProjectSelect";
+import { useEffect, useMemo, useState } from "react";
+import type { BriefRef, WfLimits, WfStep } from "@/lib/types";
+import { STEP_INFO, TEMPLATES, defaultWorkflow, nameFromGoal, stepIconOf, stepTitle, templateWorkflow, type AgentRef, type TemplateKey } from "@/lib/wf";
+import { BackLink, ErrorBox, InfoTip, Label, post } from "./bits";
+import BriefPicker from "./BriefPicker";
+import { CoachBox, IdeaHelp } from "./Coach";
+import type { SuggestionKey } from "@/lib/coach";
+import StartTaskLink from "./StartTaskLink";
+import ProjectSelect, { defaultProjectOf, rememberProject } from "./ProjectSelect";
+import { useHelperContext } from "./helper/helperStore";
 import { Icon, btn } from "./ui";
 
-const EXAMPLE = "When I give it an idea, research it, build it, have it reviewed and checked against the research, then ship it.";
+// The start screen asks one thing: what Nic wants to make. The steps come from a sensible default
+// and only change if he opens "Change the steps".
+type Steps = { from: "default" } | { from: "template"; key: TemplateKey } | { from: "words"; name: string; steps: WfStep[]; limits: WfLimits };
 
 export default function NewWorkflow({ projects, agents }: { projects: string[]; agents: AgentRef[] }) {
   const router = useRouter();
-  const [text, setText] = useState("");
-  const [project, setProject] = useState(projects[0] ?? "");
-  const [busy, setBusy] = useState<string>("");
-  const [error, setError] = useState<{ msg: string; retry: () => void } | null>(null);
+  const [goal, setGoal] = useState("");
+  const [project, setProject] = useState(() => (typeof window === "undefined" ? projects.find((p) => p !== "agentbox-panel") ?? projects[0] ?? "" : defaultProjectOf(projects)));
+  const [brief, setBrief] = useState<BriefRef | null>(null);
+  const [choice, setChoice] = useState<Steps>({ from: "default" });
+  const [changing, setChanging] = useState(false);
+  const [words, setWords] = useState("");
+  const [autoGoal, setAutoGoal] = useState("");
+  const [idea, setIdea] = useState<{ goal: string; title: string } | null>(null); // a picked idea is named after its title // a goal a template filled in, not typed by Nic
+  const [busy, setBusy] = useState<"" | "make" | "words">("");
+  const [error, setError] = useState<{ msg: string; retry?: () => void } | null>(null);
+  const [coach, setCoach] = useState(false); // the prompt coach is open
+  const [coached, setCoached] = useState(false); // it already had its say, so Next goes straight on
+  const [ideas, setIdeas] = useState(false);
+  const [tweaks, setTweaks] = useState<{ moreTime?: boolean; smartest?: boolean }>({});
 
-  async function fromTemplate(key: TemplateKey) {
-    setBusy(key);
+  // Made once per choice (step ids are random), not on every key press.
+  const plan = useMemo(() => {
+    if (choice.from === "template") return templateWorkflow(choice.key, agents, "");
+    if (choice.from === "words") return { name: choice.name, project: "", steps: choice.steps, limits: choice.limits };
+    return defaultWorkflow("", "");
+  }, [choice, agents]);
+  // Settings the coach suggested and Nic accepted, applied to the build steps.
+  const planned = useMemo(() => {
+    if (!tweaks.moreTime && !tweaks.smartest) return plan;
+    const steps = plan.steps.map((s) => (s.type === "agent" ? { ...s, ...(tweaks.moreTime ? { maxMinutes: 120 } : {}), ...(tweaks.smartest ? { model: "opus" as const } : {}) } : s));
+    return { ...plan, steps, limits: tweaks.moreTime ? { ...plan.limits, maxMinutes: Math.max(plan.limits.maxMinutes, 180) } : plan.limits };
+  }, [plan, tweaks]);
+  // The Helper sees what's typed and can fill the goal box (only when Nic presses Use this).
+  useHelperContext(
+    {
+      editing: `the New workflow screen. "What do you want to make?" box says: "${goal.slice(0, 1200)}" · Project: ${project || "none picked"} · Brief: ${brief ? brief.name : "none attached"} · steps: ${planned.steps.map((s) => stepTitle(s, agents)).join(" → ")} (${choice.from === "words" ? `drafted by "Make these steps" from his words: "${words.slice(0, 300)}"` : choice.from === "template" ? "a ready-made set he picked" : "the recommended default"})${coach ? " · the prompt coach is open" : ""}${ideas ? " · Help me think of ideas is open" : ""}`,
+      fill: 'the "What do you want to make?" box',
+    },
+    (t) => {
+      setGoal(t);
+      setAutoGoal("");
+    },
+  );
+  const planName = choice.from === "template" ? setName(choice.key) : choice.from === "words" ? "Your own steps" : DEFAULT_NAME;
+
+  // Next: the coach checks the goal first (once), then the workflow is made.
+  function next(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (busy) return; // still drafting the steps: wait for them
+    if (coached || (!goal.trim() && !brief) || (autoGoal && goal === autoGoal)) return make();
+    setError(null);
+    setIdeas(false);
+    setCoach(true);
+  }
+
+  async function make(withGoal?: string) {
+    const typed = withGoal ?? goal;
+    // A brief on its own is enough: the goal then points at it.
+    const g = typed.trim() || (plan.steps[0]?.task ?? "").trim() || (brief ? `Make what the attached brief (${brief.name}) describes.` : "");
+    if (!g) {
+      document.getElementById("nw-goal")?.focus();
+      return setError({ msg: "Write what you want to make first. One sentence is enough." });
+    }
+    setBusy("make");
     setError(null);
     try {
-      const w = await post<{ id: number }>("/api/workflows", { template: key, project });
-      router.push(`/workflows/${w.id}`);
-    } catch (e) {
-      setError({ msg: (e as Error).message, retry: () => fromTemplate(key) });
+      const steps = planned.steps.map((s, i) => (i === 0 ? { ...s, task: g, ...(brief ? { brief } : {}) } : s));
+      const briefWords = brief ? brief.name.replace(/\.(md|markdown|txt)$/i, "").replace(/[-_]+/g, " ") : "";
+      const fromBrief = briefWords && !/^(claude|brief|readme|agents|spec|plan)$/i.test(briefWords) && !typed.trim() && !(plan.steps[0]?.task ?? "").trim() ? nameFromGoal(briefWords) : "";
+      // Named from Nic's own words when he typed some (shorter than the coach's version).
+      const name = fromBrief || (!typed.trim() || (autoGoal && typed === autoGoal) ? plan.name : idea && [goal, typed].some((x) => x.startsWith(idea.goal.slice(0, 40))) ? idea.title.slice(0, 60) : nameFromGoal(goal.trim() || g));
+      const w = await post<{ id: number }>("/api/workflows", { name, project, steps, limits: planned.limits });
+      rememberProject(project);
+      router.push(`/workflows/${w.id}?new=1`);
+    } catch (err) {
+      setError({ msg: (err as Error).message, retry: () => make(g) });
       setBusy("");
     }
   }
 
-  async function describe(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (text.trim().length < 10) return setError({ msg: "Write a sentence or two about what should happen.", retry: () => describe() });
-    setBusy("describe");
+  // Made from the coach: wait one render, so settings it just turned on are in the steps.
+  const [makeWith, setMakeWith] = useState<string | null>(null);
+  useEffect(() => {
+    if (makeWith === null) return;
+    setMakeWith(null);
+    make(makeWith);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [makeWith]);
+  function coachDone(g: string) {
+    setCoach(false);
+    setCoached(true);
+    if (g !== goal) setGoal(g);
+    setMakeWith(g);
+  }
+
+  function applyTweak(k: SuggestionKey) {
+    if (k === "research_first") pickSteps({ from: "template", key: "build-review-ship" });
+    if (k === "more_time") setTweaks((t) => ({ ...t, moreTime: true }));
+    if (k === "smartest") setTweaks((t) => ({ ...t, smartest: true }));
+  }
+  const on: SuggestionKey[] = [
+    ...(planned.steps.some((s) => s.type === "research") ? (["research_first"] as const) : []),
+    ...(tweaks.moreTime ? (["more_time"] as const) : []),
+    ...(tweaks.smartest || !planned.steps.some((s) => s.type === "agent" && s.model !== "opus") ? (["smartest"] as const) : []),
+  ];
+
+  async function draftSteps() {
+    if (words.trim().length < 10) return setError({ msg: "Say how it should go in a sentence or two, for example: research first, then build, then ask me before shipping." });
+    setBusy("words");
     setError(null);
     try {
-      const w = await post<{ id: number }>("/api/workflows/draft", { text, project });
-      router.push(`/workflows/${w.id}?drafted=1`);
+      const d = await post<{ name: string; steps: WfStep[]; limits: WfLimits }>("/api/workflows/draft", { text: words, goal, project, preview: true });
+      pickSteps({ from: "words", ...d });
     } catch (err) {
-      setError({ msg: (err as Error).message, retry: () => describe() });
+      setError({ msg: (err as Error).message, retry: draftSteps });
+    } finally {
       setBusy("");
+    }
+  }
+
+  // Templates that come with their own job (e.g. the nightly site check) fill an empty goal box,
+  // and take that goal back out if Nic picks other steps without changing it.
+  function pickSteps(next: Steps) {
+    setChoice(next);
+    setChanging(false);
+    const task = next.from === "template" ? (templateWorkflow(next.key, agents, "").steps[0]?.task ?? "") : "";
+    const untouched = !goal.trim() || (autoGoal && goal === autoGoal);
+    if (untouched) {
+      setGoal(task);
+      setAutoGoal(task);
     }
   }
 
@@ -45,80 +150,241 @@ export default function NewWorkflow({ projects, agents }: { projects: string[]; 
     <div className="pt-8 sm:pt-10">
       <BackLink href="/workflows">All workflows</BackLink>
       <h1 className="mt-4 text-[30px] font-bold leading-tight tracking-tight sm:text-[36px]">New workflow</h1>
-      <p className="mt-2 text-[17px] text-muted">Two ways to start. You'll see every step before anything runs.</p>
+      <p className="mt-2 text-[17px] text-muted">Say what you want. You'll see every step before anything runs.</p>
+      <p className="mt-2 max-w-[860px] text-[15px] text-muted">
+        A workflow is for bigger jobs you want done in the same careful steps every time (build it, have it checked, then ask you). For a quick one-off, <StartTaskLink /> is simpler.
+      </p>
 
-      <div className="mt-6 max-w-[420px]">
-        <ProjectSelect value={project} onChange={setProject} projects={projects} tip="The code this workflow works on. All its steps share one copy of it." />
-      </div>
-
-      {error && (
-        <div className="mt-6">
-          <ErrorBox message={error.msg} onRetry={error.retry} where="New workflow" />
-        </div>
-      )}
-
-      <section className="panel mt-8 p-6 sm:p-8" aria-labelledby="describe-h">
-        <h2 id="describe-h" className="flex items-center text-[22px] font-bold">
-          Describe it
-          <InfoTip text="Claude reads what you wrote and turns it into steps. It only drafts: nothing runs until you check the steps and turn the workflow on." label="Describe it" />
-        </h2>
-        <form onSubmit={describe} className="mt-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-2">
-            <span className="text-[15px] font-semibold">What should happen?</span>
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder={`For example: ${EXAMPLE}`} className="rounded-[14px] border border-[#C9CDD4] p-4 text-[16px] leading-relaxed" disabled={busy === "describe"} />
-          </label>
-          <p className="text-[14px] text-muted">Say what starts it, what should happen in order, and when it should check with you.</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="submit" className={btn.primary} disabled={!!busy}>
-              {busy === "describe" ? "Drafting the steps…" : "Make the steps"}
-            </button>
-            {busy === "describe" && (
-              <span className="flex items-center gap-2 text-[14px] text-muted" role="status">
-                <span className="pulse h-2.5 w-2.5 rounded-full bg-[#2F4FD8]" aria-hidden="true" /> Claude is reading it. This takes about half a minute.
-              </span>
+      <form onSubmit={next} className="panel mt-8 flex max-w-[860px] flex-col gap-6 p-6 sm:p-8">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-4">
+            <Label as="label" htmlFor="nw-goal" tip="This is the goal. You only type it once: every run works on it, and you can change it later on the workflow's page.">
+              What do you want to make?
+            </Label>
+            {!ideas && (
+              <button type="button" className={btn.link + " !text-[14px]"} onClick={() => (setIdeas(true), setCoach(false))} disabled={!!busy}>
+                Help me think of ideas
+              </button>
             )}
           </div>
-        </form>
-      </section>
+          {ideas && (
+            <IdeaHelp
+              where="workflow"
+              onClose={() => setIdeas(false)}
+              onPick={(g, title) => {
+                setGoal(g);
+                setIdea({ goal: g, title });
+                setAutoGoal("");
+                setIdeas(false);
+                setTimeout(() => document.getElementById("nw-goal")?.focus(), 30);
+              }}
+            />
+          )}
+          <textarea
+            id="nw-goal"
+            value={goal}
+            onChange={(e) => {
+              setGoal(e.target.value);
+              if (error && !error.retry) setError(null);
+              if (coach) setCoach(false);
+            }}
+            rows={4}
+            placeholder="For example: An arcade website with 4 small games that work on phones too."
+            className="rounded-[14px] border border-[#C9CDD4] p-4 text-[16px] leading-relaxed"
+            disabled={busy === "make"}
+          />
+          <p className="text-[14px] text-muted">Say what it is, who it's for, and anything it must have.</p>
+        </div>
 
-      <section className="mt-12" aria-labelledby="tpl-h">
-        <h2 id="tpl-h" className="text-[22px] font-bold">
-          Start from a template
-        </h2>
-        <ul className="mt-5 grid gap-6 sm:grid-cols-2">
-          {TEMPLATES.map((t) => {
-            const steps = templateWorkflow(t.key, agents, project).steps;
-            return (
-              <li key={t.key}>
-                <button
-                  type="button"
-                  onClick={() => fromTemplate(t.key)}
-                  disabled={!!busy}
-                  className="flex h-full w-full flex-col gap-3 rounded-[40px] border border-[rgba(21,23,27,0.28)] bg-white p-7 text-left shadow-[0_1px_2px_rgba(21,23,27,0.04),0_10px_30px_rgba(21,23,27,0.05)] transition-shadow hover:shadow-[0_2px_4px_rgba(21,23,27,0.06),0_16px_40px_rgba(21,23,27,0.09)] disabled:opacity-60"
-                >
-                  <span className="text-[18px] font-semibold">{t.name}</span>
-                  <span className="text-[15px] leading-relaxed text-muted">{t.blurb}</span>
-                  <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-2" aria-hidden="true">
-                    {steps.map((s, i) => {
-                      const a = s.type === "agent" && s.agentId != null ? agents.find((x) => x.id === s.agentId) : null;
-                      const color = a?.color ?? STEP_INFO[s.type].color;
-                      return (
-                        <span key={s.id} className="flex items-center gap-1.5">
-                          {i > 0 && <span className="text-[#9AA0A8]">→</span>}
-                          <span className="flex h-8 w-8 items-center justify-center rounded-[10px]" style={{ background: `${color}1A` }}>
-                            <Icon name={a?.icon ?? stepIconOf(s)} color={color} size={16} />
-                          </span>
-                        </span>
-                      );
-                    })}
-                  </span>
-                  <span className="text-[15px] font-semibold underline">{busy === t.key ? "Setting it up…" : "Use this template"}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+        <div className="max-w-[420px]">
+          <ProjectSelect value={project} onChange={setProject} projects={projects} tip="Which app, game or site it works on. All its steps work on one copy of it, so your real project only changes when you say so." />
+        </div>
+
+        <BriefPicker project={project} value={brief} onChange={setBrief} disabled={busy === "make"} />
+
+        <div className="flex flex-col gap-3" aria-labelledby="nw-steps-h">
+          <p id="nw-steps-h" className="flex items-center text-[15px] font-semibold">
+            The steps: {planName}
+            <InfoTip text="What happens, in order, each time it runs. Build in Careful mode builds it, checks its own work and polishes it. Put it in always asks you first." label="The steps" />
+          </p>
+          <StepRow steps={planned.steps} agents={agents} />
+          {!changing && (
+            <button type="button" className={btn.link + " self-start"} onClick={() => setChanging(true)} aria-expanded={false} disabled={!!busy}>
+              Change the steps
+            </button>
+          )}
+        </div>
+
+        {changing && (
+          <ChangeSteps
+            words={words}
+            setWords={setWords}
+            busy={busy === "words"}
+            disabled={!!busy}
+            onDraft={draftSteps}
+            onTemplate={(key) => pickSteps({ from: "template", key })}
+            onDefault={() => pickSteps({ from: "default" })}
+            onClose={() => setChanging(false)}
+            agents={agents}
+            current={choice}
+          />
+        )}
+
+        {error && <ErrorBox message={error.msg} onRetry={error.retry} where="New workflow" />}
+
+        {coach && (
+          <CoachBox
+            where="workflow"
+            goal={goal}
+            brief={brief}
+            current={on}
+            onApply={applyTweak}
+            onDone={coachDone}
+            onEdit={(g) => {
+              setGoal(g);
+              setCoach(false);
+              setCoached(true);
+              setTimeout(() => document.getElementById("nw-goal")?.focus(), 30);
+            }}
+            onClose={() => {
+              setCoach(false);
+              setTimeout(() => document.getElementById("nw-goal")?.focus(), 30);
+            }}
+            doneLabel="Next"
+          />
+        )}
+
+        {!coach && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" className={btn.primary} disabled={!!busy}>
+              {busy === "make" ? "Setting it up…" : "Next"}
+            </button>
+            <span className="text-[14px] text-muted">{coached ? "Nothing runs yet. Next shows you the workflow so you can check it." : "Next checks your goal, then shows you the workflow. Nothing runs yet."}</span>
+          </div>
+        )}
+      </form>
     </div>
+  );
+}
+
+const DEFAULT_NAME = "Build carefully → Review → Put it in (recommended)";
+// The ready-made sets, named by what they do so no two look alike.
+const setName = (key: TemplateKey) => (key === "build-review-ship" ? "Research → Build → Review → Put it in" : TEMPLATES.find((t) => t.key === key)!.name);
+
+function StepRow({ steps, agents }: { steps: WfStep[]; agents: AgentRef[] }) {
+  return (
+    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-2" aria-label="Steps, in order">
+      {steps.map((s, i) => {
+        const a = s.type === "agent" && s.agentId != null ? agents.find((x) => x.id === s.agentId) : null;
+        const color = a?.color ?? STEP_INFO[s.type].color;
+        const title = s.type === "start" ? "Start" : stepTitle(s, agents);
+        const extra = s.type === "agent" && s.careful ? " (Careful)" : s.type === "ship" && s.shipMode !== "auto" ? " (asks you first)" : "";
+        return (
+          <li key={s.id} className="flex items-center gap-1.5">
+            {i > 0 && (
+              <span className="text-[#9AA0A8]" aria-hidden="true">
+                →
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 rounded-full bg-soft py-1 pl-1 pr-3 text-[14px] font-medium">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full" style={{ background: `${color}1A` }} aria-hidden="true">
+                <Icon name={a?.icon ?? stepIconOf(s)} color={color} size={14} />
+              </span>
+              {title}
+              {extra}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ChangeSteps(props: {
+  words: string;
+  setWords: (s: string) => void;
+  busy: boolean;
+  disabled: boolean;
+  onDraft: () => void;
+  onTemplate: (k: TemplateKey) => void;
+  onDefault: () => void;
+  onClose: () => void;
+  agents: AgentRef[];
+  current: Steps;
+}) {
+  const { words, setWords, busy, disabled, onDraft, onTemplate, onDefault, onClose, agents, current } = props;
+  return (
+    <section className="flex flex-col gap-5 rounded-[24px] border border-line bg-[#FAFAFB] p-5 sm:p-6" aria-labelledby="nw-change-h">
+      <h2 id="nw-change-h" className="text-[18px] font-bold">
+        Change the steps
+      </h2>
+
+      <div className="flex flex-col gap-2">
+        <Label as="label" htmlFor="nw-words" tip="Claude turns this into steps. It only changes how the work happens, not what gets made: that's the goal box above.">
+          Change the steps in your own words
+        </Label>
+        <textarea
+          id="nw-words"
+          value={words}
+          onChange={(e) => setWords(e.target.value)}
+          rows={3}
+          placeholder="For example: Research first, then build, then ask me before shipping."
+          className="rounded-[14px] border border-[#C9CDD4] bg-white p-4 text-[16px] leading-relaxed"
+          disabled={busy}
+        />
+        <p className="text-[14px] text-muted">Only say how it should go, in order. What to make goes in the box above.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className={btn.secondary} onClick={onDraft} disabled={disabled}>
+            {busy ? "Drafting the steps…" : "Make these steps"}
+          </button>
+          {busy && (
+            <span className="flex items-center gap-2 text-[14px] text-muted" role="status">
+              <span className="pulse h-2.5 w-2.5 rounded-full bg-[#2F4FD8]" aria-hidden="true" /> Claude is reading it. This takes about half a minute.
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <p className="text-[15px] font-semibold">Or pick a ready-made set</p>
+        <ul className="grid gap-3 sm:grid-cols-2">
+          <li>
+            <PlanButton name={DEFAULT_NAME} blurb="Builds it carefully, has it reviewed, then asks you before shipping. Good for most things." on={current.from === "default"} onClick={onDefault} disabled={disabled} />
+          </li>
+          {TEMPLATES.map((t) => (
+            <li key={t.key}>
+              <PlanButton
+                name={setName(t.key)}
+                blurb={t.blurb}
+                on={current.from === "template" && current.key === t.key}
+                onClick={() => onTemplate(t.key)}
+                disabled={disabled}
+              />
+            </li>
+          ))}
+        </ul>
+      </div>
+      <button type="button" className={btn.link + " self-start"} onClick={onClose} disabled={busy}>
+        Keep the steps as they are
+      </button>
+    </section>
+  );
+}
+
+function PlanButton({ name, blurb, on, onClick, disabled }: { name: string; blurb: string; on: boolean; onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={on}
+      className={`flex h-full min-h-11 w-full flex-col gap-1.5 rounded-[18px] border bg-white p-4 text-left hover:border-ink disabled:opacity-60 ${on ? "border-ink ring-1 ring-ink" : "border-line"}`}
+    >
+      <span className="text-[15px] font-semibold">
+        {name}
+        {on ? " ✓" : ""}
+      </span>
+      <span className="text-[14px] leading-snug text-muted">{blurb}</span>
+    </button>
   );
 }

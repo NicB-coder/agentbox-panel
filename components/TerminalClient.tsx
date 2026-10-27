@@ -88,7 +88,7 @@ export default function TerminalClient({ cmd }: { cmd: string }) {
         title="Terminal"
         sub={
           <span className="inline-flex items-center">
-            A command line on this Mac, as the agent account. You rarely need it.
+            For advanced fixes only: a place to type commands straight into this Mac. You never need it for normal use.
             <InfoTip text="Everything you type runs on agentbox for real. Agents and the panel keep working while it's open. Close the page whenever you like; it stays where you left it." label="Terminal" />
           </span>
         }

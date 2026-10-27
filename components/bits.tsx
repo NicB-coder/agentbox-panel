@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Icon, btn } from "./ui";
-import { useReportError } from "./helper/helperStore";
+import { useHelperContext, useReportError } from "./helper/helperStore";
 
 export async function post<T = Record<string, unknown>>(url: string, body: unknown = {}, method = "POST"): Promise<T> {
   let r: Response;
@@ -12,7 +12,7 @@ export async function post<T = Record<string, unknown>>(url: string, body: unkno
     throw new Error("Couldn't reach agentbox. Check that you're online and try again.");
   }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((j as { error?: string }).error ?? "Something went wrong. Try again in a moment.");
+  if (!r.ok) throw Object.assign(new Error((j as { error?: string }).error ?? "Something went wrong. Try again in a moment."), { data: j });
   return j as T;
 }
 
@@ -95,8 +95,8 @@ export function Label({ children, tip, as = "span", htmlFor, className = "" }: {
   return <span className={cls}>{inner}</span>;
 }
 
-// Errors in plain words, with Try again and "Ask Claude to fix this".
-export function ErrorBox({ message, onRetry, where, compact, retryLabel = "Try again" }: { message: string; onRetry?: () => void; where?: string; compact?: boolean; retryLabel?: string }) {
+// Errors in plain words, with Try again and "Ask an agent to fix this" (not for simple typing mistakes: noFix).
+export function ErrorBox({ message, onRetry, where, compact, retryLabel = "Try again", noFix }: { message: string; onRetry?: () => void; where?: string; compact?: boolean; retryLabel?: string; noFix?: boolean }) {
   const [asked, setAsked] = useState<null | { agentId: number }>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -122,13 +122,13 @@ export function ErrorBox({ message, onRetry, where, compact, retryLabel = "Try a
             {retryLabel}
           </button>
         )}
-        {asked ? (
+        {noFix ? null : asked ? (
           <Link href={`/agents/${asked.agentId}`} className={btn.link + " !text-[#A11B12]"}>
             An agent is looking into it. See how it's going
           </Link>
         ) : (
           <button type="button" className={btn.secondary} onClick={ask} disabled={busy}>
-            {busy ? "Asking…" : "Ask Claude to fix this"}
+            {busy ? "Asking…" : "Ask an agent to fix this"}
           </button>
         )}
       </div>
@@ -197,6 +197,8 @@ export function Confirm({
     if (open && !d.open) d.showModal();
     if (!open && d.open) d.close();
   }, [open]);
+  // The Helper knows which "Are you sure?" is open, so "what happens if I press this?" has an answer.
+  useHelperContext(open ? { panels: [`Pop-up "${title}"${text ? `: ${text}` : ""} Buttons: ${no}, ${yes}`] } : null);
   return (
     <dialog ref={ref} aria-labelledby={titleId} onClose={onClose} className="m-auto w-[min(480px,calc(100vw-32px))] rounded-[24px] p-0 backdrop:bg-black/30">
       <div className="flex flex-col gap-4 p-6 sm:p-8">

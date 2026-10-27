@@ -45,6 +45,7 @@ export function startBackground() {
   tickSchedules();
   refreshUsage(true);
   import("./connectorStatus").then((m) => m.connectorStatus()).catch(() => {});
+  import("./projectsAdmin").then((m) => m.projectInfos()).catch(() => {});
   const tick = () => {
     try {
       tickSchedules();

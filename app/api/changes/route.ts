@@ -9,6 +9,6 @@ export async function GET(req: Request) {
   const v = await changesView(pr);
   if (!v) return Response.json({ error: "Couldn't load that pull request from GitHub. Check you're online and try again." }, { status: 502 });
   // Pull requests that agentbox didn't review get a reviewer automatically (Nic never has to ask).
-  if (!v.careful && !v.review && v.state === "OPEN" && v.project) reviewExternalPr(pr, v.project).catch(() => {});
+  if (!v.careful && !v.review && !v.ship && !v.workflow && v.state === "OPEN" && v.project) reviewExternalPr(pr, v.project).catch(() => {});
   return Response.json(v);
 }
