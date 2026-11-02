@@ -17,7 +17,7 @@ All 10 milestones are done.
 4. Open the **Helper** (round button, bottom right) on any page or pop-up and ask "What's running?" or "Why did
    Lookout stop?".
 
-![New workflow](docs/screenshots/v3.1-start-screen.png)
+![New workflow](../screenshots/v3.1-start-screen.png)
 
 ## v3.1 — Done
 
