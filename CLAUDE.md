@@ -4,7 +4,7 @@ A private web app for controlling the AI agents that run on this Mac ("agentbox"
 
 You are working unattended
 
-Nic is away for about 2 hours. Do NOT stop to ask questions. When something is unclear, pick the most reasonable option, write it down in NOTES.md under "Decisions I made", and keep going. Stop only for something that needs an admin password (sudo) or would be destructive; write those in NOTES.md under "Needs Nic" and move on to the next thing you can do.
+Nic is away for about 2 hours. Do NOT stop to ask questions. When something is unclear, pick the most reasonable option, write it down in docs/build-log/NOTES.md under "Decisions I made", and keep going. Stop only for something that needs an admin password (sudo) or would be destructive; write those in docs/build-log/NOTES.md under "Needs Nic" and move on to the next thing you can do.
 
 What it is
 
@@ -98,6 +98,6 @@ Agent editor (create and edit agents) saved to SQLite.
 Real heartbeat data.
 Real task runs: worktree → Claude Code → PR → status updates, plus Run now / Pause / Stop.
 Scheduler for scheduled agents.
-Always on: a launchd LaunchAgent in this (agent) account that keeps npm start running, and a README section "How to open it": the admin account runs tailscale serve for port 3000 (write the exact command in NOTES.md under "Needs Nic").
+Always on: a launchd LaunchAgent in this (agent) account that keeps npm start running, and a README section "How to open it": the admin account runs tailscale serve for port 3000 (write the exact command in docs/build-log/NOTES.md under "Needs Nic").
 
-Finish with NOTES.md: what's done, what isn't, decisions you made, and what Nic should click first.
+Finish with docs/build-log/NOTES.md: what's done, what isn't, decisions you made, and what Nic should click first.

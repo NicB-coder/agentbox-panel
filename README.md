@@ -2,6 +2,8 @@
 
 A private web panel for controlling the AI agents that run on agentbox. Start a task (each one becomes its own agent), watch it work, approve its plans and steps, see what changed, play what it built, and read research reports. Everything happens in the panel.
 
+The build notes and review rounds are in [docs/build-log/](docs/build-log/).
+
 ![Home page](docs/screenshots/v3-home.png)
 
 ## How to open it

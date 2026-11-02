@@ -1,6 +1,6 @@
 // Full check-over, part 1: every page at 1366, 768 and 390px wide.
 // Checks: console errors, failed network requests, sideways scrolling, tap targets, load time,
-// and that polling keeps the page responsive. Also lists every control it finds (for QA-CHECKLIST.md).
+// and that polling keeps the page responsive. Also lists every control it finds (for docs/build-log/QA-CHECKLIST.md).
 // Usage: BASE_URL=http://127.0.0.1:3253 node scripts/qa/sweep.mjs [out.json] [--only] [/extra/path ...]
 import { chromium } from "playwright";
 import fs from "node:fs";
